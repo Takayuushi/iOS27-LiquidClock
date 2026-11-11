@@ -43,15 +43,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:fontFamily="@font/sf_pro_display"
-            android:format12Hour="h:mm"
-            android:format24Hour="HH:mm"
             android:gravity="center"
             android:includeFontPadding="false"
             android:letterSpacing="-0.05"
+            android:format12Hour="h:mm"
+            android:format24Hour="HH:mm"
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
             android:textScaleX="0.92"
-            android:textSize="104sp" />
+            android:textSize="160sp" />
 
         <TextView
             android:layout_width="wrap_content"
