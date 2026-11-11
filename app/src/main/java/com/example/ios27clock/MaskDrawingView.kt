@@ -12,7 +12,6 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
-import android.graphics.RenderEffect
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -57,23 +56,9 @@ class MaskDrawingView @JvmOverloads constructor(
     private val coverRect = RectF()
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val ambientPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-        alpha = 150
-        setRenderEffect(
-            RenderEffect.createBlurEffect(
-                30f,
-                30f,
-                android.graphics.Shader.TileMode.CLAMP
-            )
-        )
-    }
-    private val ambientShadePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(58, 8, 14, 24)
-    }
-
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = PorterDuffColorFilter(
-            Color.argb(186, 30, 170, 255),
+            Color.argb(112, 30, 155, 245),
             PorterDuff.Mode.SRC_IN
         )
     }
@@ -197,14 +182,13 @@ class MaskDrawingView @JvmOverloads constructor(
             return
         }
 
-        // Fill unused editor space with a blurred, dimmed extension of the same
+        // Fill unused editor space with a sharp cropped extension of the same
         // wallpaper, then show the entire original image sharply in fit-center.
         // This avoids black bars while keeping the complete building visible for
         // precise lasso tracing. Selection coordinates remain in source pixels.
         updateImageRect(source)
         updateCoverRect(source)
-        canvas.drawBitmap(source, null, coverRect, ambientPaint)
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), ambientShadePaint)
+        canvas.drawBitmap(source, null, coverRect, imagePaint)
         canvas.drawBitmap(source, null, imageRect, imagePaint)
 
         maskBitmap?.let { mask ->
