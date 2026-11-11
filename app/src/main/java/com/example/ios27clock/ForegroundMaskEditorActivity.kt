@@ -123,7 +123,7 @@ class ForegroundMaskEditorActivity : Activity() {
         val temporary = File(filesDir, "$MANUAL_FOREGROUND_FILE_NAME.tmp")
 
         try {
-            drawingView.writeForegroundCutout(temporary)
+            drawingView.writeSelectionMask(temporary)
             check(temporary.exists() && temporary.length() > 0L) {
                 "The foreground selection file was not created."
             }
