@@ -204,6 +204,7 @@ internal class LiquidWallpaperRenderer(
             return half4(clamp(colour, 0.0, 1.0), alpha);
         }
     """.trimIndent()
+    }
 
     private var surfaceWidth = 0
     private var surfaceHeight = 0
