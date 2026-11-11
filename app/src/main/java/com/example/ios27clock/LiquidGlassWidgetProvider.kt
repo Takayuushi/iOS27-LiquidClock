@@ -188,9 +188,9 @@ class LiquidGlassWidgetProvider : AppWidgetProvider() {
         val textSizePx = calculateFittingTextSize(
             paint = paint,
             text = timeText,
-            maxWidth = width * 0.94f,
-            maxHeight = height * 0.82f,
-            upperBound = maxOf(width, height) * 2f
+            maxWidth = width * 0.985f,
+            maxHeight = height * 0.94f,
+            upperBound = maxOf(width, height) * 2.5f
         )
 
         paint.textSize = textSizePx
@@ -202,7 +202,10 @@ class LiquidGlassWidgetProvider : AppWidgetProvider() {
         )
 
         val metrics = paint.fontMetrics
-        val baseline = (height / 2f) -
+        // The Big Clock composition sits in the upper-center region,
+        // not the geometric center of a tall multi-row widget.
+        val clockCenterY = height * 0.43f
+        val baseline = clockCenterY -
             ((metrics.ascent + metrics.descent) / 2f)
 
         canvas.drawText(
