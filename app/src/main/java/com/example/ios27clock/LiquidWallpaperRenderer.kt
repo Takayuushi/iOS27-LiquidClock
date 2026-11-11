@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
-import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -44,9 +43,10 @@ internal class LiquidWallpaperRenderer(
 
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.225f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.32f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.36f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val TRACKING_EM = -0.035f
+        private const val VERTICAL_GLYPH_STRETCH = 1.24f
+        private const val TRACKING_EM = -0.040f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
 
@@ -58,6 +58,9 @@ internal class LiquidWallpaperRenderer(
 
             half4 main(float2 p) {
                 float coverage = uGlyphMask.eval(p).a;
+                if (coverage < 0.002) {
+                    return half4(0.0);
+                }
 
                 float leftMask = uGlyphMask.eval(
                     clamp(p - float2(1.8, 0.0), float2(0.0), uResolution)
@@ -81,10 +84,10 @@ internal class LiquidWallpaperRenderer(
                 float edge = clamp(gradientLength * 3.2, 0.0, 1.0);
                 float rim = smoothstep(0.025, 0.62, edge);
 
-                float waveA = sin(p.y * 0.0054 + uTime * 0.30);
-                float waveB = cos(p.x * 0.0037 - uTime * 0.24);
-                float2 warp = normal * (2.8 + edge * 10.5) +
-                    float2(waveA * 1.9, waveB * 1.25);
+                float waveA = sin(p.y * 0.0052 + uTime * 0.28);
+                float waveB = cos(p.x * 0.0035 - uTime * 0.22);
+                float2 warp = normal * (3.4 + edge * 12.0) +
+                    float2(waveA * 2.0, waveB * 1.3);
 
                 float2 samplePoint = clamp(
                     p + warp,
@@ -93,32 +96,51 @@ internal class LiquidWallpaperRenderer(
                 );
 
                 float3 center = uWallpaper.eval(samplePoint).rgb;
-                float red = uWallpaper.eval(
-                    clamp(samplePoint + normal * 2.2, float2(0.0), uResolution)
-                ).r;
-                float blue = uWallpaper.eval(
-                    clamp(samplePoint - normal * 2.2, float2(0.0), uResolution)
-                ).b;
+                float3 redShift = uWallpaper.eval(
+                    clamp(
+                        samplePoint + normal * 2.8 + float2(0.8, 0.0),
+                        float2(0.0),
+                        uResolution
+                    )
+                ).rgb;
+                float3 blueShift = uWallpaper.eval(
+                    clamp(
+                        samplePoint - normal * 2.8 - float2(0.8, 0.0),
+                        float2(0.0),
+                        uResolution
+                    )
+                ).rgb;
 
-                float3 refracted = float3(red, center.g, blue);
-
-                // Keep the underlying wallpaper recognisable through the glass.
-                float3 body = mix(
-                    refracted,
-                    float3(0.88, 0.93, 1.0),
-                    0.37
+                float3 refracted = float3(
+                    redShift.r,
+                    center.g,
+                    blueShift.b
                 );
 
-                float2 lightDirection = normalize(float2(-0.62, -0.78));
-                float2 lowerDirection = normalize(float2(0.52, 0.84));
+                // Let wallpaper hue and luminance remain obvious inside each
+                // digit. White is now a glass reflection, not the base fill.
+                float luminance = dot(refracted, float3(0.2126, 0.7152, 0.0722));
+                float3 saturated = clamp(
+                    mix(float3(luminance), refracted, 1.16),
+                    0.0,
+                    1.0
+                );
+                float3 glassBody = mix(
+                    saturated,
+                    float3(0.90, 0.95, 1.0),
+                    0.20
+                );
+
+                float2 upperLight = normalize(float2(-0.62, -0.78));
+                float2 lowerLight = normalize(float2(0.52, 0.84));
 
                 float topGlint = pow(
-                    max(dot(normal, lightDirection), 0.0),
+                    max(dot(normal, upperLight), 0.0),
                     2.0
                 ) * rim;
 
                 float lowerGlint = pow(
-                    max(dot(normal, lowerDirection), 0.0),
+                    max(dot(normal, lowerLight), 0.0),
                     1.8
                 ) * rim;
 
@@ -126,21 +148,21 @@ internal class LiquidWallpaperRenderer(
                     (1.0 - smoothstep(0.48, 0.94, edge));
 
                 float sweepPosition = p.x / max(uResolution.x, 1.0) -
-                    0.30 - 0.04 * sin(uTime * 0.28);
+                    0.30 - 0.045 * sin(uTime * 0.26);
                 float movingHighlight = exp(
                     -pow(sweepPosition * 10.0, 2.0)
-                ) * 0.075;
+                ) * 0.085;
 
-                float3 color = body;
-                color += float3(0.22, 0.40, 0.72) * rim * 0.22;
-                color += float3(0.78, 0.89, 1.0) * innerRim * 0.11;
-                color += float3(1.0) * topGlint * 0.48;
-                color += float3(0.43, 0.65, 0.98) * lowerGlint * 0.27;
-                color += float3(1.0) * movingHighlight;
+                float3 color = glassBody;
+                color += float3(0.20, 0.42, 0.78) * rim * 0.24;
+                color += float3(0.78, 0.90, 1.0) * innerRim * 0.12;
+                color += float3(1.0, 1.0, 1.0) * topGlint * 0.46;
+                color += float3(0.42, 0.66, 1.0) * lowerGlint * 0.28;
+                color += float3(1.0, 1.0, 1.0) * movingHighlight;
 
-                // The final alpha is multiplied by the glyph mask again on
-                // the Canvas layer, so no rectangular shader backing remains.
-                float alpha = 0.96;
+                // Alpha follows the glyph coverage at every pixel. A clear
+                // mask pixel returns zero alpha, never a rectangular backdrop.
+                float alpha = coverage * (0.92 + rim * 0.08);
                 return half4(clamp(color, 0.0, 1.0), alpha);
             }
         """.trimIndent()
@@ -159,7 +181,6 @@ internal class LiquidWallpaperRenderer(
     private var clockScale = 1f
 
     private val glyphBounds = RectF()
-    private val shaderLayerBounds = RectF()
     private val glyphBoundsSource = Rect()
     private val typeface: Typeface = loadTypeface()
 
@@ -170,10 +191,6 @@ internal class LiquidWallpaperRenderer(
     private val shaderPaint = Paint(
         Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
     )
-
-    private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        blendMode = BlendMode.DST_IN
-    }
 
     private val shadowPaint = Paint(
         Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
@@ -268,26 +285,16 @@ internal class LiquidWallpaperRenderer(
                 shader.setFloatUniform("uTime", timeSeconds)
                 shaderPaint.shader = shader
 
-                shaderLayerBounds.set(glyphBounds)
                 val shadowOffset = max(2f, height * 0.0015f)
                 val shadowSave = canvas.save()
                 canvas.translate(0f, shadowOffset)
                 canvas.drawBitmap(mask, 0f, 0f, shadowPaint)
                 canvas.restoreToCount(shadowSave)
 
-                // Render the optical material to a bounded off-screen layer,
-                // then retain only pixels covered by the actual anti-aliased
-                // glyph alpha. This prevents the preview's rectangular patch.
-                val layerSave = canvas.saveLayer(shaderLayerBounds, null)
-                canvas.drawRect(
-                    0f,
-                    0f,
-                    width.toFloat(),
-                    height.toFloat(),
-                    shaderPaint
-                )
-                canvas.drawBitmap(mask, 0f, 0f, maskPaint)
-                canvas.restoreToCount(layerSave)
+                // The AGSL shader itself returns glyph-mask alpha. Drawing only
+                // within glyphBounds avoids saveLayer side effects and guarantees
+                // there is no rectangular shader surface behind the numerals.
+                canvas.drawRect(glyphBounds, shaderPaint)
 
                 shaderPaint.shader = null
                 drawForegroundLayer(canvas)
@@ -559,11 +566,24 @@ internal class LiquidWallpaperRenderer(
             cursorX += paint.measureText(glyph) + tracking
         }
 
+        val stretchedTop = centerY +
+            (minTop.toFloat() - centerY) * VERTICAL_GLYPH_STRETCH
+        val stretchedBottom = centerY +
+            (maxBottom.toFloat() - centerY) * VERTICAL_GLYPH_STRETCH
+
         glyphBounds.set(
             (startX - fontSize * 0.04f).coerceAtLeast(0f),
-            (minTop.toFloat() - fontSize * 0.045f).coerceAtLeast(0f),
+            (stretchedTop - fontSize * 0.045f).coerceAtLeast(0f),
             (startX + totalWidth + fontSize * 0.04f).coerceAtMost(width.toFloat()),
-            (maxBottom.toFloat() + fontSize * 0.045f).coerceAtMost(height.toFloat())
+            (stretchedBottom + fontSize * 0.045f).coerceAtMost(height.toFloat())
+        )
+
+        val maskSave = maskCanvas.save()
+        maskCanvas.scale(
+            1f,
+            VERTICAL_GLYPH_STRETCH,
+            clockCenterX * width,
+            centerY
         )
 
         cursorX = startX
@@ -571,6 +591,7 @@ internal class LiquidWallpaperRenderer(
             maskCanvas.drawText(glyph, cursorX, baseline, paint)
             cursorX += paint.measureText(glyph) + tracking
         }
+        maskCanvas.restoreToCount(maskSave)
 
         glyphMask?.recycle()
         glyphMask = mask
