@@ -63,8 +63,10 @@ internal object WallpaperDepthProcessor {
                         try {
                             val confidence = result.foregroundConfidenceMask
                             val pixelCount = inputBitmap.width * inputBitmap.height
+                            val confidenceOffset = confidence?.position() ?: 0
+                            val confidenceCount = confidence?.remaining() ?: 0
 
-                            if (confidence == null || confidence.size < pixelCount) {
+                            if (confidence == null || confidenceCount < pixelCount) {
                                 Log.w(TAG, "ML Kit returned an invalid foreground confidence mask.")
                             } else {
                                 val sourcePixels = IntArray(pixelCount)
@@ -83,7 +85,8 @@ internal object WallpaperDepthProcessor {
 
                                 for (index in 0 until pixelCount) {
                                     val sourceColor = sourcePixels[index]
-                                    val confidenceValue = confidence[index].coerceIn(0f, 1f)
+                                    val confidenceValue = confidence.get(confidenceOffset + index)
+                                        .coerceIn(0f, 1f)
 
                                     // Soft threshold keeps anti-aliased tree branches and
                                     // mountain edges while removing most background pixels.
