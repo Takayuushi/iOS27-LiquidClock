@@ -24,8 +24,8 @@ import kotlin.math.roundToInt
 class LiquidGlassWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        private const val FONT_ASSET_PATH = "fonts/sf_pro_display.otf"
-        private const val FONT_CACHE_NAME = "sf_pro_display.otf"
+        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_thin.otf"
+        private const val FONT_CACHE_NAME = "sf_pro_display_thin.otf"
         private const val TRACKING_EM = -0.06f
 
         @Volatile
