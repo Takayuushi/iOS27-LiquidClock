@@ -38,8 +38,8 @@ internal class LiquidWallpaperRenderer(
         private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
         private const val CLOCK_CENTER_Y_FRACTION = 0.235f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.235f
-        private const val MAX_GLYPH_WIDTH_FRACTION = 0.97f
-        private const val TRACKING_EM = -0.045f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.86f
+        private const val TRACKING_EM = -0.035f
 
         private val AGSL = """
             uniform shader uWallpaper;
@@ -49,33 +49,47 @@ internal class LiquidWallpaperRenderer(
 
             half4 main(float2 p) {
                 float coverage = uGlyphMask.eval(p).a;
+
+                float shadowA = uGlyphMask.eval(
+                    clamp(p - float2(0.0, 7.0), float2(0.0), uResolution)
+                ).a;
+                float shadowB = uGlyphMask.eval(
+                    clamp(p - float2(2.0, 5.0), float2(0.0), uResolution)
+                ).a;
+
                 if (coverage < 0.002) {
-                    return half4(0.0);
+                    float shadow = max(shadowA, shadowB) * 0.18;
+                    return half4(float3(0.008, 0.016, 0.035), shadow);
                 }
 
                 float leftMask = uGlyphMask.eval(
-                    clamp(p - float2(1.4, 0.0), float2(0.0), uResolution)
+                    clamp(p - float2(1.6, 0.0), float2(0.0), uResolution)
                 ).a;
                 float rightMask = uGlyphMask.eval(
-                    clamp(p + float2(1.4, 0.0), float2(0.0), uResolution)
+                    clamp(p + float2(1.6, 0.0), float2(0.0), uResolution)
                 ).a;
                 float topMask = uGlyphMask.eval(
-                    clamp(p - float2(0.0, 1.4), float2(0.0), uResolution)
+                    clamp(p - float2(0.0, 1.6), float2(0.0), uResolution)
                 ).a;
                 float bottomMask = uGlyphMask.eval(
-                    clamp(p + float2(0.0, 1.4), float2(0.0), uResolution)
+                    clamp(p + float2(0.0, 1.6), float2(0.0), uResolution)
                 ).a;
 
-                float2 gradient = float2(rightMask - leftMask, bottomMask - topMask);
+                float2 gradient = float2(
+                    rightMask - leftMask,
+                    bottomMask - topMask
+                );
                 float gradientLength = length(gradient);
                 float2 normal = gradient / max(gradientLength, 0.0005);
-                float edge = clamp(gradientLength * 1.8, 0.0, 1.0);
+                float edge = clamp(gradientLength * 3.1, 0.0, 1.0);
+                float rim = smoothstep(0.025, 0.58, edge);
 
-                float slowWave = sin(p.y * 0.0065 + uTime * 0.55);
-                float crossWave = cos(p.x * 0.0042 - uTime * 0.42);
+                float slowWave = sin(p.y * 0.0055 + uTime * 0.34);
+                float crossWave = cos(p.x * 0.0038 - uTime * 0.29);
+
                 float2 refractionOffset =
-                    normal * (1.2 + edge * 8.5) +
-                    float2(slowWave * 1.35, crossWave * 0.9);
+                    normal * (2.4 + edge * 8.0) +
+                    float2(slowWave * 1.75, crossWave * 1.15);
 
                 float2 samplePoint = clamp(
                     p + refractionOffset,
@@ -83,35 +97,66 @@ internal class LiquidWallpaperRenderer(
                     uResolution
                 );
 
-                float3 wallpaper = uWallpaper.eval(samplePoint).rgb;
-                float3 glassTint = mix(
-                    wallpaper,
-                    float3(0.975, 0.985, 1.0),
-                    0.84
+                float3 centerSample = uWallpaper.eval(samplePoint).rgb;
+                float redSample = uWallpaper.eval(
+                    clamp(
+                        samplePoint + normal * 1.7 + float2(0.7, 0.0),
+                        float2(0.0),
+                        uResolution
+                    )
+                ).r;
+                float blueSample = uWallpaper.eval(
+                    clamp(
+                        samplePoint - normal * 1.7 - float2(0.7, 0.0),
+                        float2(0.0),
+                        uResolution
+                    )
+                ).b;
+
+                float3 refractedWallpaper = float3(
+                    redSample,
+                    centerSample.g,
+                    blueSample
                 );
 
-                float rim = smoothstep(0.10, 0.72, edge);
-                float upperSpecular = max(
-                    0.0,
-                    dot(normal, normalize(float2(-0.55, -0.84)))
+                // Keep the actual wallpaper colour visible through the glass.
+                // The previous renderer mixed 84% white into the glyphs, which
+                // made the clock look like ordinary opaque text.
+                float3 glassBody = mix(
+                    refractedWallpaper,
+                    float3(0.91, 0.955, 1.0),
+                    0.43
+                );
+
+                float2 upperLight = normalize(float2(-0.62, -0.78));
+                float2 lowerLight = normalize(float2(0.50, 0.86));
+
+                float upperSpecular = pow(
+                    max(dot(normal, upperLight), 0.0),
+                    2.2
                 ) * rim;
-                float lowerReflection = max(
-                    0.0,
-                    dot(normal, normalize(float2(0.50, 0.82)))
+
+                float lowerReflection = pow(
+                    max(dot(normal, lowerLight), 0.0),
+                    1.7
                 ) * rim;
 
-                float movingSheen = exp(
-                    -pow((p.x / max(uResolution.x, 1.0) - 0.34 -
-                    0.035 * sin(uTime * 0.42)) * 13.0, 2.0)
-                ) * 0.08;
+                float innerEdge = smoothstep(0.01, 0.22, edge) *
+                    (1.0 - smoothstep(0.46, 0.92, edge));
 
-                glassTint += float3(0.42, 0.58, 0.82) * rim * 0.07;
-                glassTint += float3(1.0) * upperSpecular * 0.19;
-                glassTint += float3(0.58, 0.75, 1.0) * lowerReflection * 0.08;
-                glassTint += float3(1.0) * movingSheen;
+                float sweep = p.x / max(uResolution.x, 1.0) -
+                    0.31 - 0.045 * sin(uTime * 0.30);
+                float movingSheen = exp(-pow(sweep * 10.0, 2.0)) * 0.10;
 
-                float alpha = coverage * (0.97 + rim * 0.03);
-                return half4(glassTint, alpha);
+                float3 color = glassBody;
+                color += float3(0.24, 0.43, 0.72) * rim * 0.20;
+                color += float3(0.82, 0.91, 1.0) * innerEdge * 0.08;
+                color += float3(1.0, 1.0, 1.0) * upperSpecular * 0.42;
+                color += float3(0.48, 0.68, 0.98) * lowerReflection * 0.23;
+                color += float3(1.0, 1.0, 1.0) * movingSheen;
+
+                float alpha = coverage * (0.91 + rim * 0.09);
+                return half4(clamp(color, 0.0, 1.0), alpha);
             }
         """.trimIndent()
     }
@@ -431,7 +476,7 @@ internal class LiquidWallpaperRenderer(
             typeface = this@LiquidWallpaperRenderer.typeface
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            textScaleX = 0.985f
+            textScaleX = 0.90f
             isSubpixelText = true
         }
 
