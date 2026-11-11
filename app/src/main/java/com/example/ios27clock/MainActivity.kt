@@ -1,111 +1,162 @@
 package com.example.ios27clock
 
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : Activity() {
 
-    private var waitingForOverlayPermission = false
+    companion object {
+        private const val REQUEST_PICK_WALLPAPER = 4101
+        private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
+    }
+
+    private lateinit var selectionStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.start_overlay_button).setOnClickListener {
-            confirmOverlayStart()
+        selectionStatus = findViewById(R.id.wallpaper_selection_status)
+
+        findViewById<Button>(R.id.choose_wallpaper_button).setOnClickListener {
+            openWallpaperPicker()
         }
 
-        findViewById<Button>(R.id.stop_overlay_button).setOnClickListener {
-            stopService(Intent(this, LiquidLockService::class.java))
-            Toast.makeText(this, R.string.overlay_stopped, Toast.LENGTH_SHORT).show()
+        findViewById<Button>(R.id.apply_live_wallpaper_button).setOnClickListener {
+            openLiveWallpaperPreview()
         }
+
+        updateSelectionStatus()
     }
 
     override fun onResume() {
         super.onResume()
+        updateSelectionStatus()
+    }
 
-        if (waitingForOverlayPermission) {
-            waitingForOverlayPermission = false
+    private fun openWallpaperPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
 
-            if (Settings.canDrawOverlays(this)) {
-                startLiquidLockService()
-            } else {
+        try {
+            startActivityForResult(intent, REQUEST_PICK_WALLPAPER)
+        } catch (exception: Exception) {
+            Toast.makeText(
+                this,
+                getString(R.string.wallpaper_picker_unavailable),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    @Deprecated("The document picker result is handled for the native Activity workflow.")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode != REQUEST_PICK_WALLPAPER || resultCode != RESULT_OK) {
+            return
+        }
+
+        val uri: Uri = data?.data ?: return
+
+        try {
+            copySelectedImage(uri)
+            sendBroadcast(
+                Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
+                    .setPackage(packageName)
+            )
+            updateSelectionStatus()
+            Toast.makeText(
+                this,
+                R.string.wallpaper_imported,
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (exception: Exception) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.wallpaper_import_failed,
+                    exception.message ?: "Unknown error"
+                ),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun copySelectedImage(uri: Uri) {
+        val destination = File(filesDir, SOURCE_FILE_NAME)
+        val temporary = File(filesDir, "$SOURCE_FILE_NAME.tmp")
+
+        contentResolver.openInputStream(uri).use { input ->
+            requireNotNull(input) { "The selected image could not be opened." }
+            FileOutputStream(temporary).use { output ->
+                input.copyTo(output)
+                output.fd.sync()
+            }
+        }
+
+        if (!temporary.renameTo(destination)) {
+            temporary.copyTo(destination, overwrite = true)
+            temporary.delete()
+        }
+
+        check(destination.exists() && destination.length() > 0L) {
+            "The selected image was empty."
+        }
+    }
+
+    private fun openLiveWallpaperPreview() {
+        val component = ComponentName(
+            this,
+            LiquidWallpaperService::class.java
+        )
+
+        val previewIntent = Intent(
+            WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER
+        ).putExtra(
+            WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+            component
+        )
+
+        try {
+            startActivity(previewIntent)
+        } catch (exception: Exception) {
+            try {
+                startActivity(
+                    Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+                )
+            } catch (fallbackException: Exception) {
                 Toast.makeText(
                     this,
-                    R.string.overlay_permission_denied,
+                    R.string.live_wallpaper_preview_unavailable,
                     Toast.LENGTH_LONG
                 ).show()
             }
         }
     }
 
-    private fun confirmOverlayStart() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.overlay_dialog_title)
-            .setMessage(R.string.overlay_dialog_message)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.continue_label) { _, _ ->
-                requestOverlayPermissionOrStart()
-            }
-            .show()
-    }
-
-    private fun requestOverlayPermissionOrStart() {
-        if (Settings.canDrawOverlays(this)) {
-            startLiquidLockService()
-            return
-        }
-
-        waitingForOverlayPermission = true
-
-        val permissionIntent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-
-        startActivity(permissionIntent)
-    }
-
-    private fun startLiquidLockService() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(
-                this,
-                R.string.overlay_permission_required,
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-
-        val serviceIntent = Intent(
-            this,
-            LiquidLockService::class.java
-        ).setAction(LiquidLockService.ACTION_SHOW)
-
-        try {
-            startForegroundService(serviceIntent)
-            Toast.makeText(
-                this,
-                R.string.overlay_started,
-                Toast.LENGTH_SHORT
-            ).show()
-        } catch (exception: SecurityException) {
-            Toast.makeText(
-                this,
-                getString(R.string.service_start_failed, exception.message ?: ""),
-                Toast.LENGTH_LONG
-            ).show()
-        } catch (exception: IllegalStateException) {
-            Toast.makeText(
-                this,
-                getString(R.string.service_start_failed, exception.message ?: ""),
-                Toast.LENGTH_LONG
-            ).show()
+    private fun updateSelectionStatus() {
+        val wallpaperFile = File(filesDir, SOURCE_FILE_NAME)
+        selectionStatus.text = if (wallpaperFile.exists() && wallpaperFile.length() > 0L) {
+            getString(R.string.wallpaper_selected)
+        } else {
+            getString(R.string.wallpaper_not_selected)
         }
     }
 }
