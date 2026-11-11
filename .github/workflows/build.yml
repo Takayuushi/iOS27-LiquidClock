@@ -87,11 +87,12 @@ jobs:
             file "$FONT"
           done
 
-          cp "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display.otf"
-          cp "$FONT_DIR/sf_pro_display_thin.otf" "$ASSET_FONT_DIR/sf_pro_display.otf"
-          test -s "$FONT_DIR/sf_pro_display.otf"
+          # Keep res/font/sf_pro_display.xml as the single resource named
+          # sf_pro_display; do not generate a second sf_pro_display.otf resource.
+          cp "$FONT_DIR/sf_pro_display_thin.otf" "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
+          test -s "$FONT_DIR/sf_pro_display_thin.otf"
           test -s "$FONT_DIR/sf_pro_display_bold.otf"
-          test -s "$ASSET_FONT_DIR/sf_pro_display.otf"
+          test -s "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
 
           echo "SF Pro Display Thin and Bold assets downloaded and validated."
 
