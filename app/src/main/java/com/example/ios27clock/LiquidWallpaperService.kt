@@ -181,6 +181,7 @@ class LiquidWallpaperService : WallpaperService() {
                 MotionEvent.ACTION_UP,
                 MotionEvent.ACTION_CANCEL -> {
                     if (draggingClock) {
+                        renderer.finishGesture()
                         renderer.persistComposition()
                         drawFrame()
                     }

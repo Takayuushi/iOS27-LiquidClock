@@ -25,6 +25,7 @@ import android.util.Log
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -54,10 +55,12 @@ internal class LiquidWallpaperRenderer(
 
         // One coherent SF Pro variable face supplies every numeral. Per-digit
         // profiles change real font axes instead of mixing hand-drawn glyphs.
-        private const val MIN_GLYPH_WIDTH_SCALE = 0.98f
-        private const val MAX_GLYPH_WIDTH_SCALE = 1.06f
+        // The expanded lock-screen treatment is taller, not merely wider:
+        // compress each glyph's horizontal advance so the fitted font can grow.
+        private const val MIN_GLYPH_WIDTH_SCALE = 0.92f
+        private const val MAX_GLYPH_WIDTH_SCALE = 0.86f
         private const val MIN_GLYPH_HEIGHT_SCALE = 1.10f
-        private const val MAX_GLYPH_HEIGHT_SCALE = 1.34f
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.40f
         private const val TRACKING_EM = -0.018f
         private const val BASE_WEIGHT_MIN = 460
         private const val BASE_WEIGHT_MAX = 680
@@ -222,7 +225,13 @@ internal class LiquidWallpaperRenderer(
     private var clockCenterX = DEFAULT_CLOCK_X
     private var clockCenterY = DEFAULT_CLOCK_Y
     private var clockScale = 1f
+    private var maskClockScale = 1f
+    private var gestureOffsetX = 0f
+    private var gestureOffsetY = 0f
+    private var previewScaleX = 1f
+    private var previewScaleY = 1f
 
+    private val glyphBaseBounds = RectF()
     private val glyphBounds = RectF()
     private val glyphBoundsSource = Rect()
     private val fallbackTypeface: Typeface = loadFallbackTypeface()
@@ -298,18 +307,54 @@ internal class LiquidWallpaperRenderer(
     fun moveClockBy(deltaX: Float, deltaY: Float) {
         if (surfaceWidth <= 0 || surfaceHeight <= 0) return
 
+        val previousX = clockCenterX
+        val previousY = clockCenterY
         clockCenterX = (clockCenterX + deltaX / surfaceWidth)
             .coerceIn(0.10f, 0.90f)
         clockCenterY = (clockCenterY + deltaY / surfaceHeight)
             .coerceIn(0.10f, 0.78f)
-        rebuildGlyphMask(force = true)
+
+        // Keep the cached glyph/SDF textures. Moving a canvas transform is
+        // effectively free compared with rebuilding two full distance fields.
+        gestureOffsetX += (clockCenterX - previousX) * surfaceWidth
+        gestureOffsetY += (clockCenterY - previousY) * surfaceHeight
+        updatePreviewBounds()
     }
 
     fun scaleClock(factor: Float) {
         if (!factor.isFinite() || factor <= 0f) return
         clockScale = (clockScale * factor)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+
+        // Preview the pinch with a slightly taller-than-wide transform. The
+        // final adaptive glyph paths and SDF are regenerated once on release.
+        val relativeScale = (clockScale / maskClockScale).coerceIn(0.45f, 2.0f)
+        previewScaleX = relativeScale.pow(0.82f)
+        previewScaleY = relativeScale.pow(1.18f)
+        updatePreviewBounds()
+    }
+
+    fun finishGesture() {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
         rebuildGlyphMask(force = true)
+    }
+
+    private fun updatePreviewBounds() {
+        if (glyphBaseBounds.isEmpty) {
+            glyphBounds.setEmpty()
+            return
+        }
+        glyphBounds.set(glyphBaseBounds)
+        val transform = Matrix().apply {
+            setScale(
+                previewScaleX,
+                previewScaleY,
+                glyphBaseBounds.centerX(),
+                glyphBaseBounds.centerY()
+            )
+        }
+        transform.mapRect(glyphBounds)
+        glyphBounds.offset(gestureOffsetX, gestureOffsetY)
     }
 
     fun setDeviceTilt(x: Float, y: Float) {
@@ -356,6 +401,15 @@ internal class LiquidWallpaperRenderer(
         // remains visible below, so the selected object never replaces it.
         val layerSave = canvas.saveLayer(clockLayerBounds, null)
         try {
+            val transformSave = canvas.save()
+            canvas.translate(gestureOffsetX, gestureOffsetY)
+            canvas.scale(
+                previewScaleX,
+                previewScaleY,
+                glyphBaseBounds.centerX(),
+                glyphBaseBounds.centerY()
+            )
+
             val shadowSave = canvas.save()
             canvas.translate(0f, shadowOffset)
             canvas.drawBitmap(mask, 0f, 0f, shadowPaint)
@@ -374,11 +428,11 @@ internal class LiquidWallpaperRenderer(
                     shader.setFloatUniform("uTilt", deviceTiltX, deviceTiltY)
                     shader.setFloatUniform(
                         "uClockCenter",
-                        clockCenterX,
-                        clockCenterY
+                        glyphBaseBounds.centerX() / width.toFloat(),
+                        glyphBaseBounds.centerY() / height.toFloat()
                     )
                     shaderPaint.shader = shader
-                    canvas.drawRect(glyphBounds, shaderPaint)
+                    canvas.drawRect(glyphBaseBounds, shaderPaint)
                     shaderPaint.shader = null
                     shaderDrawn = true
                 } catch (exception: RuntimeException) {
@@ -387,12 +441,15 @@ internal class LiquidWallpaperRenderer(
                 }
             }
 
-            // If hardware shader rendering is unavailable, draw readable
-            // numerals instead of silently showing wallpaper without a clock.
+            // During a pinch/drag, transform the cached mask and shader rather
+            // than regenerating their pixel data on the UI thread.
             if (!shaderDrawn) {
                 canvas.drawBitmap(mask, 0f, 0f, fallbackGlyphPaint)
             }
+            canvas.restoreToCount(transformSave)
 
+            // Keep the selected foreground object fixed in wallpaper space;
+            // only the clock layer is transformed beneath its depth mask.
             foregroundOcclusionMask?.let { occlusionMask ->
                 canvas.drawBitmap(occlusionMask, 0f, 0f, clockOcclusionPaint)
             }
@@ -792,6 +849,7 @@ internal class LiquidWallpaperRenderer(
             )
         } else {
             glyphBounds.setEmpty()
+            glyphBaseBounds.setEmpty()
         }
 
         glyphMask?.recycle()
@@ -800,6 +858,12 @@ internal class LiquidWallpaperRenderer(
         glyphSdfOriginX = 0f
         glyphSdfOriginY = 0f
         glyphSdf = if (hasBounds) createGlyphSdf(mask, glyphBounds) else null
+        glyphBaseBounds.set(glyphBounds)
+        maskClockScale = clockScale
+        gestureOffsetX = 0f
+        gestureOffsetY = 0f
+        previewScaleX = 1f
+        previewScaleY = 1f
         cachedTimeText = timeText
         updateGlyphMaskInput()
     }
@@ -918,30 +982,30 @@ internal class LiquidWallpaperRenderer(
     private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
         val progress = expansion.coerceIn(0f, 1f)
         val compact = when (glyph) {
-            "1" -> 0.92f
-            "2" -> 0.99f
-            "3" -> 0.98f
-            "4" -> 0.94f
-            "5" -> 0.98f
-            "6" -> 1.00f
-            "7" -> 0.91f
-            "8" -> 1.00f
-            "9" -> 0.99f
-            "0" -> 1.00f
-            else -> 1.00f
+            "1" -> 0.84f
+            "2" -> 0.93f
+            "3" -> 0.92f
+            "4" -> 0.88f
+            "5" -> 0.92f
+            "6" -> 0.94f
+            "7" -> 0.84f
+            "8" -> 0.94f
+            "9" -> 0.93f
+            "0" -> 0.94f
+            else -> 0.94f
         }
         val expanded = when (glyph) {
-            "1" -> 0.91f
-            "2" -> 0.98f
-            "3" -> 0.97f
-            "4" -> 0.93f
-            "5" -> 0.97f
-            "6" -> 1.00f
-            "7" -> 0.90f
-            "8" -> 1.00f
-            "9" -> 0.99f
-            "0" -> 1.00f
-            else -> 1.00f
+            "1" -> 0.78f
+            "2" -> 0.87f
+            "3" -> 0.86f
+            "4" -> 0.82f
+            "5" -> 0.86f
+            "6" -> 0.88f
+            "7" -> 0.78f
+            "8" -> 0.89f
+            "9" -> 0.88f
+            "0" -> 0.89f
+            else -> 0.89f
         }
         return compact + (expanded - compact) * progress
     }
