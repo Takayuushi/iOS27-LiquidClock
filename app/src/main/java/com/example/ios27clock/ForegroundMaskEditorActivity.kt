@@ -3,6 +3,8 @@ package com.example.ios27clock
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.widget.Button
 import android.widget.Toast
 import java.io.File
@@ -34,6 +36,7 @@ class ForegroundMaskEditorActivity : Activity() {
 
         try {
             drawingView.loadImage(source, existingSelection)
+        drawingView.setMagneticLassoEnabled(true)
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
@@ -43,6 +46,24 @@ class ForegroundMaskEditorActivity : Activity() {
             finish()
             return
         }
+
+        val addModeButton = findViewById<Button>(R.id.mask_add_mode_button)
+        val eraseModeButton = findViewById<Button>(R.id.mask_erase_mode_button)
+        val magneticButton = findViewById<Button>(R.id.mask_magnetic_button)
+
+        addModeButton.setOnClickListener {
+            drawingView.setEraseMode(false)
+            updateToolButtons(addModeButton, eraseModeButton, magneticButton)
+        }
+        eraseModeButton.setOnClickListener {
+            drawingView.setEraseMode(true)
+            updateToolButtons(addModeButton, eraseModeButton, magneticButton)
+        }
+        magneticButton.setOnClickListener {
+            drawingView.setMagneticLassoEnabled(!drawingView.isMagneticLassoEnabled)
+            updateToolButtons(addModeButton, eraseModeButton, magneticButton)
+        }
+        updateToolButtons(addModeButton, eraseModeButton, magneticButton)
 
         findViewById<Button>(R.id.mask_undo_button).setOnClickListener {
             drawingView.undo()
@@ -61,6 +82,45 @@ class ForegroundMaskEditorActivity : Activity() {
         findViewById<Button>(R.id.mask_save_button).setOnClickListener {
             saveSelection()
         }
+    }
+
+
+    private fun updateToolButtons(
+        addButton: Button,
+        eraseButton: Button,
+        magneticButton: Button
+    ) {
+        val addSelected = !drawingView.isEraseMode
+        val eraseSelected = drawingView.isEraseMode
+        addButton.text = getString(
+            if (addSelected) R.string.mask_mode_add_selected else R.string.mask_mode_add
+        )
+        eraseButton.text = getString(
+            if (eraseSelected) R.string.mask_mode_erase_selected else R.string.mask_mode_erase
+        )
+        magneticButton.text = getString(
+            if (drawingView.isMagneticLassoEnabled) {
+                R.string.mask_magnetic_on
+            } else {
+                R.string.mask_magnetic_off
+            }
+        )
+        addButton.backgroundTintList = ColorStateList.valueOf(
+            if (addSelected) Color.rgb(77, 151, 210) else Color.rgb(59, 71, 86)
+        )
+        eraseButton.backgroundTintList = ColorStateList.valueOf(
+            if (eraseSelected) Color.rgb(190, 91, 72) else Color.rgb(59, 71, 86)
+        )
+        magneticButton.backgroundTintList = ColorStateList.valueOf(
+            if (drawingView.isMagneticLassoEnabled) {
+                Color.rgb(77, 151, 210)
+            } else {
+                Color.rgb(59, 71, 86)
+            }
+        )
+        addButton.setTextColor(Color.WHITE)
+        eraseButton.setTextColor(Color.WHITE)
+        magneticButton.setTextColor(Color.WHITE)
     }
 
     private fun showOneTimeGuide() {

@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -17,15 +18,18 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
- * Lasso-only object selector.
+ * Manual foreground selector with polygon and magnetic lasso modes.
  *
- * One finger traces a polygon. Two fingers pinch to zoom and drag to pan.
- * All lasso points are stored in source-image coordinates, so the exported
- * selection remains registered to the original wallpaper at every zoom level.
+ * Add and erase are both closed-lasso operations; there is deliberately no
+ * paint brush. One finger traces, while two fingers pinch and pan. All paths
+ * are stored in source-image coordinates so zooming never misaligns a mask.
  */
 class MaskDrawingView @JvmOverloads constructor(
     context: Context,
@@ -35,6 +39,7 @@ class MaskDrawingView @JvmOverloads constructor(
 
     private data class SelectionAction(
         val path: Path? = null,
+        val erase: Boolean = false,
         val clear: Boolean = false
     )
 
@@ -45,6 +50,13 @@ class MaskDrawingView @JvmOverloads constructor(
 
     private val actions = mutableListOf<SelectionAction>()
     private var currentPath: Path? = null
+    private var lastMagneticPoint: PointF? = null
+    private var currentOperationErase = false
+
+    var isEraseMode: Boolean = false
+        private set
+    var isMagneticLassoEnabled: Boolean = true
+        private set
 
     private val imageRect = RectF()
     private val coverRect = RectF()
@@ -65,12 +77,21 @@ class MaskDrawingView @JvmOverloads constructor(
     }
 
     private val lassoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(105, 215, 255)
         style = Paint.Style.STROKE
         strokeWidth = 3f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
         setShadowLayer(3f, 0f, 1f, Color.BLACK)
+    }
+
+    private val addMaskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+
+    private val eraseMaskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
 
     private val scaleGestureDetector = ScaleGestureDetector(
@@ -102,6 +123,22 @@ class MaskDrawingView @JvmOverloads constructor(
             }
         }
     )
+
+    fun setEraseMode(enabled: Boolean) {
+        if (isEraseMode == enabled) return
+        isEraseMode = enabled
+        currentPath = null
+        lastMagneticPoint = null
+        invalidate()
+    }
+
+    fun setMagneticLassoEnabled(enabled: Boolean) {
+        if (isMagneticLassoEnabled == enabled) return
+        isMagneticLassoEnabled = enabled
+        currentPath = null
+        lastMagneticPoint = null
+        invalidate()
+    }
 
     fun loadImage(sourceFile: File, existingSelection: File) {
         release()
@@ -169,6 +206,7 @@ class MaskDrawingView @JvmOverloads constructor(
         if (actions.isNotEmpty()) {
             actions.removeAt(actions.lastIndex)
             currentPath = null
+            lastMagneticPoint = null
             redrawMask()
             invalidate()
         }
@@ -176,6 +214,7 @@ class MaskDrawingView @JvmOverloads constructor(
 
     fun clearSelection() {
         currentPath = null
+        lastMagneticPoint = null
         actions.add(SelectionAction(clear = true))
         redrawMask()
         invalidate()
@@ -190,14 +229,14 @@ class MaskDrawingView @JvmOverloads constructor(
         }
 
         // Keep both the sharp complete image and its surrounding fill sharp.
-        // The cropped copy only fills the unused canvas; it is never blurred.
+        // The cropped copy only fills unused canvas space; it is never blurred.
         updateImageRect(source)
         updateCoverRect(source)
         canvas.drawBitmap(source, null, coverRect, imagePaint)
         canvas.drawBitmap(source, null, imageRect, imagePaint)
 
         maskBitmap?.let { canvas.drawBitmap(it, null, imageRect, overlayPaint) }
-        currentPath?.let { drawLassoPreview(canvas, it, source) }
+        currentPath?.let { drawLassoPreview(canvas, it, source, currentOperationErase) }
     }
 
     private fun updateImageRect(bitmap: Bitmap) {
@@ -242,10 +281,18 @@ class MaskDrawingView @JvmOverloads constructor(
                 transformGestureActive = false
                 lastCentroidX = -1f
                 lastCentroidY = -1f
-
+                updateImageRect(source)
                 if (!imageRect.contains(event.x, event.y)) return false
-                val start = viewToImage(event.x, event.y, source) ?: return false
+
+                val rawStart = viewToImage(event.x, event.y, source) ?: return false
+                currentOperationErase = isEraseMode
+                val start = if (isMagneticLassoEnabled) {
+                    snapToNearbyEdge(rawStart, source)
+                } else {
+                    rawStart
+                }
                 currentPath = Path().apply { moveTo(start.x, start.y) }
+                lastMagneticPoint = start
                 parent?.requestDisallowInterceptTouchEvent(true)
                 invalidate()
                 return true
@@ -254,6 +301,7 @@ class MaskDrawingView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_DOWN -> {
                 // A pinch/pan takes precedence over an unfinished lasso.
                 currentPath = null
+                lastMagneticPoint = null
                 transformGestureActive = true
                 val centroid = pointerCentroid(event)
                 lastCentroidX = centroid.x
@@ -280,9 +328,18 @@ class MaskDrawingView @JvmOverloads constructor(
                 }
 
                 val path = currentPath ?: return false
-                val point = viewToImage(event.x, event.y, source) ?: return true
-                path.lineTo(point.x, point.y)
-                invalidate()
+                val rawPoint = viewToImage(event.x, event.y, source) ?: return true
+                val point = if (isMagneticLassoEnabled) {
+                    snapToNearbyEdge(rawPoint, source)
+                } else {
+                    rawPoint
+                }
+                val previous = lastMagneticPoint
+                if (previous == null || hypot(point.x - previous.x, point.y - previous.y) >= 1.4f) {
+                    path.lineTo(point.x, point.y)
+                    lastMagneticPoint = point
+                    invalidate()
+                }
                 return true
             }
 
@@ -297,12 +354,18 @@ class MaskDrawingView @JvmOverloads constructor(
                 if (!transformGestureActive) {
                     currentPath?.let { path ->
                         path.close()
-                        actions.add(SelectionAction(path = Path(path)))
+                        actions.add(
+                            SelectionAction(
+                                path = Path(path),
+                                erase = currentOperationErase
+                            )
+                        )
                         redrawMask()
                     }
                 }
 
                 currentPath = null
+                lastMagneticPoint = null
                 transformGestureActive = false
                 lastCentroidX = -1f
                 lastCentroidY = -1f
@@ -314,6 +377,7 @@ class MaskDrawingView @JvmOverloads constructor(
 
             MotionEvent.ACTION_CANCEL -> {
                 currentPath = null
+                lastMagneticPoint = null
                 transformGestureActive = false
                 lastCentroidX = -1f
                 lastCentroidY = -1f
@@ -323,6 +387,97 @@ class MaskDrawingView @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    /**
+     * Searches a small radius around the finger for a high-contrast image edge.
+     * The search radius is screen-space based, so it stays predictable at all
+     * zoom levels. A coarse pass finds a candidate; a one-pixel pass refines it.
+     */
+    private fun snapToNearbyEdge(pointer: PointF, bitmap: Bitmap): PointF {
+        if (imageRect.width() <= 0f) return pointer
+
+        val radius = (
+            15f * resources.displayMetrics.density *
+                bitmap.width / imageRect.width()
+            ).coerceIn(4f, 52f)
+        val radiusInt = radius.roundToInt()
+        val minX = max(1, (pointer.x - radiusInt).toInt())
+        val maxX = min(bitmap.width - 2, (pointer.x + radiusInt).toInt())
+        val minY = max(1, (pointer.y - radiusInt).toInt())
+        val maxY = min(bitmap.height - 2, (pointer.y + radiusInt).toInt())
+        if (minX > maxX || minY > maxY) return pointer
+
+        fun scoreAt(x: Int, y: Int): Float {
+            val gradient = edgeMagnitude(bitmap, x, y)
+            val dx = x - pointer.x
+            val dy = y - pointer.y
+            val distance = sqrt(dx * dx + dy * dy)
+            if (distance > radius) return 0f
+            val proximity = 1f - (distance / radius).coerceIn(0f, 1f)
+            return gradient * (0.38f + 0.62f * proximity)
+        }
+
+        val coarseStep = max(1, (radius / 9f).roundToInt())
+        var bestX = pointer.x.roundToInt().coerceIn(minX, maxX)
+        var bestY = pointer.y.roundToInt().coerceIn(minY, maxY)
+        var bestScore = 0f
+
+        var y = minY
+        while (y <= maxY) {
+            var x = minX
+            while (x <= maxX) {
+                val score = scoreAt(x, y)
+                if (score > bestScore) {
+                    bestScore = score
+                    bestX = x
+                    bestY = y
+                }
+                x += coarseStep
+            }
+            y += coarseStep
+        }
+
+        val coarseBestX = bestX
+        val coarseBestY = bestY
+        val refineRadius = coarseStep
+        for (candidateY in (coarseBestY - refineRadius)..(coarseBestY + refineRadius)) {
+            if (candidateY !in minY..maxY) continue
+            for (candidateX in (coarseBestX - refineRadius)..(coarseBestX + refineRadius)) {
+                if (candidateX !in minX..maxX) continue
+                val score = scoreAt(candidateX, candidateY)
+                if (score > bestScore) {
+                    bestScore = score
+                    bestX = candidateX
+                    bestY = candidateY
+                }
+            }
+        }
+
+        // Avoid snapping to noise or flat areas when no useful boundary exists.
+        return if (bestScore < 24f) pointer else PointF(bestX.toFloat(), bestY.toFloat())
+    }
+
+    private fun edgeMagnitude(bitmap: Bitmap, x: Int, y: Int): Float {
+        fun luminance(px: Int, py: Int): Float {
+            val pixel = bitmap.getPixel(px, py)
+            return Color.red(pixel) * 0.2126f +
+                Color.green(pixel) * 0.7152f +
+                Color.blue(pixel) * 0.0722f
+        }
+
+        val tl = luminance(x - 1, y - 1)
+        val tc = luminance(x, y - 1)
+        val tr = luminance(x + 1, y - 1)
+        val ml = luminance(x - 1, y)
+        val mr = luminance(x + 1, y)
+        val bl = luminance(x - 1, y + 1)
+        val bc = luminance(x, y + 1)
+        val br = luminance(x + 1, y + 1)
+
+        val gx = -tl + tr - 2f * ml + 2f * mr - bl + br
+        val gy = -tl - 2f * tc - tr + bl + 2f * bc + br
+        return hypot(gx, gy) * 0.25f
     }
 
     private fun pointerCentroid(event: MotionEvent): PointF {
@@ -350,7 +505,12 @@ class MaskDrawingView @JvmOverloads constructor(
         )
     }
 
-    private fun drawLassoPreview(canvas: Canvas, path: Path, source: Bitmap) {
+    private fun drawLassoPreview(
+        canvas: Canvas,
+        path: Path,
+        source: Bitmap,
+        erase: Boolean
+    ) {
         updateImageRect(source)
         val saveCount = canvas.save()
         canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
@@ -361,9 +521,12 @@ class MaskDrawingView @JvmOverloads constructor(
         )
 
         val previousWidth = lassoPaint.strokeWidth
+        val previousColor = lassoPaint.color
         lassoPaint.strokeWidth = 2.6f * source.width / imageRect.width()
+        lassoPaint.color = if (erase) Color.rgb(255, 142, 110) else Color.rgb(105, 215, 255)
         canvas.drawPath(path, lassoPaint)
         lassoPaint.strokeWidth = previousWidth
+        lassoPaint.color = previousColor
         canvas.restoreToCount(saveCount)
     }
 
@@ -375,16 +538,13 @@ class MaskDrawingView @JvmOverloads constructor(
             target.drawBitmap(it, 0f, 0f, null)
         }
 
-        val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-
         for (action in actions) {
             if (action.clear) {
                 target.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             } else {
-                action.path?.let { target.drawPath(it, selectionPaint) }
+                action.path?.let { path ->
+                    target.drawPath(path, if (action.erase) eraseMaskPaint else addMaskPaint)
+                }
             }
         }
     }
@@ -411,6 +571,7 @@ class MaskDrawingView @JvmOverloads constructor(
         maskCanvas = null
         actions.clear()
         currentPath = null
+        lastMagneticPoint = null
         zoomScale = 1f
         panX = 0f
         panY = 0f

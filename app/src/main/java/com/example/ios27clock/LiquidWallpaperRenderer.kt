@@ -47,7 +47,8 @@ internal class LiquidWallpaperRenderer(
         private const val DEFAULT_CLOCK_Y = 0.225f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.39f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val VERTICAL_GLYPH_STRETCH = 1.29f
+        private const val HORIZONTAL_GLYPH_STRETCH = 1.055f
+        private const val VERTICAL_GLYPH_STRETCH = 1.16f
         private const val TRACKING_EM = -0.040f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
@@ -618,7 +619,12 @@ internal class LiquidWallpaperRenderer(
             typeface = this@LiquidWallpaperRenderer.typeface
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            textScaleX = 0.92f
+            // Slightly broaden and embolden the light face so the numerals
+            // read as substantial liquid-glass forms rather than hairlines.
+            textScaleX = 0.98f
+            strokeWidth = fontSize * 0.014f
+            strokeJoin = Paint.Join.ROUND
+            style = Paint.Style.FILL_AND_STROKE
             isSubpixelText = true
         }
 
@@ -680,16 +686,24 @@ internal class LiquidWallpaperRenderer(
         val stretchedBottom = centerY +
             (maxBottom.toFloat() - centerY) * VERTICAL_GLYPH_STRETCH
 
+        val stretchCenterX = clockCenterX * width
+        val stretchedLeft = stretchCenterX +
+            (startX - stretchCenterX) * HORIZONTAL_GLYPH_STRETCH
+        val stretchedRight = stretchCenterX +
+            (startX + totalWidth - stretchCenterX) * HORIZONTAL_GLYPH_STRETCH
+
         glyphBounds.set(
-            (startX - fontSize * 0.04f).coerceAtLeast(0f),
+            (stretchedLeft - fontSize * 0.045f).coerceAtLeast(0f),
             (stretchedTop - fontSize * 0.045f).coerceAtLeast(0f),
-            (startX + totalWidth + fontSize * 0.04f).coerceAtMost(width.toFloat()),
+            (stretchedRight + fontSize * 0.045f).coerceAtMost(width.toFloat()),
             (stretchedBottom + fontSize * 0.045f).coerceAtMost(height.toFloat())
         )
 
         val maskSave = maskCanvas.save()
+        // A mild two-axis deformation makes the numerals fuller and closer
+        // to rounded-square proportions as the clock expands.
         maskCanvas.scale(
-            1f,
+            HORIZONTAL_GLYPH_STRETCH,
             VERTICAL_GLYPH_STRETCH,
             clockCenterX * width,
             centerY

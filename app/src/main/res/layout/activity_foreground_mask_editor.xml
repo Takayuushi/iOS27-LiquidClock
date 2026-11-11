@@ -28,6 +28,46 @@
         android:textColor="#D2DCE8"
         android:textSize="12sp" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp">
+
+        <Button
+            android:id="@+id/mask_add_mode_button"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="@string/mask_mode_add_selected"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/mask_erase_mode_button"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="@string/mask_mode_erase"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/mask_magnetic_button"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="@string/mask_magnetic_on"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <com.example.ios27clock.MaskDrawingView
         android:id="@+id/foreground_mask_drawing_view"
         android:layout_width="match_parent"
