@@ -18,7 +18,7 @@ class LiquidWallpaperService : WallpaperService() {
             "com.example.ios27clock.action.WALLPAPER_SOURCE_CHANGED"
 
         private const val TAG = "LiquidWallpaperService"
-        private const val FRAME_INTERVAL_MS = 100L
+        private const val FRAME_INTERVAL_MS = 33L
     }
 
     override fun onCreateEngine(): Engine = LiquidEngine()
