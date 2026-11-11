@@ -59,10 +59,12 @@ class MaskDrawingView @JvmOverloads constructor(
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val ambientPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         alpha = 150
-        renderEffect = RenderEffect.createBlurEffect(
-            30f,
-            30f,
-            android.graphics.Shader.TileMode.CLAMP
+        setRenderEffect(
+            RenderEffect.createBlurEffect(
+                30f,
+                30f,
+                android.graphics.Shader.TileMode.CLAMP
+            )
         )
     }
     private val ambientShadePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
