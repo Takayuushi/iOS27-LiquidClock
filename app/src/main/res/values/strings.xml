@@ -27,6 +27,7 @@
     <string name="wallpaper_selected">Wallpaper image imported and ready.</string>
     <string name="wallpaper_not_selected">No wallpaper image selected yet. Choose an image to begin.</string>
     <string name="wallpaper_imported">Wallpaper image imported.</string>
+    <string name="wallpaper_imported_manual_depth">Wallpaper imported. The clock will stay visible. Use Choose foreground overlap to paint the objects that should appear in front.</string>
     <string name="wallpaper_preparing_depth">Preparing wallpaper depth effect…</string>
     <string name="wallpaper_depth_ready">Wallpaper ready with foreground depth layering.</string>
     <string name="wallpaper_depth_fallback">Wallpaper ready. This image could not be segmented, so the clock will render without foreground overlap.</string>
