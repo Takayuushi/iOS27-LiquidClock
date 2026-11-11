@@ -71,14 +71,17 @@ jobs:
           mkdir -p "$FONT_DIR" "$ASSET_FONT_DIR"
 
           THIN_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
+          LIGHT_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Light.otf"
           BOLD_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Bold.otf"
 
           curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
             "$THIN_URL" --output "$FONT_DIR/sf_pro_display_thin.otf"
           curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
+            "$LIGHT_URL" --output "$FONT_DIR/sf_pro_display_light.otf"
+          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
             "$BOLD_URL" --output "$FONT_DIR/sf_pro_display_bold.otf"
 
-          for FONT in "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display_bold.otf"; do
+          for FONT in "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display_light.otf" "$FONT_DIR/sf_pro_display_bold.otf"; do
             test -s "$FONT"
             MAGIC="$(od -An -tx1 -N4 "$FONT" | tr -d ' \n')"
             if [[ "$MAGIC" != "4f54544f" && "$MAGIC" != "00010000" ]]; then
@@ -91,11 +94,14 @@ jobs:
           # Keep res/font/sf_pro_display.xml as the single resource named
           # sf_pro_display; do not generate a second sf_pro_display.otf resource.
           cp "$FONT_DIR/sf_pro_display_thin.otf" "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
+          cp "$FONT_DIR/sf_pro_display_light.otf" "$ASSET_FONT_DIR/sf_pro_display_light.otf"
           test -s "$FONT_DIR/sf_pro_display_thin.otf"
+          test -s "$FONT_DIR/sf_pro_display_light.otf"
           test -s "$FONT_DIR/sf_pro_display_bold.otf"
           test -s "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
+          test -s "$ASSET_FONT_DIR/sf_pro_display_light.otf"
 
-          echo "SF Pro Display Thin and Bold assets downloaded and validated."
+          echo "SF Pro Display Thin, Light and Bold assets downloaded and validated."
 
       - name: Build debug APK
         shell: bash
