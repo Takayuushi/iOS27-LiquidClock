@@ -57,15 +57,28 @@ jobs:
           gradle --version
           sdkmanager --list_installed
 
-      - name: Download Inter variable font (SIL Open Font License)
+      - name: Download SF Pro Display font files
         run: |
           set -euo pipefail
           mkdir -p app/src/main/res/font
+          FONT_BASE="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58"
+
           curl --fail --location --retry 3 --retry-all-errors \
-            "https://raw.githubusercontent.com/google/fonts/e1d6480102fed30739fead0faee463101f892c8f/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf" \
-            --output app/src/main/res/font/inter_variable.ttf
-          test -s app/src/main/res/font/inter_variable.ttf
-          file app/src/main/res/font/inter_variable.ttf
+            "$FONT_BASE/SF-Pro-Display-Thin.otf" \
+            --output app/src/main/res/font/sf_pro_display_thin.otf
+
+          curl --fail --location --retry 3 --retry-all-errors \
+            "$FONT_BASE/SF-Pro-Display-Light.otf" \
+            --output app/src/main/res/font/sf_pro_display_light.otf
+
+          curl --fail --location --retry 3 --retry-all-errors \
+            "$FONT_BASE/SF-Pro-Display-Bold.otf" \
+            --output app/src/main/res/font/sf_pro_display_bold.otf
+
+          test -s app/src/main/res/font/sf_pro_display_thin.otf
+          test -s app/src/main/res/font/sf_pro_display_light.otf
+          test -s app/src/main/res/font/sf_pro_display_bold.otf
+          file app/src/main/res/font/*.otf
 
       - name: Build debug APK
         run: |
