@@ -317,7 +317,7 @@ class MaskDrawingView @JvmOverloads constructor(
                     }
                     actions.add(
                         action.copy(
-                            path = action.path?.let(::Path),
+                            path = action.path?.let { Path(it) },
                             start = action.start?.let { PointF(it.x, it.y) }
                         )
                     )
