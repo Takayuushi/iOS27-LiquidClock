@@ -883,26 +883,34 @@ internal class LiquidWallpaperRenderer(
             }
 
             "8" -> {
-                // A connected figure-eight silhouette with a tighter upper
-                // counter and a deeper, wider lower counter. Even-odd fill
-                // keeps both openings clean when rendered into the mask.
+                // Match the expanded iOS lock-screen 8: two vertically stacked,
+                // softly squared bowls connected through a gently pinched waist.
+                // The counters are rounded rectangles, not circular ovals.
                 normalized.moveTo(0.50f, 0.0f)
-                normalized.cubicTo(0.77f, 0.0f, 0.94f, 0.10f, 0.94f, 0.25f)
-                normalized.cubicTo(0.94f, 0.39f, 0.82f, 0.46f, 0.66f, 0.50f)
-                normalized.cubicTo(0.85f, 0.55f, 0.97f, 0.63f, 0.97f, 0.78f)
-                normalized.cubicTo(0.97f, 0.94f, 0.77f, 1.0f, 0.50f, 1.0f)
-                normalized.cubicTo(0.23f, 1.0f, 0.03f, 0.94f, 0.03f, 0.78f)
-                normalized.cubicTo(0.03f, 0.63f, 0.15f, 0.55f, 0.34f, 0.50f)
-                normalized.cubicTo(0.18f, 0.46f, 0.06f, 0.39f, 0.06f, 0.25f)
-                normalized.cubicTo(0.06f, 0.10f, 0.23f, 0.0f, 0.50f, 0.0f)
+                normalized.cubicTo(0.25f, 0.0f, 0.10f, 0.085f, 0.10f, 0.245f)
+                normalized.cubicTo(0.10f, 0.385f, 0.18f, 0.455f, 0.355f, 0.50f)
+                normalized.cubicTo(0.17f, 0.545f, 0.075f, 0.625f, 0.075f, 0.775f)
+                normalized.cubicTo(0.075f, 0.94f, 0.255f, 1.0f, 0.50f, 1.0f)
+                normalized.cubicTo(0.745f, 1.0f, 0.925f, 0.94f, 0.925f, 0.775f)
+                normalized.cubicTo(0.925f, 0.625f, 0.83f, 0.545f, 0.645f, 0.50f)
+                normalized.cubicTo(0.82f, 0.455f, 0.90f, 0.385f, 0.90f, 0.245f)
+                normalized.cubicTo(0.90f, 0.085f, 0.75f, 0.0f, 0.50f, 0.0f)
                 normalized.close()
 
-                normalized.addOval(
-                    RectF(0.31f, 0.12f, 0.69f, 0.38f),
+                // Upper counter: slightly smaller and shallower, with upright
+                // side walls and a broad, soft corner radius.
+                normalized.addRoundRect(
+                    RectF(0.305f, 0.105f, 0.695f, 0.395f),
+                    0.092f,
+                    0.090f,
                     Path.Direction.CW
                 )
-                normalized.addOval(
-                    RectF(0.27f, 0.62f, 0.73f, 0.89f),
+                // Lower counter: a little taller and wider, keeping the 8
+                // visually grounded instead of looking like two separate loops.
+                normalized.addRoundRect(
+                    RectF(0.275f, 0.605f, 0.725f, 0.905f),
+                    0.105f,
+                    0.095f,
                     Path.Direction.CW
                 )
             }
