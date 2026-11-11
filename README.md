@@ -17,7 +17,7 @@ An Android live-wallpaper clock experiment for modern Samsung Galaxy devices, ta
 
 A normal third-party WallpaperService does not replace Samsung One UI's secure Lock Screen clock. One UI still draws its own system clock above the wallpaper. This app's live wallpaper is intended first for the Home Screen. The same image can be selected as the Lock Screen wallpaper separately, with Samsung's native clock styling or Good Lock / LockStar controlling the secure clock.
 
-The app no longer requests Display over other apps permission and no longer uses the old floating overlay service. Touch input is enabled on the WallpaperService engine: drag the clock to reposition it and pinch with two fingers to change its scale. The composition is persisted in app preferences.
+The app no longer requests Display over other apps permission and no longer uses the old floating overlay service. Touch input is enabled on the WallpaperService engine: drag the clock to reposition it and pinch with two fingers to change its scale. The composition is persisted in app preferences. Shader code is reused while the glyph mask is refreshed during drag and resize, avoiding shader recompilation on each pointer movement.
 
 ## Build
 
