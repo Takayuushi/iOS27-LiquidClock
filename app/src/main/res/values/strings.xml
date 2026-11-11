@@ -10,12 +10,14 @@
     <string name="preview_and_set">Preview and set live wallpaper</string>
     <string name="edit_foreground_overlap">Choose foreground overlap</string>
     <string name="mask_editor_title">Foreground depth editor</string>
-    <string name="mask_editor_instructions">Paint over the exact subject or shape that should appear IN FRONT of the clock. Switch to Erase to refine the selection. Blue shows the selected area.</string>
-    <string name="mask_editor_canvas_description">Wallpaper image. Paint over the objects you want to appear in front of the clock.</string>
+    <string name="mask_editor_instructions">The full wallpaper stays visible. Use Lasso to trace a precise outline around the object that should appear IN FRONT of the clock. Paint and Erase are available for small refinements. Blue shows the selected foreground.</string>
+    <string name="mask_editor_canvas_description">Full wallpaper preview. Trace the object that should appear in front of the clock.</string>
     <string name="mask_brush_size">Brush size: %1$dp</string>
     <string name="mask_brush_size_initial">Brush size: 64dp</string>
     <string name="mask_mode_paint">Paint</string>
     <string name="mask_mode_erase">Erase</string>
+    <string name="mask_lasso">Lasso</string>
+    <string name="mask_lasso_active">Lasso selected</string>
     <string name="mask_undo">Undo</string>
     <string name="mask_clear">Clear</string>
     <string name="mask_save">Save selection</string>
