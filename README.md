@@ -8,13 +8,17 @@ An Android 17 (API 37) clock preview and home-screen widget inspired by liquid-g
 - JDK 17, Android Gradle Plugin 9.5.1, Gradle 9.6.1.
 - AGP 9 built-in Kotlin support; no separate Kotlin Android or AppCompat plugin.
 - AGSL RuntimeShader renders the animated glass surface, including lighting, chromatic edge accents, a procedural refraction field and interactive light response.
-- WindowManager FLAG_BLUR_BEHIND with setBlurBehindRadius() provides real compositor blur of the content behind the overlay when the device enables cross-window blur.
+- WindowManager cross-window blur supplies compositor blur behind the floating overlay when enabled by the device.
 
-## Important rendering limitation
+## Typography
 
-Android does not expose another application's live framebuffer to an ordinary application overlay or AGSL shader. The compositor blurs the real content behind the overlay. The AGSL shader then renders the surface's own optical distortion and color refraction using an internal procedural color field; it cannot refract arbitrary pixels from the app underneath.
+GitHub Actions downloads the SF Pro Display Thin, Light and Bold OTF files into app/src/main/res/font before resource compilation. The font family XML maps weights 100, 300 and 700 for the clock, supporting date and captions. The workflow pins the upstream mirror to a specific commit.
 
-Cross-window blur is system-controlled and can be disabled by the device or runtime conditions. The service listens for availability changes and removes the blur flag when the compositor reports that blur is unavailable.
+The font binaries are fetched at build time and are not committed as binary files in this repository.
+
+## Rendering limitation
+
+Android does not expose another application's live framebuffer to an ordinary overlay or AGSL shader. The compositor blurs the real content behind the overlay. AGSL renders the surface's own optical highlights and procedural color distortion; it cannot refract arbitrary pixels from the app underneath.
 
 ## Overlay behavior
 
