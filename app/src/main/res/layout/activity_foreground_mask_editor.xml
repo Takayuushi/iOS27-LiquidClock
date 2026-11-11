@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:background="#101820"
     android:orientation="vertical"
-    android:paddingTop="10dp"
+    android:paddingTop="36dp"
     android:paddingBottom="12dp">
 
     <TextView
@@ -16,17 +16,6 @@
         android:textColor="#FFFFFFFF"
         android:textSize="22sp"
         android:fontFamily="sans-serif-medium" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="10dp"
-        android:text="@string/mask_editor_instructions"
-        android:textColor="#D2DCE8"
-        android:textSize="13sp" />
 
     <com.example.ios27clock.MaskDrawingView
         android:id="@+id/foreground_mask_drawing_view"
