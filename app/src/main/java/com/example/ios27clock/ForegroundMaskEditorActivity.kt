@@ -53,6 +53,7 @@ class ForegroundMaskEditorActivity : Activity() {
 
         findViewById<Button>(R.id.mask_mode_button).setOnClickListener {
             lassoMode = false
+            drawingView.setLassoMode(false)
             drawingView.setEraseMode(!eraseMode)
             eraseMode = !eraseMode
             it as Button
