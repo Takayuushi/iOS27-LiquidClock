@@ -908,12 +908,12 @@ internal class LiquidWallpaperRenderer(
             }
         }
 
-        val transform = Matrix().apply {
+        val glyphMatrix = Matrix().apply {
             setScale(bounds.width(), bounds.height())
             postTranslate(bounds.left, bounds.top)
         }
         return Path(normalized).apply {
-            transform(transform)
+            transform(glyphMatrix)
         }
     }
 
