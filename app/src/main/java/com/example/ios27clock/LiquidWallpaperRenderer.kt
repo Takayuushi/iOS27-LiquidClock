@@ -10,6 +10,8 @@ import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
+import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -120,6 +122,8 @@ internal class LiquidWallpaperRenderer(
     private var glassShader: RuntimeShader? = null
     private var cachedTimeText: String? = null
     private var elapsedSeconds = 0f
+    private val glyphBounds = RectF()
+    private val glyphBoundsSource = Rect()
     private var typeface: Typeface = loadTypeface()
 
     private val bitmapPaint = Paint(
@@ -146,13 +150,10 @@ internal class LiquidWallpaperRenderer(
         surfaceWidth = width
         surfaceHeight = height
         rebuildBackdrop()
-        rebuildGlyphMask(force = true)
-        rebuildGlassShader()
     }
 
     fun reloadWallpaper() {
         rebuildBackdrop()
-        rebuildGlassShader()
     }
 
     fun draw(canvas: Canvas, timeSeconds: Float) {
@@ -176,13 +177,9 @@ internal class LiquidWallpaperRenderer(
                 )
                 shader.setFloatUniform("uTime", elapsedSeconds)
                 shaderPaint.shader = shader
-                canvas.drawRect(
-                    0f,
-                    0f,
-                    width.toFloat(),
-                    height.toFloat(),
-                    shaderPaint
-                )
+                if (!glyphBounds.isEmpty) {
+                    canvas.drawRect(glyphBounds, shaderPaint)
+                }
                 shaderPaint.shader = null
                 return
             } catch (exception: RuntimeException) {
@@ -192,7 +189,20 @@ internal class LiquidWallpaperRenderer(
         }
 
         glyphMask?.let { mask ->
-            canvas.drawBitmap(mask, 0f, 0f, fallbackGlyphPaint)
+            if (!glyphBounds.isEmpty) {
+                glyphBoundsSource.set(
+                    glyphBounds.left.toInt().coerceAtLeast(0),
+                    glyphBounds.top.toInt().coerceAtLeast(0),
+                    glyphBounds.right.toInt().coerceAtMost(width),
+                    glyphBounds.bottom.toInt().coerceAtMost(height)
+                )
+                canvas.drawBitmap(
+                    mask,
+                    glyphBoundsSource,
+                    glyphBoundsSource,
+                    fallbackGlyphPaint
+                )
+            }
         }
     }
 
@@ -263,11 +273,10 @@ internal class LiquidWallpaperRenderer(
                 return null
             }
 
-            val maxTarget = max(targetWidth, targetHeight)
             var sampleSize = 1
             while (
-                bounds.outWidth / (sampleSize * 2) >= maxTarget &&
-                bounds.outHeight / (sampleSize * 2) >= maxTarget
+                bounds.outWidth / (sampleSize * 2) >= targetWidth * 2 ||
+                bounds.outHeight / (sampleSize * 2) >= targetHeight * 2
             ) {
                 sampleSize *= 2
             }
@@ -387,6 +396,13 @@ internal class LiquidWallpaperRenderer(
         val metrics = paint.fontMetrics
         val centerY = height * CLOCK_CENTER_Y_FRACTION
         val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
+
+        glyphBounds.set(
+            (startX - fontSize * 0.035f).coerceAtLeast(0f),
+            (baseline + metrics.ascent - fontSize * 0.045f).coerceAtLeast(0f),
+            (startX + totalWidth + fontSize * 0.035f).coerceAtMost(width.toFloat()),
+            (baseline + metrics.descent + fontSize * 0.045f).coerceAtMost(height.toFloat())
+        )
 
         var cursorX = startX
         glyphs.forEach { glyph ->
