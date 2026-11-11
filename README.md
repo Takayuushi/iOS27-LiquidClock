@@ -1,25 +1,22 @@
 # iOS 27 Liquid Clock
 
-An Android 17 (API 37) clock preview and home-screen widget inspired by Apple's oversized Lock Screen typography.
+An Android live-wallpaper clock experiment for modern Samsung Galaxy devices, targeting an oversized iOS-inspired clock composition.
 
-## Package and platform
+## Current architecture
 
-- Unified package, namespace and application ID: com.example.ios27clock.
-- Android 17 / API 37 only (minSdk = 37, compileSdk = 37, targetSdk = 37).
-- JDK 17, Android Gradle Plugin 9.5.1, Gradle 9.6.1.
+- The main renderer is a native Android WallpaperService, not a RemoteViews widget or an application overlay.
+- Users choose a wallpaper image through the system document picker. The app copies it into private storage so the wallpaper engine can render it without depending on a temporary document URI permission.
+- LiquidWallpaperService draws the wallpaper and clock into the live wallpaper surface. Home-screen icons and launcher controls are naturally composited above the wallpaper by Android.
+- LiquidWallpaperRenderer creates a glyph alpha mask for the time and uses AGSL RuntimeShader to sample the selected wallpaper inside the glyphs, adding chromatic refraction, rim lighting, and a subtle animated sheen.
+- The clock is drawn once per screen frame using a cached wallpaper bitmap and glyph mask; the shader animation updates at a modest 10 fps while the wallpaper is visible. Rendering stops when the wallpaper is not visible.
+- SF Pro Display Thin is loaded from the workflow-provisioned app asset. A system thin font fallback is used only if the asset is unavailable.
 
-## Home-screen widget renderer
+## Lock Screen boundary
 
-The launcher widget uses a transparent ImageView inside RemoteViews. LiquidGlassWidgetProvider renders the time into an ARGB_8888 bitmap using Android Canvas and Paint, measures its font metrics and available widget dimensions from AppWidgetManager options, and fits the clock text to the usable bounds. The SF Pro Display OTF is copied into assets by GitHub Actions, copied into app-private storage at runtime, and loaded using Typeface.createFromFile.
+A normal third-party WallpaperService does not replace Samsung One UI's secure Lock Screen clock. One UI still draws its own system clock above the wallpaper. This app's live wallpaper is intended first for the Home Screen. The same image can be selected as the Lock Screen wallpaper separately, with Samsung's native clock styling or Good Lock / LockStar controlling the secure clock.
 
-The clock is drawn as one horizontal time string (h:mm or HH:mm) to match the iOS Big Clock composition. The provider rerenders on widget updates/resizes and system time, date, timezone, and locale changes.
-
-## Wallpaper overlay
-
-LiquidLockService creates a full-screen translucent TYPE_APPLICATION_OVERLAY window. FLAG_SHOW_WALLPAPER requests the system wallpaper surface behind the overlay; FLAG_BLUR_BEHIND with setBlurBehindRadius(45) asks the compositor to blur what is behind that window. The service listens for runtime cross-window blur availability changes.
-
-The overlay is a visual preview. It does not replace, cover, or unlock Android's secure system lock screen. A full-screen preview also temporarily covers home-screen interaction; tap it or use the notification's Stop action to dismiss.
+The app no longer requests Display over other apps permission and no longer uses the old floating overlay service.
 
 ## Build
 
-GitHub Actions downloads the SF Pro Display Thin OTF into res/font and copies it into assets/fonts for the Canvas renderer. The workflow builds app/build/outputs/apk/debug/app-debug.apk and uploads it as an artifact.
+GitHub Actions builds the Android 17 debug APK with JDK 17 and uploads it as an artifact.
