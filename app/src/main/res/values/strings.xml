@@ -14,5 +14,5 @@
     <string name="wallpaper_import_failed">Could not import wallpaper: %1$s</string>
     <string name="wallpaper_picker_unavailable">No image picker is available on this device.</string>
     <string name="live_wallpaper_preview_unavailable">The system live wallpaper preview could not be opened.</string>
-    <string name="lock_screen_note">Lock Screen note: One UI controls the secure Lock Screen clock and draws it above the wallpaper. This live wallpaper primarily targets the Home Screen. For the Lock Screen, use Samsung's native clock editor or Good Lock / LockStar alongside the same wallpaper.</string>
+    <string name="lock_screen_note">Lock Screen note: One UI controls the secure Lock Screen clock and draws it above the wallpaper. This live wallpaper primarily targets the Home Screen. For the Lock Screen, use Samsung native clock settings or Good Lock / LockStar alongside the same wallpaper.</string>
 </resources>
