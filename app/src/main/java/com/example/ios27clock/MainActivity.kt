@@ -85,26 +85,21 @@ class MainActivity : Activity() {
             copySelectedImage(uri)
             File(filesDir, MANUAL_FOREGROUND_FILE_NAME).delete()
             File(filesDir, AUTO_FOREGROUND_FILE_NAME).delete()
-            selectionStatus.setText(R.string.wallpaper_preparing_depth)
+            // Depth is manual by default. Automatic ML segmentation previously
+            // produced false-positive masks that could cover the entire clock.
+            File(filesDir, AUTO_FOREGROUND_FILE_NAME).delete()
 
-            val sourceFile = File(filesDir, SOURCE_FILE_NAME)
-            WallpaperDepthProcessor.process(this, sourceFile) { depthReady ->
-                sendBroadcast(
-                    Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
-                        .setPackage(packageName)
-                )
-                updateSelectionStatus()
+            sendBroadcast(
+                Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
+                    .setPackage(packageName)
+            )
+            updateSelectionStatus()
 
-                Toast.makeText(
-                    this,
-                    if (depthReady) {
-                        R.string.wallpaper_depth_ready
-                    } else {
-                        R.string.wallpaper_depth_fallback
-                    },
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+            Toast.makeText(
+                this,
+                R.string.wallpaper_imported_manual_depth,
+                Toast.LENGTH_LONG
+            ).show()
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
