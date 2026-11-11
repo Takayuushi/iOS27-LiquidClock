@@ -11,6 +11,9 @@
     <string name="wallpaper_selected">Wallpaper image imported and ready.</string>
     <string name="wallpaper_not_selected">No wallpaper image selected yet. Choose an image to begin.</string>
     <string name="wallpaper_imported">Wallpaper image imported.</string>
+    <string name="wallpaper_preparing_depth">Preparing wallpaper depth effect…</string>
+    <string name="wallpaper_depth_ready">Wallpaper ready with foreground depth layering.</string>
+    <string name="wallpaper_depth_fallback">Wallpaper ready. This image could not be segmented, so the clock will render without foreground overlap.</string>
     <string name="wallpaper_import_failed">Could not import wallpaper: %1$s</string>
     <string name="wallpaper_picker_unavailable">No image picker is available on this device.</string>
     <string name="live_wallpaper_preview_unavailable">The system live wallpaper preview could not be opened.</string>
