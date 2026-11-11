@@ -101,17 +101,20 @@ internal class LiquidWallpaperRenderer(
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
             float sdfBottom = uGlyphSdf.eval(sdfPoint + float2(0.0, sampleStep.y)).a;
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
-            float2 normal = gradient / max(length(gradient), 0.0005);
+            // Positive SDF values point inward, so invert the gradient to
+            // obtain the outward-facing contour normal used by glass refraction.
+            float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 2.6);
-            float innerBevel = 1.0 - smoothstep(1.0, 8.5, max(signedDistance, 0.0));
-            float outerLip = 1.0 - smoothstep(0.5, 5.0, max(-signedDistance, 0.0));
-            float face = smoothstep(-1.5, 1.5, signedDistance);
+            float edgeBand = exp(-abs(signedDistance) / 3.4);
+            float innerBevel = 1.0 - smoothstep(1.0, 12.0, max(signedDistance, 0.0));
+            float outerLip = 1.0 - smoothstep(0.5, 5.5, max(-signedDistance, 0.0));
+            float face = smoothstep(-1.5, 5.0, signedDistance);
+            float interiorVolume = smoothstep(1.0, 22.0, signedDistance);
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
             float waveA = sin(p.y * 0.0038 + uTime * 0.13);
             float waveB = cos(p.x * 0.0028 - uTime * 0.11);
-            float displacement = 1.5 + edgeBand * 7.2 + innerBevel * 1.8;
+            float displacement = 1.8 + edgeBand * 8.6 + innerBevel * 2.4;
             float2 warp = normal * displacement +
                 tilt * 1.25 +
                 float2(waveA * 0.45, waveB * 0.35);
@@ -167,7 +170,7 @@ internal class LiquidWallpaperRenderer(
                 mix(transmitted, float3(0.90, 0.92, 0.98), 0.26),
                 monochrome * 0.28
             );
-            body *= mix(0.94, 1.02, face);
+            body *= mix(0.86, 1.025, interiorVolume) * mix(0.97, 1.02, face);
 
             // Highlights react to device orientation instead of sliding across
             // the clock at a fixed, unrelated angle.
@@ -181,7 +184,7 @@ internal class LiquidWallpaperRenderer(
             ) * edgeBand;
             float keySpecular = pow(facing, 12.0) * edgeBand;
             float fillSpecular = pow(oppositeFacing, 8.0) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.16;
+            float bevelShade = innerBevel * (1.0 - facing) * 0.21;
 
             float clockRelativeY = p.y / max(uResolution.y, 1.0) - uClockCenter.y;
             float reflectionTrack = clockRelativeY + tilt.y * 0.035;
@@ -192,17 +195,17 @@ internal class LiquidWallpaperRenderer(
             float movingSpecular = exp(-pow(sweepPosition * 10.0, 2.0)) * 0.035;
 
             float3 colour = body;
-            colour += uAccentColor * fresnel * 0.14;
-            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.10;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * 0.56;
-            colour += float3(0.68, 0.82, 1.0) * fillSpecular * 0.16;
+            colour += uAccentColor * fresnel * 0.19;
+            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.14;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * 0.62;
+            colour += float3(0.68, 0.82, 1.0) * fillSpecular * 0.20;
             colour -= float3(0.09, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
             colour += float3(0.95, 0.78, 0.92) * outerLip * 0.045;
 
-            float bodyOpacity = mix(0.40, 0.53, brightSurface);
+            float bodyOpacity = mix(0.46, 0.59, brightSurface);
             bodyOpacity = mix(bodyOpacity, bodyOpacity + 0.035, monochrome);
-            float alpha = coverage * (bodyOpacity + edgeBand * 0.19 + outerLip * 0.05);
+            float alpha = coverage * (bodyOpacity + edgeBand * 0.22 + outerLip * 0.06);
             return half4(clamp(colour, 0.0, 1.0), alpha);
         }
     """.trimIndent()
@@ -801,6 +804,13 @@ internal class LiquidWallpaperRenderer(
                 glyphPath.computeBounds(originalBounds, true)
 
                 if (!originalBounds.isEmpty) {
+                    // The iOS-style 8 uses taller, softly squared counters and
+                    // a gently pinched waist instead of the stock font's oval loops.
+                    val sourcePath = if (glyph == "8") {
+                        buildAdaptiveEightPath(originalBounds)
+                    } else {
+                        glyphPath
+                    }
                     val glyphTransform = Matrix().apply {
                         setScale(
                             globalWidthScale * glyphWidthProfile(glyph, expansion),
@@ -810,7 +820,7 @@ internal class LiquidWallpaperRenderer(
                         )
                     }
                     val opticalPath = Path()
-                    glyphPath.transform(glyphTransform, opticalPath)
+                    sourcePath.transform(glyphTransform, opticalPath)
                     composedPath.addPath(opticalPath)
 
                     val opticalBounds = RectF()
@@ -979,6 +989,71 @@ internal class LiquidWallpaperRenderer(
                 }
                 distances[index] = min(best, maxUnits).toShort()
             }
+        }
+    }
+
+    private fun buildAdaptiveEightPath(bounds: RectF): Path {
+        val left = bounds.left
+        val right = bounds.right
+        val top = bounds.top
+        val bottom = bounds.bottom
+        val width = bounds.width().coerceAtLeast(1f)
+        val height = bounds.height().coerceAtLeast(1f)
+        val centerX = bounds.centerX()
+        val waistY = bounds.centerY()
+
+        return Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+
+            // A continuous outer silhouette: broad upper/lower bowls with a
+            // soft inward waist, keeping the characteristic SF-like rhythm.
+            moveTo(centerX, top)
+            cubicTo(left + width * 0.22f, top, left, top + height * 0.10f,
+                left, top + height * 0.27f)
+            cubicTo(left, top + height * 0.40f, left + width * 0.13f,
+                top + height * 0.46f, centerX, waistY)
+            cubicTo(left + width * 0.13f, top + height * 0.54f, left,
+                top + height * 0.61f, left, top + height * 0.75f)
+            cubicTo(left, bottom - height * 0.10f, left + width * 0.22f,
+                bottom, centerX, bottom)
+            cubicTo(right - width * 0.22f, bottom, right,
+                bottom - height * 0.10f, right, top + height * 0.75f)
+            cubicTo(right, top + height * 0.61f, right - width * 0.13f,
+                top + height * 0.54f, centerX, waistY)
+            cubicTo(right - width * 0.13f, top + height * 0.46f, right,
+                top + height * 0.40f, right, top + height * 0.27f)
+            cubicTo(right, top + height * 0.10f, right - width * 0.22f,
+                top, centerX, top)
+            close()
+
+            // Tall rounded-square counters are the defining detail of the
+            // expanded lock-screen 8; EVEN_ODD cuts them from the silhouette.
+            val counterLeft = left + width * 0.245f
+            val counterRight = right - width * 0.245f
+            val counterRadiusX = width * 0.095f
+            val counterRadiusY = height * 0.045f
+            addRoundRect(
+                RectF(
+                    counterLeft,
+                    top + height * 0.125f,
+                    counterRight,
+                    top + height * 0.425f
+                ),
+                counterRadiusX,
+                counterRadiusY,
+                Direction.CW
+            )
+            addRoundRect(
+                RectF(
+                    counterLeft - width * 0.008f,
+                    top + height * 0.575f,
+                    counterRight + width * 0.008f,
+                    bottom - height * 0.115f
+                ),
+                counterRadiusX,
+                counterRadiusY,
+                Direction.CW
+            )
         }
     }
 
