@@ -44,11 +44,16 @@ internal class LiquidWallpaperRenderer(
         private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
 
         private const val DEFAULT_CLOCK_X = 0.50f
-        private const val DEFAULT_CLOCK_Y = 0.225f
+        private const val DEFAULT_CLOCK_Y = 0.36f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.39f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val HORIZONTAL_GLYPH_STRETCH = 1.055f
-        private const val VERTICAL_GLYPH_STRETCH = 1.16f
+
+        // The iOS tall clock is narrow and very tall. Measure the text after
+        // deformation so its final silhouette, not its original font box,
+        // controls the available screen area.
+        private const val HORIZONTAL_GLYPH_STRETCH = 0.54f
+        private const val VERTICAL_GLYPH_STRETCH = 1.55f
+        private const val GLYPH_STROKE_EM = 0.055f
         private const val TRACKING_EM = -0.040f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
@@ -619,10 +624,9 @@ internal class LiquidWallpaperRenderer(
             typeface = this@LiquidWallpaperRenderer.typeface
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            // Slightly broaden and embolden the light face so the numerals
-            // read as substantial liquid-glass forms rather than hairlines.
             textScaleX = 0.98f
             strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
             style = Paint.Style.FILL_AND_STROKE
             isSubpixelText = true
         }
@@ -650,7 +654,13 @@ internal class LiquidWallpaperRenderer(
                 visibleHeight = max(visibleHeight, bounds.height())
             }
 
-            if (measuredWidth <= maxWidth && visibleHeight <= maxHeight) {
+            val outputStroke = candidate * GLYPH_STROKE_EM
+            val deformedWidth =
+                measuredWidth * HORIZONTAL_GLYPH_STRETCH + outputStroke
+            val deformedHeight =
+                visibleHeight * VERTICAL_GLYPH_STRETCH + outputStroke
+
+            if (deformedWidth <= maxWidth && deformedHeight <= maxHeight) {
                 fontSize = candidate
                 low = candidate
             } else {
@@ -659,7 +669,7 @@ internal class LiquidWallpaperRenderer(
         }
 
         paint.textSize = fontSize
-        paint.strokeWidth = fontSize * 0.014f
+        paint.strokeWidth = fontSize * GLYPH_STROKE_EM
         val tracking = fontSize * TRACKING_EM
         val totalWidth = glyphs.sumOf {
             paint.measureText(it).toDouble()
@@ -670,51 +680,42 @@ internal class LiquidWallpaperRenderer(
         val centerY = clockCenterY * height
         val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
 
+        // Build the glyphs as outlines first. Applying the deformation to the
+        // paths (rather than resizing the font) keeps the digits aligned and
+        // lets the glass renderer receive the exact final glyph silhouette.
+        val sourcePath = Path()
         var cursorX = startX
-        val textBounds = android.graphics.Rect()
-        var minTop = height
-        var maxBottom = 0
         glyphs.forEach { glyph ->
-            paint.getTextBounds(glyph, 0, glyph.length, textBounds)
-            minTop = min(minTop, (baseline + textBounds.top).toInt())
-            maxBottom = max(maxBottom, (baseline + textBounds.bottom).toInt())
+            paint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, sourcePath)
             cursorX += paint.measureText(glyph) + tracking
         }
 
-        val stretchedTop = centerY +
-            (minTop.toFloat() - centerY) * VERTICAL_GLYPH_STRETCH
-        val stretchedBottom = centerY +
-            (maxBottom.toFloat() - centerY) * VERTICAL_GLYPH_STRETCH
+        val deformation = Matrix().apply {
+            setScale(
+                HORIZONTAL_GLYPH_STRETCH,
+                VERTICAL_GLYPH_STRETCH,
+                clockCenterX * width,
+                centerY
+            )
+        }
+        val deformedPath = Path()
+        sourcePath.transform(deformation, deformedPath)
 
-        val stretchCenterX = clockCenterX * width
-        val stretchedLeft = stretchCenterX +
-            (startX - stretchCenterX) * HORIZONTAL_GLYPH_STRETCH
-        val stretchedRight = stretchCenterX +
-            (startX + totalWidth - stretchCenterX) * HORIZONTAL_GLYPH_STRETCH
-
+        // Stroke after the path deformation. This keeps the glass numerals
+        // uniformly thick instead of squeezing their vertical strokes along
+        // with their width. Rounded joins soften the terminals into the
+        // stretched, squircle-like iOS lock-screen silhouette.
+        val pathBounds = RectF()
+        deformedPath.computeBounds(pathBounds, true)
+        val strokePadding = paint.strokeWidth * 0.5f + fontSize * 0.012f
         glyphBounds.set(
-            (stretchedLeft - fontSize * 0.045f).coerceAtLeast(0f),
-            (stretchedTop - fontSize * 0.045f).coerceAtLeast(0f),
-            (stretchedRight + fontSize * 0.045f).coerceAtMost(width.toFloat()),
-            (stretchedBottom + fontSize * 0.045f).coerceAtMost(height.toFloat())
+            (pathBounds.left - strokePadding).coerceAtLeast(0f),
+            (pathBounds.top - strokePadding).coerceAtLeast(0f),
+            (pathBounds.right + strokePadding).coerceAtMost(width.toFloat()),
+            (pathBounds.bottom + strokePadding).coerceAtMost(height.toFloat())
         )
 
-        val maskSave = maskCanvas.save()
-        // A mild two-axis deformation makes the numerals fuller and closer
-        // to rounded-square proportions as the clock expands.
-        maskCanvas.scale(
-            HORIZONTAL_GLYPH_STRETCH,
-            VERTICAL_GLYPH_STRETCH,
-            clockCenterX * width,
-            centerY
-        )
-
-        cursorX = startX
-        glyphs.forEach { glyph ->
-            maskCanvas.drawText(glyph, cursorX, baseline, paint)
-            cursorX += paint.measureText(glyph) + tracking
-        }
-        maskCanvas.restoreToCount(maskSave)
+        maskCanvas.drawPath(deformedPath, paint)
 
         glyphMask?.recycle()
         glyphMask = mask
