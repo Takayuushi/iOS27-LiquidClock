@@ -38,8 +38,13 @@ jobs:
       - name: Install Android 17 platform and build tools
         run: |
           sdkmanager --channel=3 --install \
-            "platforms;android-37" \
+            "platforms;android-37.0" \
             "build-tools;37.0.0"
+
+          if [ -d "$ANDROID_SDK_ROOT/platforms/android-37.0" ] && [ ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          ls -la "$ANDROID_SDK_ROOT/platforms"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
