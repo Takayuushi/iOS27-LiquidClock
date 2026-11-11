@@ -50,17 +50,17 @@ internal class LiquidWallpaperRenderer(
 
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.36f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.50f
-        private const val MAX_GLYPH_WIDTH_FRACTION = 0.92f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.48f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
 
         // One coherent SF Pro variable face supplies every numeral. Per-digit
         // profiles change real font axes instead of mixing hand-drawn glyphs.
         // The expanded lock-screen treatment is taller, not merely wider:
         // compress each glyph's horizontal advance so the fitted font can grow.
-        private const val MIN_GLYPH_WIDTH_SCALE = 0.94f
-        private const val MAX_GLYPH_WIDTH_SCALE = 0.76f
-        private const val MIN_GLYPH_HEIGHT_SCALE = 1.10f
-        private const val MAX_GLYPH_HEIGHT_SCALE = 1.78f
+        private const val MIN_GLYPH_WIDTH_SCALE = 1.00f
+        private const val MAX_GLYPH_WIDTH_SCALE = 0.92f
+        private const val MIN_GLYPH_HEIGHT_SCALE = 1.00f
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.12f
         private const val TRACKING_EM = -0.018f
         private const val BASE_WEIGHT_MIN = 460
         private const val BASE_WEIGHT_MAX = 680
@@ -334,10 +334,10 @@ internal class LiquidWallpaperRenderer(
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
 
         val relativeScale = (clockScale / maskClockScale).coerceIn(0.40f, 2.8f)
-        // Keep width almost fixed during the preview; stretch vertically.
-        // The final vector rebuild then uses narrower digit profiles as well.
-        previewScaleX = 1f
-        previewScaleY = relativeScale.pow(1.38f)
+        // Preserve the typeface's natural proportions. The small vertical bias
+        // communicates adaptive expansion without turning glyphs into bars.
+        previewScaleX = relativeScale.pow(0.94f)
+        previewScaleY = relativeScale.pow(1.06f)
         updatePreviewBounds()
     }
 
@@ -665,7 +665,7 @@ internal class LiquidWallpaperRenderer(
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxHeight = height * (
             MAX_GLYPH_HEIGHT_FRACTION * clockScale
-            ).coerceAtMost(0.60f)
+            ).coerceAtMost(0.56f)
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
 
         var low = 1f
@@ -989,30 +989,30 @@ internal class LiquidWallpaperRenderer(
     private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
         val progress = expansion.coerceIn(0f, 1f)
         val compact = when (glyph) {
-            "1" -> 0.82f
-            "2" -> 0.90f
-            "3" -> 0.89f
-            "4" -> 0.85f
-            "5" -> 0.89f
-            "6" -> 0.91f
-            "7" -> 0.82f
-            "8" -> 0.92f
-            "9" -> 0.90f
-            "0" -> 0.92f
-            else -> 0.92f
+            "1" -> 0.96f
+            "2" -> 0.99f
+            "3" -> 0.98f
+            "4" -> 0.95f
+            "5" -> 0.98f
+            "6" -> 0.99f
+            "7" -> 0.95f
+            "8" -> 1.00f
+            "9" -> 0.99f
+            "0" -> 1.00f
+            else -> 1.00f
         }
         val expanded = when (glyph) {
-            "1" -> 0.68f
-            "2" -> 0.78f
-            "3" -> 0.77f
-            "4" -> 0.73f
-            "5" -> 0.77f
-            "6" -> 0.80f
-            "7" -> 0.68f
-            "8" -> 0.81f
-            "9" -> 0.79f
-            "0" -> 0.81f
-            else -> 0.81f
+            "1" -> 0.86f
+            "2" -> 0.91f
+            "3" -> 0.90f
+            "4" -> 0.88f
+            "5" -> 0.90f
+            "6" -> 0.92f
+            "7" -> 0.86f
+            "8" -> 0.93f
+            "9" -> 0.92f
+            "0" -> 0.93f
+            else -> 0.93f
         }
         return compact + (expanded - compact) * progress
     }
