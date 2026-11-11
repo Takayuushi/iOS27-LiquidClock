@@ -73,6 +73,7 @@ jobs:
           THIN_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
           LIGHT_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Light.otf"
           BOLD_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Bold.otf"
+          VARIABLE_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro.ttf"
 
           curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
             "$THIN_URL" --output "$FONT_DIR/sf_pro_display_thin.otf"
@@ -80,6 +81,8 @@ jobs:
             "$LIGHT_URL" --output "$FONT_DIR/sf_pro_display_light.otf"
           curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
             "$BOLD_URL" --output "$FONT_DIR/sf_pro_display_bold.otf"
+          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
+            "$VARIABLE_URL" --output "$ASSET_FONT_DIR/SF-Pro.ttf"
 
           for FONT in "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display_light.otf" "$FONT_DIR/sf_pro_display_bold.otf"; do
             test -s "$FONT"
@@ -98,10 +101,16 @@ jobs:
           test -s "$FONT_DIR/sf_pro_display_thin.otf"
           test -s "$FONT_DIR/sf_pro_display_light.otf"
           test -s "$FONT_DIR/sf_pro_display_bold.otf"
+          test -s "$ASSET_FONT_DIR/SF-Pro.ttf"
           test -s "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
           test -s "$ASSET_FONT_DIR/sf_pro_display_light.otf"
+          MAGIC="$(od -An -tx1 -N4 "$ASSET_FONT_DIR/SF-Pro.ttf" | tr -d ' \\n')"
+          if [[ "$MAGIC" != "00010000" ]]; then
+            echo "Invalid variable SF Pro font signature: $MAGIC" >&2
+            exit 1
+          fi
 
-          echo "SF Pro Display Thin, Light and Bold assets downloaded and validated."
+          echo "SF Pro Display assets and variable SF Pro downloaded and validated."
 
       - name: Build debug APK
         shell: bash
