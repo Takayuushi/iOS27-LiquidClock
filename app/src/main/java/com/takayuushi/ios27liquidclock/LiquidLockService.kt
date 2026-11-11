@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import java.util.function.Consumer
 import kotlin.math.min
@@ -31,7 +32,7 @@ class LiquidLockService : Service() {
     }
 
     private lateinit var windowManager: WindowManager
-    private var overlayView: android.view.View? = null
+    private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var blurListenerRegistered = false
 
@@ -137,9 +138,12 @@ class LiquidLockService : Service() {
             false
         )
 
-        view.setOnClickListener {
+        val dismissListener = View.OnClickListener {
             stopSelf()
         }
+        view.setOnClickListener(dismissListener)
+        view.findViewById<LiquidGlassClockView>(R.id.glass_surface)
+            .setOnClickListener(dismissListener)
 
         val baseFlags =
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
