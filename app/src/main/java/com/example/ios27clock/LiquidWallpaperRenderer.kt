@@ -667,7 +667,11 @@ internal class LiquidWallpaperRenderer(
             tracking * (glyphs.size - 1).coerceAtLeast(0)
         var cursorX = clockCenterX * width - totalWidth / 2f
 
-        val composedPath = Path()
+        val composedPath = Path().apply {
+            // Keep counter subpaths transparent when custom digit contours are
+            // merged from their individual glyph paths into the shared mask.
+            fillType = Path.FillType.EVEN_ODD
+        }
         val composedBounds = RectF()
         var hasBounds = false
 
