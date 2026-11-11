@@ -62,9 +62,10 @@ internal class LiquidWallpaperRenderer(
         private const val TRACKING_EM = -0.028f
         private const val BASE_WEIGHT_MIN = 420
         private const val BASE_WEIGHT_MAX = 680
-        private const val COLON_ADVANCE_EM = 0.22f
-        private const val COLON_DOT_RADIUS_EM = 0.052f
-        private const val GLYPH_CORNER_RADIUS_EM = 0.018f
+        private const val COLON_ADVANCE_EM = 0.30f
+        private const val COLON_DOT_RADIUS_EM = 0.044f
+        private const val COLON_DOT_OFFSET_EM = 0.16f
+        private const val GLYPH_CORNER_RADIUS_EM = 0.016f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
 
@@ -672,18 +673,32 @@ internal class LiquidWallpaperRenderer(
 
         glyphs.forEachIndexed { index, glyph ->
             if (glyph == ":") {
+                // A proper two-dot separator: the dots are round, individually
+                // spaced and optically smaller than the digit strokes.
                 val dotRadius = fontSize * COLON_DOT_RADIUS_EM
+                val dotOffset = fontSize * COLON_DOT_OFFSET_EM
                 val dotCenterX = cursorX + advances[index] * 0.5f
                 val dotPath = Path().apply {
-                    addCircle(dotCenterX, centerY, dotRadius, Path.Direction.CW)
+                    addCircle(
+                        dotCenterX,
+                        centerY - dotOffset,
+                        dotRadius,
+                        Path.Direction.CW
+                    )
+                    addCircle(
+                        dotCenterX,
+                        centerY + dotOffset,
+                        dotRadius,
+                        Path.Direction.CW
+                    )
                 }
                 composedPath.addPath(dotPath)
 
                 val dotBounds = RectF(
                     dotCenterX - dotRadius,
-                    centerY - dotRadius,
+                    centerY - dotOffset - dotRadius,
                     dotCenterX + dotRadius,
-                    centerY + dotRadius
+                    centerY + dotOffset + dotRadius
                 )
                 if (!hasBounds) {
                     composedBounds.set(dotBounds)
@@ -711,19 +726,28 @@ internal class LiquidWallpaperRenderer(
                     style = Paint.Style.FILL
                 }
 
-                val glyphPath = Path()
+                val fontGlyphPath = Path()
                 glyphPaint.getTextPath(
                     glyph,
                     0,
                     glyph.length,
                     cursorX,
                     baseline,
-                    glyphPath
+                    fontGlyphPath
                 )
 
                 val originalBounds = RectF()
-                glyphPath.computeBounds(originalBounds, true)
+                fontGlyphPath.computeBounds(originalBounds, true)
                 if (!originalBounds.isEmpty) {
+                    // The 1, 3 and 8 have dedicated optical outlines. The
+                    // variable font still supplies sizing/metrics, but these
+                    // three forms get softer iOS-like geometry instead of
+                    // inheriting the stock glyph terminals unchanged.
+                    val glyphPath = createOpticalDigitPath(
+                        glyph,
+                        originalBounds
+                    ) ?: fontGlyphPath
+
                     val widthScale =
                         globalWidthScale * glyphWidthFactor(glyph)
                     val heightScale =
@@ -796,6 +820,101 @@ internal class LiquidWallpaperRenderer(
         glyphMask = mask
         cachedTimeText = timeText
         updateGlyphMaskInput()
+    }
+
+
+    /**
+     * Creates optically tuned outlines for the three digits visible in the
+     * supplied reference screenshot. Coordinates are normalized to the font
+     * glyph's measured box, so the shapes continue to follow the live clock
+     * size and variable-font metrics.
+     */
+    private fun createOpticalDigitPath(
+        glyph: String,
+        bounds: RectF
+    ): Path? {
+        if (glyph !in setOf("1", "3", "8") || bounds.isEmpty) return null
+
+        val normalized = Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+        }
+
+        when (glyph) {
+            "1" -> {
+                // A softer flag and a gently tapered stem. Avoid the sharp,
+                // wedge-like top and rigid rectangular foot in the stock 1.
+                normalized.moveTo(0.12f, 0.20f)
+                normalized.cubicTo(0.24f, 0.15f, 0.34f, 0.07f, 0.43f, 0.015f)
+                normalized.cubicTo(0.48f, 0.0f, 0.55f, 0.0f, 0.64f, 0.0f)
+                normalized.cubicTo(0.67f, 0.0f, 0.69f, 0.025f, 0.69f, 0.06f)
+                normalized.lineTo(0.69f, 0.94f)
+                normalized.cubicTo(0.69f, 0.98f, 0.67f, 1.0f, 0.63f, 1.0f)
+                normalized.lineTo(0.35f, 1.0f)
+                normalized.cubicTo(0.31f, 1.0f, 0.29f, 0.98f, 0.29f, 0.94f)
+                normalized.lineTo(0.29f, 0.34f)
+                normalized.lineTo(0.14f, 0.44f)
+                normalized.cubicTo(0.10f, 0.47f, 0.07f, 0.45f, 0.07f, 0.40f)
+                normalized.lineTo(0.07f, 0.27f)
+                normalized.cubicTo(0.07f, 0.24f, 0.09f, 0.22f, 0.12f, 0.20f)
+                normalized.close()
+            }
+
+            "3" -> {
+                // One continuous, balanced S-curve: a slightly smaller upper
+                // bowl, fuller lower bowl and a soft central waist.
+                normalized.moveTo(0.15f, 0.055f)
+                normalized.cubicTo(0.36f, -0.005f, 0.78f, 0.005f, 0.86f, 0.21f)
+                normalized.cubicTo(0.93f, 0.39f, 0.79f, 0.47f, 0.58f, 0.50f)
+                normalized.cubicTo(0.80f, 0.53f, 0.94f, 0.63f, 0.91f, 0.81f)
+                normalized.cubicTo(0.87f, 1.015f, 0.45f, 1.02f, 0.13f, 0.94f)
+                normalized.cubicTo(0.09f, 0.93f, 0.08f, 0.90f, 0.09f, 0.86f)
+                normalized.lineTo(0.12f, 0.77f)
+                normalized.cubicTo(0.37f, 0.85f, 0.68f, 0.88f, 0.73f, 0.75f)
+                normalized.cubicTo(0.77f, 0.65f, 0.57f, 0.61f, 0.39f, 0.61f)
+                normalized.cubicTo(0.35f, 0.61f, 0.33f, 0.59f, 0.33f, 0.55f)
+                normalized.lineTo(0.33f, 0.44f)
+                normalized.cubicTo(0.33f, 0.40f, 0.35f, 0.39f, 0.40f, 0.39f)
+                normalized.cubicTo(0.58f, 0.39f, 0.73f, 0.36f, 0.72f, 0.25f)
+                normalized.cubicTo(0.71f, 0.13f, 0.42f, 0.15f, 0.16f, 0.23f)
+                normalized.cubicTo(0.12f, 0.24f, 0.10f, 0.22f, 0.11f, 0.18f)
+                normalized.lineTo(0.13f, 0.09f)
+                normalized.cubicTo(0.13f, 0.075f, 0.14f, 0.06f, 0.15f, 0.055f)
+                normalized.close()
+            }
+
+            "8" -> {
+                // A connected figure-eight silhouette with a tighter upper
+                // counter and a deeper, wider lower counter. Even-odd fill
+                // keeps both openings clean when rendered into the mask.
+                normalized.moveTo(0.50f, 0.0f)
+                normalized.cubicTo(0.77f, 0.0f, 0.94f, 0.10f, 0.94f, 0.25f)
+                normalized.cubicTo(0.94f, 0.39f, 0.82f, 0.46f, 0.66f, 0.50f)
+                normalized.cubicTo(0.85f, 0.55f, 0.97f, 0.63f, 0.97f, 0.78f)
+                normalized.cubicTo(0.97f, 0.94f, 0.77f, 1.0f, 0.50f, 1.0f)
+                normalized.cubicTo(0.23f, 1.0f, 0.03f, 0.94f, 0.03f, 0.78f)
+                normalized.cubicTo(0.03f, 0.63f, 0.15f, 0.55f, 0.34f, 0.50f)
+                normalized.cubicTo(0.18f, 0.46f, 0.06f, 0.39f, 0.06f, 0.25f)
+                normalized.cubicTo(0.06f, 0.10f, 0.23f, 0.0f, 0.50f, 0.0f)
+                normalized.close()
+
+                normalized.addOval(
+                    RectF(0.31f, 0.12f, 0.69f, 0.38f),
+                    Path.Direction.CW
+                )
+                normalized.addOval(
+                    RectF(0.27f, 0.62f, 0.73f, 0.89f),
+                    Path.Direction.CW
+                )
+            }
+        }
+
+        val transform = Matrix().apply {
+            setScale(bounds.width(), bounds.height())
+            postTranslate(bounds.left, bounds.top)
+        }
+        return Path(normalized).apply {
+            transform(transform)
+        }
     }
 
     private fun glyphWidthFactor(glyph: String): Float = when (glyph) {
