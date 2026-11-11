@@ -49,23 +49,23 @@ internal class LiquidWallpaperRenderer(
 
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.36f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.40f
-        private const val MAX_GLYPH_WIDTH_FRACTION = 0.88f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.44f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.95f
 
         // One coherent SF Pro variable face supplies every numeral. Per-digit
         // profiles change real font axes instead of mixing hand-drawn glyphs.
         private const val MIN_GLYPH_WIDTH_SCALE = 0.98f
-        private const val MAX_GLYPH_WIDTH_SCALE = 0.92f
+        private const val MAX_GLYPH_WIDTH_SCALE = 1.06f
         private const val MIN_GLYPH_HEIGHT_SCALE = 1.10f
-        private const val MAX_GLYPH_HEIGHT_SCALE = 1.30f
-        private const val TRACKING_EM = -0.022f
-        private const val BASE_WEIGHT_MIN = 420
-        private const val BASE_WEIGHT_MAX = 620
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.34f
+        private const val TRACKING_EM = -0.018f
+        private const val BASE_WEIGHT_MIN = 460
+        private const val BASE_WEIGHT_MAX = 680
         private const val COLON_ADVANCE_EM = 0.30f
         private const val COLON_DOT_RADIUS_EM = 0.042f
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
-        private const val MAX_CLOCK_SCALE = 1.48f
+        private const val MAX_CLOCK_SCALE = 1.65f
         private const val SDF_RANGE_PX = 24f
         private const val SDF_PADDING_PX = 28
 
@@ -156,8 +156,8 @@ internal class LiquidWallpaperRenderer(
                 uAccentColor,
                 0.10
             );
-            float3 lightFace = mix(transmitted, pearlTint, 0.24);
-            float3 darkFace = mix(transmitted, smokeTint, 0.28);
+            float3 lightFace = mix(transmitted, pearlTint, 0.16);
+            float3 darkFace = mix(transmitted, smokeTint, 0.22);
             float3 body = mix(lightFace, darkFace, brightSurface * 0.72);
             body = mix(
                 body,
@@ -189,17 +189,17 @@ internal class LiquidWallpaperRenderer(
             float movingSpecular = exp(-pow(sweepPosition * 10.0, 2.0)) * 0.035;
 
             float3 colour = body;
-            colour += uAccentColor * fresnel * 0.11;
+            colour += uAccentColor * fresnel * 0.14;
             colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.10;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * 0.46;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * 0.56;
             colour += float3(0.68, 0.82, 1.0) * fillSpecular * 0.16;
             colour -= float3(0.09, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
             colour += float3(0.95, 0.78, 0.92) * outerLip * 0.045;
 
-            float bodyOpacity = mix(0.54, 0.66, brightSurface);
+            float bodyOpacity = mix(0.40, 0.53, brightSurface);
             bodyOpacity = mix(bodyOpacity, bodyOpacity + 0.035, monochrome);
-            float alpha = coverage * (bodyOpacity + edgeBand * 0.14 + outerLip * 0.035);
+            float alpha = coverage * (bodyOpacity + edgeBand * 0.19 + outerLip * 0.05);
             return half4(clamp(colour, 0.0, 1.0), alpha);
         }
     """.trimIndent()
@@ -601,11 +601,11 @@ internal class LiquidWallpaperRenderer(
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxHeight = height * (
             MAX_GLYPH_HEIGHT_FRACTION * clockScale
-            ).coerceAtMost(0.46f)
+            ).coerceAtMost(0.52f)
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
 
         var low = 1f
-        var high = min(height * 0.62f, width * 0.88f)
+        var high = min(height * 0.68f, width * 0.96f)
         var fontSize = high
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = Color.WHITE
@@ -931,17 +931,17 @@ internal class LiquidWallpaperRenderer(
             else -> 1.00f
         }
         val expanded = when (glyph) {
-            "1" -> 0.82f
-            "2" -> 0.91f
-            "3" -> 0.90f
-            "4" -> 0.86f
-            "5" -> 0.90f
-            "6" -> 0.93f
-            "7" -> 0.82f
-            "8" -> 0.94f
-            "9" -> 0.92f
-            "0" -> 0.94f
-            else -> 0.94f
+            "1" -> 0.91f
+            "2" -> 0.98f
+            "3" -> 0.97f
+            "4" -> 0.93f
+            "5" -> 0.97f
+            "6" -> 1.00f
+            "7" -> 0.90f
+            "8" -> 1.00f
+            "9" -> 0.99f
+            "0" -> 1.00f
+            else -> 1.00f
         }
         return compact + (expanded - compact) * progress
     }
