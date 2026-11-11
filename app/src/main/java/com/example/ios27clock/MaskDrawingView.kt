@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.graphics.RenderEffect
@@ -408,7 +409,7 @@ class MaskDrawingView @JvmOverloads constructor(
         }
     }
 
-    fun writeForegroundCutout(destination: File) {
+    fun writeSelectionMask(destination: File) {
         val mask = maskBitmap
             ?: throw IllegalStateException("No selection mask is available.")
 
