@@ -37,7 +37,7 @@ jobs:
 
       - name: Install Android 17 platform and build tools
         run: |
-          sdkmanager --install \
+          sdkmanager --channel=3 --install \
             "platforms;android-37" \
             "build-tools;37.0.0"
 
