@@ -4,8 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
 import android.widget.Button
-import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 
@@ -18,21 +16,15 @@ class ForegroundMaskEditorActivity : Activity() {
     }
 
     private lateinit var drawingView: MaskDrawingView
-    private lateinit var brushValue: TextView
-    private lateinit var lassoButton: Button
-    private var eraseMode = false
-    private var lassoMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_foreground_mask_editor)
 
         drawingView = findViewById(R.id.foreground_mask_drawing_view)
-        brushValue = findViewById(R.id.foreground_brush_value)
-        lassoButton = findViewById(R.id.mask_lasso_button)
 
         val source = File(filesDir, SOURCE_FILE_NAME)
-        val existingMask = File(filesDir, MANUAL_FOREGROUND_FILE_NAME)
+        val existingSelection = File(filesDir, MANUAL_FOREGROUND_FILE_NAME)
 
         if (!source.exists() || source.length() == 0L) {
             Toast.makeText(this, R.string.mask_editor_no_wallpaper, Toast.LENGTH_LONG).show()
@@ -41,7 +33,7 @@ class ForegroundMaskEditorActivity : Activity() {
         }
 
         try {
-            drawingView.loadImage(source, existingMask)
+            drawingView.loadImage(source, existingSelection)
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
@@ -52,30 +44,6 @@ class ForegroundMaskEditorActivity : Activity() {
             return
         }
 
-        findViewById<Button>(R.id.mask_mode_button).setOnClickListener {
-            lassoMode = false
-            drawingView.setLassoMode(false)
-            drawingView.setEraseMode(!eraseMode)
-            eraseMode = !eraseMode
-            it as Button
-            it.text = getString(
-                if (eraseMode) R.string.mask_mode_erase else R.string.mask_mode_paint
-            )
-            updateLassoButton()
-        }
-
-        lassoButton.setOnClickListener {
-            lassoMode = !lassoMode
-            drawingView.setLassoMode(lassoMode)
-            if (lassoMode) {
-                drawingView.setEraseMode(false)
-                eraseMode = false
-                findViewById<Button>(R.id.mask_mode_button).text =
-                    getString(R.string.mask_mode_paint)
-            }
-            updateLassoButton()
-        }
-
         findViewById<Button>(R.id.mask_undo_button).setOnClickListener {
             drawingView.undo()
         }
@@ -84,25 +52,6 @@ class ForegroundMaskEditorActivity : Activity() {
             drawingView.clearSelection()
         }
 
-        findViewById<SeekBar>(R.id.foreground_brush_seek).apply {
-            max = 170
-            progress = 54
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?,
-                    progress: Int,
-                    fromUser: Boolean
-                ) {
-                    val brushDp = (progress + 10).coerceAtLeast(10)
-                    drawingView.setBrushSizeDp(brushDp.toFloat())
-                    brushValue.text = getString(R.string.mask_brush_size, brushDp)
-                }
-
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-            })
-        }
-        drawingView.setBrushSizeDp(64f)
         showOneTimeGuide()
 
         findViewById<Button>(R.id.mask_cancel_button).setOnClickListener {
@@ -121,17 +70,12 @@ class ForegroundMaskEditorActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.mask_editor_title)
             .setMessage(R.string.mask_editor_instructions)
-            .setPositiveButton(R.string.got_it) { dialog, _ -> dialog.dismiss() }
+            .setPositiveButton(R.string.got_it) { dialog, _ ->
+                preferences.edit().putBoolean("shown", true).apply()
+                dialog.dismiss()
+            }
             .setCancelable(false)
             .show()
-
-        preferences.edit().putBoolean("shown", true).apply()
-    }
-
-    private fun updateLassoButton() {
-        lassoButton.text = getString(
-            if (lassoMode) R.string.mask_lasso_active else R.string.mask_lasso
-        )
     }
 
     private fun saveSelection() {
@@ -141,7 +85,7 @@ class ForegroundMaskEditorActivity : Activity() {
         try {
             drawingView.writeSelectionMask(temporary)
             check(temporary.exists() && temporary.length() > 0L) {
-                "The foreground selection file was not created."
+                "The object selection file was not created."
             }
 
             if (!temporary.renameTo(target)) {

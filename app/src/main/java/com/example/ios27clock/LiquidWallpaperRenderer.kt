@@ -30,7 +30,7 @@ import kotlin.math.min
  * Composition order:
  * 1. Original selected wallpaper
  * 2. Liquid-glass clock, clipped by the real glyph alpha mask
- * 3. Feathered foreground subject, when ML Kit produced a valid mask
+ * 3. The selected-object mask erases only clock pixels beneath the object
  */
 internal class LiquidWallpaperRenderer(
     private val context: Context
@@ -45,9 +45,9 @@ internal class LiquidWallpaperRenderer(
 
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.225f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.36f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.39f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val VERTICAL_GLYPH_STRETCH = 1.24f
+        private const val VERTICAL_GLYPH_STRETCH = 1.29f
         private const val TRACKING_EM = -0.040f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
@@ -56,6 +56,7 @@ internal class LiquidWallpaperRenderer(
             uniform shader uWallpaper;
             uniform shader uGlyphMask;
             uniform float2 uResolution;
+            uniform float2 uClockCenter;
             uniform float uTime;
             uniform float3 uAccentColor;
 
@@ -65,6 +66,7 @@ internal class LiquidWallpaperRenderer(
                     return half4(0.0);
                 }
 
+                float2 px = float2(1.0, 1.0);
                 float leftMask = uGlyphMask.eval(
                     clamp(p - float2(1.8, 0.0), float2(0.0), uResolution)
                 ).a;
@@ -84,13 +86,15 @@ internal class LiquidWallpaperRenderer(
                 );
                 float gradientLength = length(gradient);
                 float2 normal = gradient / max(gradientLength, 0.0005);
-                float edge = clamp(gradientLength * 3.2, 0.0, 1.0);
-                float rim = smoothstep(0.025, 0.62, edge);
+                float edge = clamp(gradientLength * 3.8, 0.0, 1.0);
+                float rim = smoothstep(0.02, 0.58, edge);
+                float innerBevel = smoothstep(0.015, 0.20, edge) *
+                    (1.0 - smoothstep(0.28, 0.78, edge));
 
-                float waveA = sin(p.y * 0.0052 + uTime * 0.28);
-                float waveB = cos(p.x * 0.0035 - uTime * 0.22);
-                float2 warp = normal * (3.4 + edge * 12.0) +
-                    float2(waveA * 2.0, waveB * 1.3);
+                float waveA = sin(p.y * 0.0050 + uTime * 0.22);
+                float waveB = cos(p.x * 0.0033 - uTime * 0.18);
+                float2 warp = normal * (4.2 + edge * 10.0) +
+                    float2(waveA * 2.4, waveB * 1.8);
 
                 float2 samplePoint = clamp(
                     p + warp,
@@ -101,14 +105,14 @@ internal class LiquidWallpaperRenderer(
                 float3 center = uWallpaper.eval(samplePoint).rgb;
                 float3 redShift = uWallpaper.eval(
                     clamp(
-                        samplePoint + normal * 2.8 + float2(0.8, 0.0),
+                        samplePoint + normal * 3.2 + float2(0.9, 0.0),
                         float2(0.0),
                         uResolution
                     )
                 ).rgb;
                 float3 blueShift = uWallpaper.eval(
                     clamp(
-                        samplePoint - normal * 2.8 - float2(0.8, 0.0),
+                        samplePoint - normal * 3.2 - float2(0.9, 0.0),
                         float2(0.0),
                         uResolution
                     )
@@ -120,77 +124,123 @@ internal class LiquidWallpaperRenderer(
                     blueShift.b
                 );
 
-                // Let wallpaper hue and luminance remain obvious inside each
-                // digit. White is now a glass reflection, not the base fill.
-                float luminance = dot(refracted, float3(0.2126, 0.7152, 0.0722));
-                float3 saturated = clamp(
-                    mix(float3(luminance), refracted, 1.12),
-                    0.0,
-                    1.0
+                // A small optical blur gives the face thickness instead of
+                // letting the glyph read as a transparent neon outline.
+                float3 blurA = uWallpaper.eval(
+                    clamp(samplePoint + float2(4.5, 0.0), float2(0.0), uResolution)
+                ).rgb;
+                float3 blurB = uWallpaper.eval(
+                    clamp(samplePoint - float2(4.5, 0.0), float2(0.0), uResolution)
+                ).rgb;
+                float3 blurC = uWallpaper.eval(
+                    clamp(samplePoint + float2(0.0, 4.5), float2(0.0), uResolution)
+                ).rgb;
+                float3 blurD = uWallpaper.eval(
+                    clamp(samplePoint - float2(0.0, 4.5), float2(0.0), uResolution)
+                ).rgb;
+                float3 softTransmission = (blurA + blurB + blurC + blurD) * 0.25;
+                float3 transmitted = mix(refracted, softTransmission, 0.24);
+
+                float luminance = dot(
+                    transmitted,
+                    float3(0.2126, 0.7152, 0.0722)
+                );
+                float maxChannel = max(max(transmitted.r, transmitted.g), transmitted.b);
+                float minChannel = min(min(transmitted.r, transmitted.g), transmitted.b);
+                float saturation = (maxChannel - minChannel) / max(maxChannel, 0.08);
+
+                float brightSurface = smoothstep(0.43, 0.78, luminance);
+                float darkSurface = 1.0 - smoothstep(0.14, 0.40, luminance);
+                float monochrome = 1.0 - smoothstep(0.08, 0.22, saturation);
+
+                // Coloured wallpapers retain their hue, but switch material
+                // value with the local background so the face stays legible.
+                float3 accentPearl = mix(
+                    float3(0.86, 0.84, 0.91),
+                    uAccentColor,
+                    0.22
+                );
+                float3 lightColourGlass = mix(transmitted, accentPearl, 0.46);
+                lightColourGlass = mix(
+                    lightColourGlass,
+                    float3(0.93, 0.95, 1.0),
+                    darkSurface * 0.30
                 );
 
-                // Bright wallpaper areas need an accent-tinted pearl fill so
-                // the translucent clock remains legible over white skies.
-                float brightSurface = smoothstep(0.58, 0.90, luminance);
-                float3 neutralPearl = float3(0.94, 0.955, 1.0);
-                float3 accentPearl = mix(
-                    float3(0.985, 0.91, 0.955),
+                float3 accentSmoke = mix(
+                    float3(0.20, 0.17, 0.23),
                     uAccentColor,
-                    0.30
+                    0.24
                 );
-                float3 glassBody = mix(saturated, neutralPearl, 0.18);
-                glassBody = mix(
-                    glassBody,
-                    accentPearl,
-                    brightSurface * 0.72
+                float3 darkColourGlass = mix(
+                    accentSmoke,
+                    transmitted,
+                    0.16
+                );
+                float3 colourGlass = mix(
+                    lightColourGlass,
+                    darkColourGlass,
+                    brightSurface
+                );
+
+                // Monochrome images get a deliberate graphite/silver glass
+                // rather than a nearly invisible transparent outline. On a
+                // bright grey sky the body is smoked; over dark branches it
+                // turns into a cool pearl so the numerals remain readable.
+                float3 monoPearl = float3(0.76, 0.79, 0.85);
+                float3 monoGraphite = mix(
+                    float3(0.15, 0.16, 0.19),
+                    uAccentColor,
+                    0.10
+                );
+                float3 monoGlass = mix(
+                    monoPearl,
+                    monoGraphite,
+                    brightSurface
+                );
+
+                float3 glassBody = mix(
+                    colourGlass,
+                    monoGlass,
+                    monochrome * 0.96
                 );
 
                 float2 upperLight = normalize(float2(-0.62, -0.78));
                 float2 lowerLight = normalize(float2(0.52, 0.84));
-
                 float topGlint = pow(
                     max(dot(normal, upperLight), 0.0),
                     2.0
                 ) * rim;
-
                 float lowerGlint = pow(
                     max(dot(normal, lowerLight), 0.0),
                     1.8
                 ) * rim;
 
-                float innerRim = smoothstep(0.02, 0.24, edge) *
-                    (1.0 - smoothstep(0.48, 0.94, edge));
-                float contourBand = smoothstep(0.015, 0.16, edge) *
-                    (1.0 - smoothstep(0.20, 0.48, edge));
-
+                // A broad, slow reflection moves across the face, while
+                // opposed rim lights create a visible bevel and glass depth.
+                float relativeY = p.y / max(uResolution.y, 1.0) - uClockCenter.y;
+                float broadReflection = exp(-pow((relativeY + 0.035) * 10.0, 2.0)) *
+                    (0.045 + 0.035 * (0.5 + 0.5 * sin(p.x * 0.003 + uTime * 0.20)));
                 float sweepPosition = p.x / max(uResolution.x, 1.0) -
-                    0.30 - 0.045 * sin(uTime * 0.26);
-                float movingHighlight = exp(
-                    -pow(sweepPosition * 10.0, 2.0)
-                ) * 0.085;
+                    0.30 - 0.045 * sin(uTime * 0.24);
+                float movingHighlight = exp(-pow(sweepPosition * 10.0, 2.0)) * 0.09;
+                float darkRim = pow(
+                    max(dot(normal, lowerLight), 0.0),
+                    2.0
+                ) * rim;
 
-                float3 color = glassBody;
-                float3 softContrastEdge = mix(
-                    uAccentColor * 0.50,
-                    float3(0.18, 0.14, 0.22),
-                    brightSurface * 0.34
-                );
-                color = mix(
-                    color,
-                    softContrastEdge,
-                    contourBand * mix(0.12, 0.26, brightSurface)
-                );
-                color += uAccentColor * rim * 0.10;
-                color += float3(0.20, 0.42, 0.78) * rim * 0.14;
-                color += float3(0.78, 0.90, 1.0) * innerRim * 0.12;
-                color += float3(1.0, 1.0, 1.0) * topGlint * 0.46;
-                color += float3(0.42, 0.66, 1.0) * lowerGlint * 0.28;
-                color += float3(1.0, 1.0, 1.0) * movingHighlight;
+                float3 colour = glassBody;
+                colour += uAccentColor * rim * 0.10;
+                colour += float3(0.78, 0.88, 1.0) * innerBevel * 0.18;
+                colour -= float3(0.10, 0.12, 0.17) * darkRim * 0.22;
+                colour += float3(1.0, 1.0, 1.0) * topGlint * 0.50;
+                colour += float3(0.48, 0.68, 1.0) * lowerGlint * 0.24;
+                colour += float3(1.0, 1.0, 1.0) * broadReflection;
+                colour += float3(1.0, 1.0, 1.0) * movingHighlight;
 
-                // Alpha follows the glyph coverage at every pixel. A clear
-                // mask pixel returns zero alpha, never a rectangular backdrop.
-                float alpha = coverage * (0.94 + rim * 0.06);
-                return half4(clamp(color, 0.0, 1.0), alpha);
+                float bodyOpacity = mix(0.82, 0.90, monochrome);
+                float alpha = coverage * (bodyOpacity + rim * 0.08);
+                return half4(clamp(colour, 0.0, 1.0), alpha);
             }
         """.trimIndent()
     }
@@ -349,6 +399,11 @@ internal class LiquidWallpaperRenderer(
                         height.toFloat()
                     )
                     shader.setFloatUniform("uTime", timeSeconds)
+                    shader.setFloatUniform(
+                        "uClockCenter",
+                        clockCenterX,
+                        clockCenterY
+                    )
                     shaderPaint.shader = shader
                     canvas.drawRect(glyphBounds, shaderPaint)
                     shaderPaint.shader = null
@@ -711,7 +766,7 @@ internal class LiquidWallpaperRenderer(
         for (index in 1 until bins) {
             if (weights[index] > weights[best]) best = index
         }
-        if (weights[best] <= 0.0) return Color.rgb(210, 165, 205)
+        if (weights[best] <= 0.0) return Color.rgb(145, 150, 160)
 
         return Color.rgb(
             (red[best] / weights[best]).toInt().coerceIn(0, 255),
@@ -752,6 +807,11 @@ internal class LiquidWallpaperRenderer(
                 Color.red(adaptiveAccentColor) / 255f,
                 Color.green(adaptiveAccentColor) / 255f,
                 Color.blue(adaptiveAccentColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uClockCenter",
+                clockCenterX,
+                clockCenterY
             )
             glassShader = shader
         } catch (exception: RuntimeException) {
