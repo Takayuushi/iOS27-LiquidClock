@@ -12,12 +12,14 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import android.graphics.RenderEffect
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Foreground mask editor with brush and polygon-lasso selection.
@@ -52,8 +54,20 @@ class MaskDrawingView @JvmOverloads constructor(
     private var lassoMode = false
     private var brushSizeDp = 64f
     private val imageRect = RectF()
+    private val coverRect = RectF()
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val ambientPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        alpha = 150
+        renderEffect = RenderEffect.createBlurEffect(
+            30f,
+            30f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    }
+    private val ambientShadePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(58, 8, 14, 24)
+    }
 
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = PorterDuffColorFilter(
@@ -185,10 +199,14 @@ class MaskDrawingView @JvmOverloads constructor(
             return
         }
 
-        // Center-crop fills the complete editor viewport with the source image.
-        // There are no black letterbox regions that can be mistaken for missing
-        // or transparent parts of the foreground selection.
+        // Fill unused editor space with a blurred, dimmed extension of the same
+        // wallpaper, then show the entire original image sharply in fit-center.
+        // This avoids black bars while keeping the complete building visible for
+        // precise lasso tracing. Selection coordinates remain in source pixels.
         updateImageRect(source)
+        updateCoverRect(source)
+        canvas.drawBitmap(source, null, coverRect, ambientPaint)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), ambientShadePaint)
         canvas.drawBitmap(source, null, imageRect, imagePaint)
 
         maskBitmap?.let { mask ->
@@ -216,8 +234,9 @@ class MaskDrawingView @JvmOverloads constructor(
         val viewHeight = height.toFloat()
         if (viewWidth <= 0f || viewHeight <= 0f) return
 
-        // Match LiquidWallpaperRenderer.drawCoverBitmap() exactly.
-        val scale = max(
+        // Fit-center the complete source image. All editing operations use
+        // these source-image coordinates, not the wallpaper's later crop.
+        val scale = min(
             viewWidth / bitmap.width,
             viewHeight / bitmap.height
         )
@@ -228,15 +247,29 @@ class MaskDrawingView @JvmOverloads constructor(
         imageRect.set(left, top, left + renderedWidth, top + renderedHeight)
     }
 
+    private fun updateCoverRect(bitmap: Bitmap) {
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        if (viewWidth <= 0f || viewHeight <= 0f) return
+
+        val scale = max(
+            viewWidth / bitmap.width,
+            viewHeight / bitmap.height
+        )
+        val renderedWidth = bitmap.width * scale
+        val renderedHeight = bitmap.height * scale
+        val left = (viewWidth - renderedWidth) / 2f
+        val top = (viewHeight - renderedHeight) / 2f
+        coverRect.set(left, top, left + renderedWidth, top + renderedHeight)
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val source = sourceBitmap ?: return false
         updateImageRect(source)
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (event.x < 0f || event.y < 0f ||
-                    event.x > width.toFloat() || event.y > height.toFloat()
-                ) return false
+                if (!imageRect.contains(event.x, event.y)) return false
 
                 val point = viewToImage(event.x, event.y, source) ?: return false
                 val path = Path().apply { moveTo(point.x, point.y) }
