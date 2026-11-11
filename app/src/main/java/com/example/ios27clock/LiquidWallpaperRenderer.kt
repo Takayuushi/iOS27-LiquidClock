@@ -24,6 +24,7 @@ import android.text.format.DateFormat
 import android.util.Log
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Full-screen wallpaper clock compositor.
@@ -663,10 +664,7 @@ internal class LiquidWallpaperRenderer(
                     (fontSize / density).roundToInt().coerceIn(6, 144)
                 )
                 textSize = fontSize
-                strokeWidth = max(0.4f, fontSize * 0.0025f)
-                strokeJoin = Paint.Join.ROUND
-                strokeCap = Paint.Cap.ROUND
-                style = Paint.Style.FILL_AND_STROKE
+                style = Paint.Style.FILL
             }
 
             val glyphPath = Path()
@@ -719,10 +717,25 @@ internal class LiquidWallpaperRenderer(
                 (composedBounds.right + inset).coerceAtMost(width.toFloat()),
                 (composedBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
-            maskCanvas.drawPath(composedPath, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                color = Color.WHITE
-                style = Paint.Style.FILL
-            })
+            maskCanvas.drawPath(
+                composedPath,
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                    color = Color.WHITE
+                    style = Paint.Style.FILL
+                }
+            )
+            // A small final contour expansion gives the variable font enough
+            // body at large display sizes without making the whole typeface bold.
+            maskCanvas.drawPath(
+                composedPath,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.WHITE
+                    style = Paint.Style.STROKE
+                    strokeWidth = fontSize * 0.008f
+                    strokeJoin = Paint.Join.ROUND
+                    strokeCap = Paint.Cap.ROUND
+                }
+            )
         } else {
             glyphBounds.setEmpty()
         }
