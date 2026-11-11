@@ -1,25 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">iOS 27 Liquid Clock</string>
-    <string name="widget_name">Liquid Clock</string>
-    <string name="widget_description">An oversized SF Pro clock rendered to a transparent bitmap.</string>
-    <string name="start_preview">Start floating preview</string>
-    <string name="stop_preview">Stop floating preview</string>
-    <string name="continue_label">Continue</string>
-    <string name="stop_label">Stop</string>
-    <string name="preview_title">Liquid Glass Clock</string>
-    <string name="preview_subtitle">A live clock with a GPU-rendered glass surface.</string>
-    <string name="overlay_dialog_title">Enable floating preview?</string>
-    <string name="overlay_dialog_message">The preview appears above other apps in a small window. It does not replace or unlock the Android system lock screen. Android will ask you to allow display over other apps.</string>
-    <string name="overlay_permission_required">Allow display over other apps to start the preview.</string>
-    <string name="overlay_permission_denied">Overlay permission was not granted.</string>
-    <string name="overlay_started">Liquid Clock preview started.</string>
-    <string name="overlay_stopped">Liquid Clock preview stopped.</string>
-    <string name="service_start_failed">Unable to start the preview: %1$s</string>
-    <string name="notification_channel_name">Liquid Clock preview</string>
-    <string name="notification_channel_description">Controls the floating Liquid Clock preview.</string>
-    <string name="notification_title">Liquid Clock is active</string>
-    <string name="notification_text">Tap the glass preview to dismiss, or use Stop here.</string>
-    <string name="glass_caption">LIVE GLASS SURFACE</string>
-    <string name="tap_to_dismiss">Tap the glass to dismiss</string>
+    <string name="widget_name">Liquid Clock (Widget)</string>
+    <string name="widget_description">A simple companion clock widget.</string>
+    <string name="live_wallpaper_name">Liquid Big Clock</string>
+    <string name="live_wallpaper_description">A full-screen oversized clock rendered over your selected wallpaper.</string>
+    <string name="live_wallpaper_intro">Choose the same wallpaper you use on your Galaxy S25+, then preview the live wallpaper. The clock is drawn into the wallpaper layer, behind your home-screen icons.</string>
+    <string name="choose_wallpaper">Choose wallpaper image</string>
+    <string name="preview_and_set">Preview and set live wallpaper</string>
+    <string name="wallpaper_selected">Wallpaper image imported and ready.</string>
+    <string name="wallpaper_not_selected">No wallpaper image selected yet. Choose an image to begin.</string>
+    <string name="wallpaper_imported">Wallpaper image imported.</string>
+    <string name="wallpaper_import_failed">Could not import wallpaper: %1$s</string>
+    <string name="wallpaper_picker_unavailable">No image picker is available on this device.</string>
+    <string name="live_wallpaper_preview_unavailable">The system live wallpaper preview could not be opened.</string>
+    <string name="lock_screen_note">Lock Screen note: One UI controls the secure Lock Screen clock and draws it above the wallpaper. This live wallpaper primarily targets the Home Screen. For the Lock Screen, use Samsung's native clock editor or Good Lock / LockStar alongside the same wallpaper.</string>
 </resources>
