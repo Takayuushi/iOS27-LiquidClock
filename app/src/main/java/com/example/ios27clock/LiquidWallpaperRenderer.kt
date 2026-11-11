@@ -50,7 +50,7 @@ internal class LiquidWallpaperRenderer(
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.36f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.39f
-        private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.88f
 
         // The whole clock is not stretched as one texture. Each numeral gets
         // its own optical width, weight and height, then is composed as a path.
@@ -593,8 +593,13 @@ internal class LiquidWallpaperRenderer(
         val globalHeightScale =
             MIN_GLYPH_HEIGHT_SCALE +
                 (MAX_GLYPH_HEIGHT_SCALE - MIN_GLYPH_HEIGHT_SCALE) * scaleProgress
-        val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION * clockScale
-        val maxHeight = height * MAX_GLYPH_HEIGHT_FRACTION * clockScale
+        // Scale the clock vertically, but never let the glyph run grow beyond
+        // the screen width. The previous scale multiplier allowed a persisted
+        // large-clock setting to push the first and last digits off-screen.
+        val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
+        val maxHeight = height * (
+            MAX_GLYPH_HEIGHT_FRACTION * clockScale
+            ).coerceAtMost(0.46f)
 
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
         var low = 1f
@@ -608,7 +613,7 @@ internal class LiquidWallpaperRenderer(
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
             textScaleX = 1f
-            typeface = typefaceFor(baseWeight, 80)
+            typeface = typefaceFor(baseWeight, 80, 100f)
             isSubpixelText = true
         }
 
@@ -622,14 +627,20 @@ internal class LiquidWallpaperRenderer(
             glyphs.forEach { glyph ->
                 val widthFactor = glyphWidthFactor(glyph)
                 val heightFactor = glyphHeightFactor(glyph)
-                candidateWidth += if (glyph == ":") {
-                    candidate * COLON_ADVANCE_EM
+                if (glyph == ":") {
+                    candidateWidth += candidate * COLON_ADVANCE_EM
                 } else {
-                    sizingPaint.measureText(glyph) *
-                        globalWidthScale *
-                        widthFactor
-                }
-                if (glyph != ":") {
+                    // Measure each digit with its own width and weight axes.
+                    // This is much closer to Apple's clock face than measuring
+                    // all characters with one generic SF Pro instance.
+                    sizingPaint.typeface = typefaceFor(
+                        (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
+                        80,
+                        glyphWidthAxis(glyph, scaleProgress)
+                    )
+                    val measuredWidth = sizingPaint.measureText(glyph)
+                    candidateWidth += measuredWidth * globalWidthScale * widthFactor
+
                     val bounds = android.graphics.Rect()
                     sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
                     visibleHeight = max(
@@ -658,6 +669,12 @@ internal class LiquidWallpaperRenderer(
             if (glyph == ":") {
                 fontSize * COLON_ADVANCE_EM
             } else {
+                sizingPaint.typeface = typefaceFor(
+                    (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
+                    (fontSize / density).roundToInt().coerceIn(6, 96),
+                    glyphWidthAxis(glyph, scaleProgress)
+                )
+                sizingPaint.textSize = fontSize
                 sizingPaint.measureText(glyph) *
                     globalWidthScale *
                     glyphWidthFactor(glyph)
@@ -724,7 +741,8 @@ internal class LiquidWallpaperRenderer(
                 val glyphPaint = Paint(sizingPaint).apply {
                     typeface = typefaceFor(
                         weightForGlyph,
-                        (fontSize / density).roundToInt().coerceIn(6, 96)
+                        (fontSize / density).roundToInt().coerceIn(6, 96),
+                        glyphWidthAxis(glyph, scaleProgress)
                     )
                     textSize = fontSize
                     style = Paint.Style.FILL
@@ -940,6 +958,29 @@ internal class LiquidWallpaperRenderer(
         else -> 0.94f
     }
 
+
+    /**
+     * SF Pro's width axis is applied per numeral, not to the whole time string.
+     * Narrow forms (especially 1 and 7) retain their natural optical width,
+     * while round forms stay fuller as the clock is expanded.
+     */
+    private fun glyphWidthAxis(glyph: String, expansion: Float): Float {
+        val base = when (glyph) {
+            "1" -> 91f
+            "2" -> 96f
+            "3" -> 95f
+            "4" -> 92f
+            "5" -> 96f
+            "6" -> 97f
+            "7" -> 90f
+            "8" -> 98f
+            "9" -> 97f
+            "0" -> 97f
+            else -> 100f
+        }
+        return (base - expansion.coerceIn(0f, 1f) * 3f).coerceIn(86f, 100f)
+    }
+
     private fun glyphHeightFactor(glyph: String): Float = when (glyph) {
         ":" -> 0.82f
         "1" -> 1.025f
@@ -993,22 +1034,33 @@ internal class LiquidWallpaperRenderer(
         }
     }
 
-    private fun typefaceFor(weight: Int, opticalSize: Int): Typeface {
+    private fun typefaceFor(
+        weight: Int,
+        opticalSize: Int,
+        width: Float
+    ): Typeface {
         val safeWeight = weight.coerceIn(100, 900)
         val safeOpticalSize = opticalSize.coerceIn(6, 144)
-        val key = safeWeight * 1000 + safeOpticalSize
+        val safeWidth = width.coerceIn(75f, 125f)
+        val widthKey = (safeWidth * 10f).roundToInt()
+        val key = safeWeight * 1_000_000 + safeOpticalSize * 1_000 + widthKey
         typefaceCache[key]?.let { return it }
 
         val variableFace = try {
+            // If this SF Pro build exposes the width axis, use it. Some
+            // redistributed variable builds omit wdth, so fall back safely
+            // to weight + optical size instead of losing the live clock.
             Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
                 .setFontVariationSettings(
-                    "'wght' $safeWeight, 'opsz' $safeOpticalSize"
+                    "'wght' $safeWeight, 'wdth' $safeWidth, 'opsz' $safeOpticalSize"
                 )
                 .build()
-        } catch (axisException: Exception) {
+        } catch (widthAxisException: Exception) {
             try {
                 Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
-                    .setFontVariationSettings("'wght' $safeWeight")
+                    .setFontVariationSettings(
+                        "'wght' $safeWeight, 'opsz' $safeOpticalSize"
+                    )
                     .build()
             } catch (fontException: Exception) {
                 Log.w(
@@ -1020,7 +1072,7 @@ internal class LiquidWallpaperRenderer(
             }
         }
 
-        if (typefaceCache.size >= 48) {
+        if (typefaceCache.size >= 64) {
             typefaceCache.clear()
         }
         typefaceCache[key] = variableFace
