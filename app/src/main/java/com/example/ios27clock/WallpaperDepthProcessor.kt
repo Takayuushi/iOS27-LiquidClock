@@ -3,7 +3,7 @@ package com.example.ios27clock
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Rect
+import android.graphics.Color
 import android.util.Log
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
@@ -13,12 +13,13 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
- * Creates an optional transparent foreground layer from a selected wallpaper.
+ * Builds a soft-edged, transparent foreground cut-out from the selected wallpaper.
  *
- * Segmentation runs once when a wallpaper is imported. The live wallpaper
- * engine only composites the cached result; it never runs ML inference per frame.
+ * ML inference runs once per wallpaper import, never inside the wallpaper frame loop.
+ * The resulting PNG is cached in app-private storage and composited above the clock.
  */
 internal object WallpaperDepthProcessor {
 
@@ -34,6 +35,7 @@ internal object WallpaperDepthProcessor {
         onComplete: (Boolean) -> Unit
     ) {
         val appContext = context.applicationContext
+
         executor.execute {
             val foregroundFile = File(appContext.filesDir, FOREGROUND_FILE_NAME)
             val temporaryFile = File(appContext.filesDir, "$FOREGROUND_FILE_NAME.tmp")
@@ -43,82 +45,123 @@ internal object WallpaperDepthProcessor {
             val inputBitmap = decodeForSegmentation(sourceFile)
             if (inputBitmap == null) {
                 Log.w(TAG, "Wallpaper could not be decoded for subject segmentation.")
-                onCompleteOnMain(false, onComplete)
+                completeOnMain(false, onComplete)
                 return@execute
             }
 
             val options = SubjectSegmenterOptions.Builder()
-                .enableForegroundBitmap()
+                .enableForegroundConfidenceMask()
                 .build()
+
             val segmenter: SubjectSegmenter = SubjectSegmentation.getClient(options)
 
             try {
                 segmenter.process(InputImage.fromBitmap(inputBitmap, 0))
                     .addOnSuccessListener { result ->
                         var success = false
+
                         try {
-                            val foreground = result.foregroundBitmap
-                            if (foreground != null) {
-                                val normalized = if (
-                                    foreground.width == inputBitmap.width &&
-                                    foreground.height == inputBitmap.height
-                                ) {
-                                    foreground.copy(Bitmap.Config.ARGB_8888, false)
-                                } else {
-                                    Bitmap.createScaledBitmap(
-                                        foreground,
-                                        inputBitmap.width,
-                                        inputBitmap.height,
-                                        true
-                                    )
+                            val confidence = result.foregroundConfidenceMask
+                            val pixelCount = inputBitmap.width * inputBitmap.height
+
+                            if (confidence == null || confidence.size < pixelCount) {
+                                Log.w(TAG, "ML Kit returned an invalid foreground confidence mask.")
+                            } else {
+                                val sourcePixels = IntArray(pixelCount)
+                                inputBitmap.getPixels(
+                                    sourcePixels,
+                                    0,
+                                    inputBitmap.width,
+                                    0,
+                                    0,
+                                    inputBitmap.width,
+                                    inputBitmap.height
+                                )
+
+                                var foregroundPixels = 0
+                                val cutoutPixels = IntArray(pixelCount)
+
+                                for (index in 0 until pixelCount) {
+                                    val sourceColor = sourcePixels[index]
+                                    val confidenceValue = confidence[index].coerceIn(0f, 1f)
+
+                                    // Soft threshold keeps anti-aliased tree branches and
+                                    // mountain edges while removing most background pixels.
+                                    val normalized = (
+                                        (confidenceValue - 0.12f) / (0.82f - 0.12f)
+                                    ).coerceIn(0f, 1f)
+                                    val featheredAlpha = normalized * normalized *
+                                        (3f - 2f * normalized)
+
+                                    val sourceAlpha = Color.alpha(sourceColor) / 255f
+                                    val alpha = (sourceAlpha * featheredAlpha * 255f)
+                                        .roundToInt()
+                                        .coerceIn(0, 255)
+
+                                    if (alpha >= 12) foregroundPixels++
+                                    cutoutPixels[index] =
+                                        (alpha shl 24) or (sourceColor and 0x00FFFFFF)
                                 }
 
-                                if (hasTransparentBackground(normalized)) {
+                                val coverageRatio = foregroundPixels.toFloat() / pixelCount
+                                if (coverageRatio in 0.015f..0.94f) {
+                                    val cutout = Bitmap.createBitmap(
+                                        cutoutPixels,
+                                        inputBitmap.width,
+                                        inputBitmap.height,
+                                        Bitmap.Config.ARGB_8888
+                                    )
+
                                     FileOutputStream(temporaryFile).use { output ->
                                         check(
-                                            normalized.compress(
+                                            cutout.compress(
                                                 Bitmap.CompressFormat.PNG,
                                                 100,
                                                 output
                                             )
-                                        ) { "Could not encode the foreground PNG." }
+                                        ) { "Could not encode the foreground cut-out." }
                                         output.fd.sync()
                                     }
+                                    cutout.recycle()
 
                                     if (!temporaryFile.renameTo(foregroundFile)) {
                                         temporaryFile.copyTo(foregroundFile, overwrite = true)
                                         temporaryFile.delete()
                                     }
+
                                     success = foregroundFile.exists() &&
                                         foregroundFile.length() > 0L
+
+                                    Log.i(
+                                        TAG,
+                                        "Foreground cut-out saved; mask coverage=" +
+                                            (coverageRatio * 100f).roundToInt() + "%."
+                                    )
                                 } else {
                                     Log.w(
                                         TAG,
-                                        "Segmentation result had no transparent background; " +
-                                            "using the normal wallpaper composition."
+                                        "Foreground mask coverage was implausible: " +
+                                            (coverageRatio * 100f) + "%."
                                     )
-                                    normalized.recycle()
                                 }
-                            } else {
-                                Log.w(TAG, "ML Kit returned no foreground bitmap.")
                             }
                         } catch (exception: Exception) {
-                            Log.e(TAG, "Could not save the foreground layer.", exception)
+                            Log.e(TAG, "Could not create the foreground cut-out.", exception)
                             temporaryFile.delete()
                             foregroundFile.delete()
                         } finally {
                             inputBitmap.recycle()
                             segmenter.close()
-                            onCompleteOnMain(success, onComplete)
+                            completeOnMain(success, onComplete)
                         }
                     }
                     .addOnFailureListener { exception ->
-                        Log.w(TAG, "Subject segmentation failed; continuing without depth.", exception)
+                        Log.w(TAG, "Subject segmentation failed; depth layer will be omitted.", exception)
                         inputBitmap.recycle()
                         segmenter.close()
                         temporaryFile.delete()
                         foregroundFile.delete()
-                        onCompleteOnMain(false, onComplete)
+                        completeOnMain(false, onComplete)
                     }
             } catch (exception: Exception) {
                 Log.e(TAG, "Could not start subject segmentation.", exception)
@@ -126,7 +169,7 @@ internal object WallpaperDepthProcessor {
                 segmenter.close()
                 temporaryFile.delete()
                 foregroundFile.delete()
-                onCompleteOnMain(false, onComplete)
+                completeOnMain(false, onComplete)
             }
         }
     }
@@ -165,29 +208,7 @@ internal object WallpaperDepthProcessor {
         }
     }
 
-    private fun hasTransparentBackground(bitmap: Bitmap): Boolean {
-        val sampleStepX = max(1, bitmap.width / 32)
-        val sampleStepY = max(1, bitmap.height / 32)
-        var samples = 0
-        var transparentSamples = 0
-
-        var y = 0
-        while (y < bitmap.height) {
-            var x = 0
-            while (x < bitmap.width) {
-                val alpha = (bitmap.getPixel(x, y) ushr 24) and 0xFF
-                samples++
-                if (alpha < 245) transparentSamples++
-                x += sampleStepX
-            }
-            y += sampleStepY
-        }
-
-        return samples > 0 && transparentSamples >= 8 &&
-            transparentSamples.toFloat() / samples.toFloat() >= 0.015f
-    }
-
-    private fun onCompleteOnMain(
+    private fun completeOnMain(
         success: Boolean,
         callback: (Boolean) -> Unit
     ) {
