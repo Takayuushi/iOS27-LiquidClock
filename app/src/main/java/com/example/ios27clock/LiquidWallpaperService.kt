@@ -4,6 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -12,6 +16,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import kotlin.math.hypot
+import kotlin.math.sin
 
 class LiquidWallpaperService : WallpaperService() {
 
@@ -30,7 +35,28 @@ class LiquidWallpaperService : WallpaperService() {
 
         private val handler = Handler(Looper.getMainLooper())
         private val renderer = LiquidWallpaperRenderer(this@LiquidWallpaperService)
+        private val sensorManager =
+            this@LiquidWallpaperService.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        private val rotationSensor =
+            sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        private val rotationMatrix = FloatArray(9)
+        private val orientation = FloatArray(3)
+        private var tiltTrackingActive = false
         private var frameScheduled = false
+
+        private val tiltListener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                SensorManager.getOrientation(rotationMatrix, orientation)
+                renderer.setDeviceTilt(
+                    sin(orientation[2]).coerceIn(-1f, 1f),
+                    -sin(orientation[1]).coerceIn(-1f, 1f)
+                )
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
 
         private var draggingClock = false
         private var activePointerId = MotionEvent.INVALID_POINTER_ID
@@ -74,15 +100,18 @@ class LiquidWallpaperService : WallpaperService() {
         ) {
             super.onSurfaceChanged(holder, format, width, height)
             renderer.setViewport(width, height)
+            if (isVisible) startTiltTracking()
             drawFrame()
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             if (visible) {
+                startTiltTracking()
                 drawFrame()
                 scheduleNextFrame()
             } else {
+                stopTiltTracking()
                 cancelScheduledFrame()
             }
         }
@@ -163,11 +192,13 @@ class LiquidWallpaperService : WallpaperService() {
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
+            stopTiltTracking()
             cancelScheduledFrame()
             super.onSurfaceDestroyed(holder)
         }
 
         override fun onDestroy() {
+            stopTiltTracking()
             cancelScheduledFrame()
             renderer.persistComposition()
             try {
@@ -177,6 +208,21 @@ class LiquidWallpaperService : WallpaperService() {
             }
             renderer.release()
             super.onDestroy()
+        }
+
+        private fun startTiltTracking() {
+            if (tiltTrackingActive || rotationSensor == null) return
+            tiltTrackingActive = sensorManager.registerListener(
+                tiltListener,
+                rotationSensor,
+                SensorManager.SENSOR_DELAY_GAME
+            )
+        }
+
+        private fun stopTiltTracking() {
+            if (!tiltTrackingActive) return
+            sensorManager.unregisterListener(tiltListener)
+            tiltTrackingActive = false
         }
 
         private fun pointerDistance(event: MotionEvent): Float {

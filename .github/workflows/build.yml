@@ -112,6 +112,36 @@ jobs:
 
           echo "SF Pro Display assets and variable SF Pro downloaded and validated."
 
+      - name: Verify SF Pro variable-font axes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet fonttools
+          python3 - <<'PY'
+          from fontTools.ttLib import TTFont
+
+          path = "app/src/main/assets/fonts/SF-Pro.ttf"
+          font = TTFont(path)
+          if "fvar" not in font:
+              raise SystemExit("SF-Pro.ttf is not a variable font (missing fvar table).")
+
+          axes = {
+              axis.axisTag: (axis.minValue, axis.defaultValue, axis.maxValue)
+              for axis in font["fvar"].axes
+          }
+          print("SF Pro variation axes:")
+          for tag, values in sorted(axes.items()):
+              print(f"  {tag}: min={values[0]}, default={values[1]}, max={values[2]}")
+
+          required = {"wght", "wdth", "opsz"}
+          missing = required - set(axes)
+          if missing:
+              raise SystemExit(
+                  "SF Pro font is missing required adaptive clock axes: "
+                  + ", ".join(sorted(missing))
+              )
+          PY
+
       - name: Build debug APK
         shell: bash
         run: |
