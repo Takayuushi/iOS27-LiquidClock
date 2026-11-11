@@ -102,7 +102,12 @@ jobs:
             exit 1
           fi
 
-          echo "SF Pro Display Thin ready: $FONT_OUTPUT ($FONT_BYTES bytes)"
+          ASSET_FONT_DIR="app/src/main/assets/fonts"
+          mkdir -p "$ASSET_FONT_DIR"
+          cp "$FONT_OUTPUT" "$ASSET_FONT_DIR/sf_pro_display.otf"
+          test -s "$ASSET_FONT_DIR/sf_pro_display.otf"
+
+          echo "SF Pro Display Thin ready for Android resources and Canvas renderer."
 
       - name: Build debug APK
         shell: bash
