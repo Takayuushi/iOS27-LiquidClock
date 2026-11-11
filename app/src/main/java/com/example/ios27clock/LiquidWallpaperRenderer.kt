@@ -353,9 +353,9 @@ internal class LiquidWallpaperRenderer(
             decodeWallpaper(wallpaperFile.absolutePath, width, height)
         } else null
 
-        val decodedForeground = if (foregroundFile.exists() && foregroundFile.length() > 0L) {
-            decodeWallpaper(foregroundFile.absolutePath, width, height)
-        } else null
+        val decodedForeground = foregroundFile
+            ?.takeIf { it.exists() && it.length() > 0L }
+            ?.let { decodeWallpaper(it.absolutePath, width, height) }
 
         val sourceOutput = Bitmap.createBitmap(
             width,
