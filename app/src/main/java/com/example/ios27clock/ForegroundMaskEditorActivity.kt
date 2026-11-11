@@ -1,15 +1,12 @@
 package com.example.ios27clock
 
 import android.app.Activity
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
-import java.io.FileOutputStream
 
 class ForegroundMaskEditorActivity : Activity() {
 
@@ -21,7 +18,9 @@ class ForegroundMaskEditorActivity : Activity() {
 
     private lateinit var drawingView: MaskDrawingView
     private lateinit var brushValue: TextView
+    private lateinit var lassoButton: Button
     private var eraseMode = false
+    private var lassoMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +28,7 @@ class ForegroundMaskEditorActivity : Activity() {
 
         drawingView = findViewById(R.id.foreground_mask_drawing_view)
         brushValue = findViewById(R.id.foreground_brush_value)
+        lassoButton = findViewById(R.id.mask_lasso_button)
 
         val source = File(filesDir, SOURCE_FILE_NAME)
         val existingMask = File(filesDir, MANUAL_FOREGROUND_FILE_NAME)
@@ -52,12 +52,26 @@ class ForegroundMaskEditorActivity : Activity() {
         }
 
         findViewById<Button>(R.id.mask_mode_button).setOnClickListener {
+            lassoMode = false
+            drawingView.setEraseMode(!eraseMode)
             eraseMode = !eraseMode
-            drawingView.setEraseMode(eraseMode)
             it as Button
             it.text = getString(
                 if (eraseMode) R.string.mask_mode_erase else R.string.mask_mode_paint
             )
+            updateLassoButton()
+        }
+
+        lassoButton.setOnClickListener {
+            lassoMode = !lassoMode
+            drawingView.setLassoMode(lassoMode)
+            if (lassoMode) {
+                drawingView.setEraseMode(false)
+                eraseMode = false
+                findViewById<Button>(R.id.mask_mode_button).text =
+                    getString(R.string.mask_mode_paint)
+            }
+            updateLassoButton()
         }
 
         findViewById<Button>(R.id.mask_undo_button).setOnClickListener {
@@ -97,6 +111,12 @@ class ForegroundMaskEditorActivity : Activity() {
         }
     }
 
+    private fun updateLassoButton() {
+        lassoButton.text = getString(
+            if (lassoMode) R.string.mask_lasso_active else R.string.mask_lasso
+        )
+    }
+
     private fun saveSelection() {
         val target = File(filesDir, MANUAL_FOREGROUND_FILE_NAME)
         val temporary = File(filesDir, "$MANUAL_FOREGROUND_FILE_NAME.tmp")
@@ -131,9 +151,7 @@ class ForegroundMaskEditorActivity : Activity() {
     }
 
     override fun onDestroy() {
-        if (::drawingView.isInitialized) {
-            drawingView.release()
-        }
+        if (::drawingView.isInitialized) drawingView.release()
         super.onDestroy()
     }
 }
