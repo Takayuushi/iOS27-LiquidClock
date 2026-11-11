@@ -54,6 +54,17 @@
             android:textSize="15sp" />
 
         <Button
+            android:id="@+id/edit_foreground_button"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="#314966"
+            android:text="@string/edit_foreground_overlap"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFFFF"
+            android:textSize="15sp" />
+
+        <Button
             android:id="@+id/apply_live_wallpaper_button"
             android:layout_width="match_parent"
             android:layout_height="58dp"
