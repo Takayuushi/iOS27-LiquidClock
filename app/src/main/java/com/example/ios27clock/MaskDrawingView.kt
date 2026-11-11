@@ -77,12 +77,6 @@ class MaskDrawingView @JvmOverloads constructor(
         setShadowLayer(3f, 0f, 1f, Color.BLACK)
     }
 
-    private val lassoStartPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-        setShadowLayer(3f, 0f, 1f, Color.BLACK)
-    }
-
     private val exportMaskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
     }
@@ -152,7 +146,6 @@ class MaskDrawingView @JvmOverloads constructor(
 
     fun setEraseMode(erase: Boolean) {
         eraseMode = erase
-        lassoMode = false
         invalidate()
     }
 
@@ -340,14 +333,6 @@ class MaskDrawingView @JvmOverloads constructor(
         )
         canvas.drawPath(path, lassoPaint)
 
-        val start = action.path?.let {
-            val bounds = RectF()
-            it.computeBounds(bounds, true)
-            PointF(bounds.left, bounds.top)
-        }
-        if (start != null) {
-            canvas.drawCircle(start.x, start.y, 5f, lassoStartPaint)
-        }
         canvas.restoreToCount(save)
     }
 
