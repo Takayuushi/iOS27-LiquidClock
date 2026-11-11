@@ -34,11 +34,11 @@ internal class LiquidWallpaperRenderer(
     companion object {
         private const val TAG = "LiquidClockRenderer"
         private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
-        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_thin.otf"
+        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
         private const val CLOCK_CENTER_Y_FRACTION = 0.235f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.175f
-        private const val MAX_GLYPH_WIDTH_FRACTION = 0.92f
-        private const val TRACKING_EM = -0.055f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.235f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.97f
+        private const val TRACKING_EM = -0.045f
 
         private val AGSL = """
             uniform shader uWallpaper;
@@ -85,8 +85,8 @@ internal class LiquidWallpaperRenderer(
                 float3 wallpaper = uWallpaper.eval(samplePoint).rgb;
                 float3 glassTint = mix(
                     wallpaper,
-                    float3(0.91, 0.955, 1.0),
-                    0.34
+                    float3(0.975, 0.985, 1.0),
+                    0.84
                 );
 
                 float rim = smoothstep(0.10, 0.72, edge);
@@ -104,12 +104,12 @@ internal class LiquidWallpaperRenderer(
                     0.035 * sin(uTime * 0.42)) * 13.0, 2.0)
                 ) * 0.08;
 
-                glassTint += float3(0.42, 0.58, 0.82) * rim * 0.15;
-                glassTint += float3(1.0) * upperSpecular * 0.23;
-                glassTint += float3(0.58, 0.75, 1.0) * lowerReflection * 0.11;
+                glassTint += float3(0.42, 0.58, 0.82) * rim * 0.07;
+                glassTint += float3(1.0) * upperSpecular * 0.19;
+                glassTint += float3(0.58, 0.75, 1.0) * lowerReflection * 0.08;
                 glassTint += float3(1.0) * movingSheen;
 
-                float alpha = coverage * (0.91 + rim * 0.06);
+                float alpha = coverage * (0.97 + rim * 0.03);
                 return half4(glassTint, alpha);
             }
         """.trimIndent()
@@ -178,7 +178,16 @@ internal class LiquidWallpaperRenderer(
                 shader.setFloatUniform("uTime", elapsedSeconds)
                 shaderPaint.shader = shader
                 if (!glyphBounds.isEmpty) {
-                    canvas.drawRect(glyphBounds, shaderPaint)
+                    val saveCount = canvas.save()
+                    canvas.clipRect(glyphBounds)
+                    canvas.drawRect(
+                        0f,
+                        0f,
+                        width.toFloat(),
+                        height.toFloat(),
+                        shaderPaint
+                    )
+                    canvas.restoreToCount(saveCount)
                 }
                 shaderPaint.shader = null
                 return
@@ -359,7 +368,7 @@ internal class LiquidWallpaperRenderer(
             typeface = this@LiquidWallpaperRenderer.typeface
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            textScaleX = 0.96f
+            textScaleX = 0.985f
             isSubpixelText = true
         }
 
@@ -368,7 +377,7 @@ internal class LiquidWallpaperRenderer(
         val maxHeight = height * MAX_GLYPH_HEIGHT_FRACTION
 
         var low = 1f
-        var high = min(height * 0.28f, width * 0.50f)
+        var high = min(height * 0.38f, width * 0.56f)
         var fontSize = high
 
         repeat(26) {
