@@ -10,6 +10,10 @@
         android:theme="@style/AppTheme">
 
         <activity
+            android:name=".ForegroundMaskEditorActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
