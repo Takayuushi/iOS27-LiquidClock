@@ -17,7 +17,7 @@
     <string name="mask_mode_paint">Paint</string>
     <string name="mask_mode_erase">Erase</string>
     <string name="mask_lasso">Lasso</string>
-    <string name="mask_lasso_active">Lasso selected</string>
+    <string name="mask_lasso_active">Lasso On</string>
     <string name="mask_undo">Undo</string>
     <string name="mask_clear">Clear</string>
     <string name="mask_save">Save selection</string>
