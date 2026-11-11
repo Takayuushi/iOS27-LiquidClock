@@ -622,7 +622,6 @@ internal class LiquidWallpaperRenderer(
             // Slightly broaden and embolden the light face so the numerals
             // read as substantial liquid-glass forms rather than hairlines.
             textScaleX = 0.98f
-            strokeWidth = fontSize * 0.014f
             strokeJoin = Paint.Join.ROUND
             style = Paint.Style.FILL_AND_STROKE
             isSubpixelText = true
@@ -660,6 +659,7 @@ internal class LiquidWallpaperRenderer(
         }
 
         paint.textSize = fontSize
+        paint.strokeWidth = fontSize * 0.014f
         val tracking = fontSize * TRACKING_EM
         val totalWidth = glyphs.sumOf {
             paint.measureText(it).toDouble()
