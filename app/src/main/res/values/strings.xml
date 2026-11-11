@@ -8,9 +8,9 @@
     <string name="live_wallpaper_intro">Choose any wallpaper, then preview the live wallpaper. Drag the clock to position it and pinch with two fingers to resize it. The clock is drawn into the wallpaper layer, behind your home-screen icons. Drag the clock to move it; use two fingers to resize it.</string>
     <string name="choose_wallpaper">Choose wallpaper image</string>
     <string name="preview_and_set">Preview and set live wallpaper</string>
-    <string name="edit_foreground_overlap">Choose foreground overlap</string>
-    <string name="mask_editor_title">Foreground depth editor</string>
-    <string name="mask_editor_instructions">The full wallpaper stays visible. Use Lasso to trace a precise outline around the object that should appear IN FRONT of the clock. Paint and Erase are available for small refinements. Blue shows the selected foreground.</string>
+    <string name="edit_foreground_overlap">Select object</string>
+    <string name="mask_editor_title">Select object</string>
+    <string name="mask_editor_instructions">Trace around the object that should appear in front of the clock. The clock will be hidden only where it crosses your selection. The original wallpaper stays visible. Blue shows the selected object.</string>
     <string name="mask_editor_canvas_description">Full wallpaper preview. Trace the object that should appear in front of the clock.</string>
     <string name="mask_brush_size">Brush size: %1$dp</string>
     <string name="mask_brush_size_initial">Brush size: 64dp</string>
@@ -22,7 +22,7 @@
     <string name="mask_clear">Clear</string>
     <string name="mask_save">Save selection</string>
     <string name="cancel">Cancel</string>
-    <string name="mask_editor_saved">Foreground selection saved.</string>
+    <string name="mask_editor_saved">Object selection saved.</string>
     <string name="mask_editor_no_wallpaper">Choose a wallpaper before editing its foreground.</string>
     <string name="mask_editor_load_failed">Could not open wallpaper: %1$s</string>
     <string name="mask_editor_save_failed">Could not save selection: %1$s</string>
