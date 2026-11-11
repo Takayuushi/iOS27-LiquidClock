@@ -1041,7 +1041,7 @@ internal class LiquidWallpaperRenderer(
                 ),
                 counterRadiusX,
                 counterRadiusY,
-                Direction.CW
+                Path.Direction.CW
             )
             addRoundRect(
                 RectF(
@@ -1052,7 +1052,7 @@ internal class LiquidWallpaperRenderer(
                 ),
                 counterRadiusX,
                 counterRadiusY,
-                Direction.CW
+                Path.Direction.CW
             )
         }
     }
