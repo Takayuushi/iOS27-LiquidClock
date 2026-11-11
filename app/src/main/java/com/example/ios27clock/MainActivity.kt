@@ -17,6 +17,8 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_PICK_WALLPAPER = 4101
         private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
+        private const val MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
+        private const val AUTO_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
     }
 
     private lateinit var selectionStatus: TextView
@@ -29,6 +31,10 @@ class MainActivity : Activity() {
 
         findViewById<Button>(R.id.choose_wallpaper_button).setOnClickListener {
             openWallpaperPicker()
+        }
+
+        findViewById<Button>(R.id.edit_foreground_button).setOnClickListener {
+            openForegroundMaskEditor()
         }
 
         findViewById<Button>(R.id.apply_live_wallpaper_button).setOnClickListener {
@@ -77,6 +83,8 @@ class MainActivity : Activity() {
 
         try {
             copySelectedImage(uri)
+            File(filesDir, MANUAL_FOREGROUND_FILE_NAME).delete()
+            File(filesDir, AUTO_FOREGROUND_FILE_NAME).delete()
             selectionStatus.setText(R.string.wallpaper_preparing_depth)
 
             val sourceFile = File(filesDir, SOURCE_FILE_NAME)
@@ -129,6 +137,15 @@ class MainActivity : Activity() {
         check(destination.exists() && destination.length() > 0L) {
             "The selected image was empty."
         }
+    }
+
+    private fun openForegroundMaskEditor() {
+        val source = File(filesDir, SOURCE_FILE_NAME)
+        if (!source.exists() || source.length() == 0L) {
+            Toast.makeText(this, R.string.wallpaper_not_selected, Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(Intent(this, ForegroundMaskEditorActivity::class.java))
     }
 
     private fun openLiveWallpaperPreview() {
