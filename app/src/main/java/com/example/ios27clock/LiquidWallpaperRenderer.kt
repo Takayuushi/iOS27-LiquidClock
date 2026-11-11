@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.CornerPathEffect
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
@@ -54,13 +55,16 @@ internal class LiquidWallpaperRenderer(
         // The whole clock is not stretched as one texture. Each numeral gets
         // its own optical width, weight and height, then is composed as a path.
         // Expanding the clock progressively narrows and lengthens the glyphs.
-        private const val MIN_GLYPH_WIDTH_SCALE = 0.84f
-        private const val MAX_GLYPH_WIDTH_SCALE = 0.66f
-        private const val MIN_GLYPH_HEIGHT_SCALE = 1.18f
-        private const val MAX_GLYPH_HEIGHT_SCALE = 1.48f
-        private const val TRACKING_EM = -0.030f
-        private const val BASE_WEIGHT_MIN = 360
-        private const val BASE_WEIGHT_MAX = 620
+        private const val MIN_GLYPH_WIDTH_SCALE = 0.82f
+        private const val MAX_GLYPH_WIDTH_SCALE = 0.64f
+        private const val MIN_GLYPH_HEIGHT_SCALE = 1.22f
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.52f
+        private const val TRACKING_EM = -0.028f
+        private const val BASE_WEIGHT_MIN = 420
+        private const val BASE_WEIGHT_MAX = 680
+        private const val COLON_ADVANCE_EM = 0.22f
+        private const val COLON_DOT_RADIUS_EM = 0.052f
+        private const val GLYPH_CORNER_RADIUS_EM = 0.018f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
 
@@ -159,13 +163,13 @@ internal class LiquidWallpaperRenderer(
                 0.13
             );
             float3 colourGlass = mix(
-                mix(transmitted, pearlTint, 0.30),
-                mix(transmitted, smokedTint, 0.48),
+                mix(transmitted, pearlTint, 0.42),
+                mix(transmitted, smokedTint, 0.54),
                 brightSurface
             );
             float3 monochromeGlass = mix(
-                mix(transmitted, float3(0.88, 0.90, 0.96), 0.34),
-                mix(transmitted, float3(0.12, 0.14, 0.18), 0.52),
+                mix(transmitted, float3(0.90, 0.92, 0.98), 0.42),
+                mix(transmitted, float3(0.12, 0.14, 0.18), 0.56),
                 brightSurface
             );
             float3 body = mix(colourGlass, monochromeGlass, monochrome * 0.92);
@@ -198,7 +202,7 @@ internal class LiquidWallpaperRenderer(
             colour -= float3(0.08, 0.10, 0.14) * edgeShade * 0.18;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
 
-            float bodyOpacity = mix(0.60, 0.76, brightSurface);
+            float bodyOpacity = mix(0.68, 0.82, brightSurface);
             bodyOpacity = mix(bodyOpacity, bodyOpacity + 0.04, monochrome);
             float alpha = coverage * (bodyOpacity + rim * 0.06);
             return half4(clamp(colour, 0.0, 1.0), alpha);
@@ -617,16 +621,21 @@ internal class LiquidWallpaperRenderer(
             glyphs.forEach { glyph ->
                 val widthFactor = glyphWidthFactor(glyph)
                 val heightFactor = glyphHeightFactor(glyph)
-                candidateWidth +=
+                candidateWidth += if (glyph == ":") {
+                    candidate * COLON_ADVANCE_EM
+                } else {
                     sizingPaint.measureText(glyph) *
-                    globalWidthScale *
-                    widthFactor
-                val bounds = android.graphics.Rect()
-                sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
-                visibleHeight = max(
-                    visibleHeight,
-                    bounds.height() * globalHeightScale * heightFactor
-                )
+                        globalWidthScale *
+                        widthFactor
+                }
+                if (glyph != ":") {
+                    val bounds = android.graphics.Rect()
+                    sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
+                    visibleHeight = max(
+                        visibleHeight,
+                        bounds.height() * globalHeightScale * heightFactor
+                    )
+                }
             }
             candidateWidth += tracking * (glyphs.size - 1).coerceAtLeast(0)
 
@@ -645,9 +654,13 @@ internal class LiquidWallpaperRenderer(
         val tracking = fontSize * TRACKING_EM * globalWidthScale
 
         val advances = glyphs.map { glyph ->
-            sizingPaint.measureText(glyph) *
-                globalWidthScale *
-                glyphWidthFactor(glyph)
+            if (glyph == ":") {
+                fontSize * COLON_ADVANCE_EM
+            } else {
+                sizingPaint.measureText(glyph) *
+                    globalWidthScale *
+                    glyphWidthFactor(glyph)
+            }
         }
         val totalWidth = advances.sum() +
             tracking * (glyphs.size - 1).coerceAtLeast(0)
@@ -658,61 +671,83 @@ internal class LiquidWallpaperRenderer(
         var hasBounds = false
 
         glyphs.forEachIndexed { index, glyph ->
-            val weightForGlyph = (
-                baseWeight +
-                    glyphWeightOffset(glyph) +
-                    wallpaperWeightAdjustment(
-                        cursorX + advances[index] * 0.5f,
-                        centerY,
-                        fontSize * 0.10f
-                    )
-                ).coerceIn(100, 900)
-
-            val glyphPaint = Paint(sizingPaint).apply {
-                typeface = typefaceFor(
-                    weightForGlyph,
-                    (fontSize / density).roundToInt().coerceIn(6, 96)
-                )
-                textSize = fontSize
-                style = Paint.Style.FILL
-            }
-
-            val glyphPath = Path()
-            glyphPaint.getTextPath(
-                glyph,
-                0,
-                glyph.length,
-                cursorX,
-                baseline,
-                glyphPath
-            )
-
-            val originalBounds = RectF()
-            glyphPath.computeBounds(originalBounds, true)
-            if (!originalBounds.isEmpty) {
-                val widthScale =
-                    globalWidthScale * glyphWidthFactor(glyph)
-                val heightScale =
-                    globalHeightScale * glyphHeightFactor(glyph)
-                val transform = Matrix().apply {
-                    setScale(
-                        widthScale,
-                        heightScale,
-                        originalBounds.centerX(),
-                        originalBounds.centerY()
-                    )
+            if (glyph == ":") {
+                val dotRadius = fontSize * COLON_DOT_RADIUS_EM
+                val dotCenterX = cursorX + advances[index] * 0.5f
+                val dotPath = Path().apply {
+                    addCircle(dotCenterX, centerY, dotRadius, Path.Direction.CW)
                 }
-                val opticalPath = Path()
-                glyphPath.transform(transform, opticalPath)
-                composedPath.addPath(opticalPath)
+                composedPath.addPath(dotPath)
 
-                val opticalBounds = RectF()
-                opticalPath.computeBounds(opticalBounds, true)
+                val dotBounds = RectF(
+                    dotCenterX - dotRadius,
+                    centerY - dotRadius,
+                    dotCenterX + dotRadius,
+                    centerY + dotRadius
+                )
                 if (!hasBounds) {
-                    composedBounds.set(opticalBounds)
+                    composedBounds.set(dotBounds)
                     hasBounds = true
                 } else {
-                    composedBounds.union(opticalBounds)
+                    composedBounds.union(dotBounds)
+                }
+            } else {
+                val weightForGlyph = (
+                    baseWeight +
+                        glyphWeightOffset(glyph) +
+                        wallpaperWeightAdjustment(
+                            cursorX + advances[index] * 0.5f,
+                            centerY,
+                            fontSize * 0.10f
+                        )
+                    ).coerceIn(100, 900)
+
+                val glyphPaint = Paint(sizingPaint).apply {
+                    typeface = typefaceFor(
+                        weightForGlyph,
+                        (fontSize / density).roundToInt().coerceIn(6, 96)
+                    )
+                    textSize = fontSize
+                    style = Paint.Style.FILL
+                }
+
+                val glyphPath = Path()
+                glyphPaint.getTextPath(
+                    glyph,
+                    0,
+                    glyph.length,
+                    cursorX,
+                    baseline,
+                    glyphPath
+                )
+
+                val originalBounds = RectF()
+                glyphPath.computeBounds(originalBounds, true)
+                if (!originalBounds.isEmpty) {
+                    val widthScale =
+                        globalWidthScale * glyphWidthFactor(glyph)
+                    val heightScale =
+                        globalHeightScale * glyphHeightFactor(glyph)
+                    val transform = Matrix().apply {
+                        setScale(
+                            widthScale,
+                            heightScale,
+                            originalBounds.centerX(),
+                            originalBounds.centerY()
+                        )
+                    }
+                    val opticalPath = Path()
+                    glyphPath.transform(transform, opticalPath)
+                    composedPath.addPath(opticalPath)
+
+                    val opticalBounds = RectF()
+                    opticalPath.computeBounds(opticalBounds, true)
+                    if (!hasBounds) {
+                        composedBounds.set(opticalBounds)
+                        hasBounds = true
+                    } else {
+                        composedBounds.union(opticalBounds)
+                    }
                 }
             }
 
@@ -732,18 +767,25 @@ internal class LiquidWallpaperRenderer(
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.FILL
+                    // Softly round the squared font terminals after the
+                    // per-glyph deformation, giving the digits a fuller,
+                    // cushion-like silhouette without blurring their edges.
+                    pathEffect = CornerPathEffect(
+                        fontSize * GLYPH_CORNER_RADIUS_EM
+                    )
                 }
             )
-            // A small final contour expansion gives the variable font enough
-            // body at large display sizes without making the whole typeface bold.
             maskCanvas.drawPath(
                 composedPath,
                 Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.STROKE
-                    strokeWidth = fontSize * 0.008f
+                    strokeWidth = fontSize * 0.012f
                     strokeJoin = Paint.Join.ROUND
                     strokeCap = Paint.Cap.ROUND
+                    pathEffect = CornerPathEffect(
+                        fontSize * GLYPH_CORNER_RADIUS_EM
+                    )
                 }
             )
         } else {
@@ -757,13 +799,13 @@ internal class LiquidWallpaperRenderer(
     }
 
     private fun glyphWidthFactor(glyph: String): Float = when (glyph) {
-        "1" -> 0.82f
-        "0", "8" -> 1.00f
-        "6", "9" -> 0.98f
-        "2", "3", "5" -> 0.94f
-        "4" -> 0.91f
-        "7" -> 0.88f
-        ":" -> 0.48f
+        "1" -> 0.88f
+        "0", "8" -> 1.02f
+        "6", "9" -> 1.00f
+        "2", "3", "5" -> 0.98f
+        "4" -> 0.95f
+        "7" -> 0.92f
+        ":" -> COLON_ADVANCE_EM
         else -> 0.94f
     }
 
@@ -775,10 +817,11 @@ internal class LiquidWallpaperRenderer(
     }
 
     private fun glyphWeightOffset(glyph: String): Int = when (glyph) {
-        "1" -> 48
-        "0", "6", "9" -> 12
-        "8" -> -8
-        ":" -> -65
+        "1" -> 32
+        "0", "6", "9" -> 18
+        "8" -> 4
+        "3", "5" -> 14
+        ":" -> 0
         else -> 0
     }
 
