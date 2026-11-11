@@ -39,6 +39,7 @@ internal class LiquidWallpaperRenderer(
         private const val TAG = "LiquidClockRenderer"
         private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
         private const val FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
+        private const val MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
         private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
 
         private const val DEFAULT_CLOCK_X = 0.50f
@@ -341,7 +342,15 @@ internal class LiquidWallpaperRenderer(
         if (width <= 0 || height <= 0) return
 
         val wallpaperFile = context.filesDir.resolve(SOURCE_FILE_NAME)
-        val foregroundFile = context.filesDir.resolve(FOREGROUND_FILE_NAME)
+        val manualForegroundFile = context.filesDir.resolve(MANUAL_FOREGROUND_FILE_NAME)
+        val automaticForegroundFile = context.filesDir.resolve(FOREGROUND_FILE_NAME)
+        val foregroundFile = if (
+            manualForegroundFile.exists() && manualForegroundFile.length() > 0L
+        ) {
+            manualForegroundFile
+        } else {
+            automaticForegroundFile
+        }
 
         val decoded = if (wallpaperFile.exists() && wallpaperFile.length() > 0L) {
             decodeWallpaper(wallpaperFile.absolutePath, width, height)
