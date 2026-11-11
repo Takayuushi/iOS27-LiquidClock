@@ -36,7 +36,7 @@ class ForegroundMaskEditorActivity : Activity() {
 
         try {
             drawingView.loadImage(source, existingSelection)
-        drawingView.setMagneticLassoEnabled(true)
+            drawingView.setMagneticLassoEnabled(true)
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
