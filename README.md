@@ -10,11 +10,11 @@ An Android 17 (API 37) clock preview and home-screen widget inspired by liquid-g
 - AGSL RuntimeShader renders the animated glass surface, including lighting, chromatic edge accents, a procedural refraction field and interactive light response.
 - WindowManager cross-window blur supplies compositor blur behind the floating overlay when enabled by the device.
 
-## Typography
+## Clock typography and build font
 
-GitHub Actions downloads the SF Pro Display Thin, Light and Bold OTF files into app/src/main/res/font before resource compilation. The font family XML maps weights 100, 300 and 700 for the clock, supporting date and captions. The workflow pins the upstream mirror to a specific commit.
+The workflow restores a compact Lato Thin TrueType subset from an embedded Base64 payload into app/src/main/res/font/sf_pro_display.ttf before resource compilation. The subset contains the numerals 0–9 and colon used by the clock. A SHA-256 check and TrueType file check stop the build if the embedded payload is damaged. The font is an open-source Lato Thin subset, not Apple's proprietary SF Pro file.
 
-The font binaries are fetched at build time and are not committed as binary files in this repository.
+The font is licensed under the SIL Open Font License 1.1; its license and copyright notice are included in app/src/main/assets/fonts/Lato-OFL.txt.
 
 ## Rendering limitation
 
@@ -28,7 +28,7 @@ This is an application overlay preview. It does not replace, cover, or unlock An
 
 ## Home-screen widget
 
-The home-screen widget uses standard RemoteViews and TextClock elements. Android widgets do not support arbitrary custom View rendering, so the AGSL animation is used in the in-app and floating preview, not in the launcher widget.
+The home-screen widget uses standard RemoteViews and TextClock elements. The launcher widget displays a transparent, centered clock and automatically sizes the numerals between 48sp and 140sp as the widget is resized. Android widgets do not support arbitrary custom View rendering, so the AGSL animation is used in the in-app and floating preview, not in the launcher widget.
 
 ## Build
 
