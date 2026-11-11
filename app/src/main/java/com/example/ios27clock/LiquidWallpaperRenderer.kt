@@ -50,7 +50,8 @@ internal class LiquidWallpaperRenderer(
 
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.36f
-        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.48f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
+        private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.70f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
 
         // One coherent SF Pro variable face supplies every numeral. Per-digit
@@ -336,11 +337,17 @@ internal class LiquidWallpaperRenderer(
         clockScale = (pinchStartClockScale * distanceRatio)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
 
-        val relativeScale = (clockScale / maskClockScale).coerceIn(0.40f, 2.8f)
-        // Adaptive expansion is vertical only. Keep the cached glyph width
-        // fixed during the gesture; the new height is committed on release.
+        val targetHeightFraction =
+            (MAX_GLYPH_HEIGHT_FRACTION * clockScale)
+                .coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
+        val cachedHeightFraction =
+            (MAX_GLYPH_HEIGHT_FRACTION * maskClockScale)
+                .coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
+        // Match the exact height target used by the final vector rebuild.
+        // Width stays untouched, so enlargement remains vertical only.
         previewScaleX = 1f
-        previewScaleY = relativeScale.pow(1.18f)
+        previewScaleY = (targetHeightFraction / cachedHeightFraction)
+            .coerceIn(0.40f, 2.8f)
         updatePreviewBounds()
     }
 
@@ -668,7 +675,7 @@ internal class LiquidWallpaperRenderer(
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxHeight = height * (
             MAX_GLYPH_HEIGHT_FRACTION * clockScale
-            ).coerceAtMost(0.56f)
+            ).coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
 
         var low = 1f
@@ -839,10 +846,12 @@ internal class LiquidWallpaperRenderer(
         if (hasBounds) {
             val fitX = ((maxWidth - 8f) / composedBounds.width().coerceAtLeast(1f))
                 .coerceIn(0.01f, 1f)
+            // Unlike the old renderer, allow fitY > 1: the final glyph
+            // geometry must be able to grow vertically, not only shrink.
             val fitY = ((maxHeight - 8f) / composedBounds.height().coerceAtLeast(1f))
-                .coerceIn(0.01f, 1f)
+                .coerceIn(0.01f, 4f)
             val fittedPath = Path()
-            if (fitX < 0.999f || fitY < 0.999f) {
+            if (fitX < 0.999f || kotlin.math.abs(fitY - 1f) > 0.001f) {
                 val fitMatrix = Matrix().apply { setScale(fitX, fitY, centerX, centerY) }
                 composedPath.transform(fitMatrix, fittedPath)
             } else {
