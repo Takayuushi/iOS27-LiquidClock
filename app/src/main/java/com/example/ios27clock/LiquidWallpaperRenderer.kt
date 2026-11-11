@@ -611,7 +611,7 @@ internal class LiquidWallpaperRenderer(
             color = Color.WHITE
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            typeface = typefaceFor(baseWeight, 80, glyphWidthAxis("0", expansion))
+            typeface = typefaceFor(baseWeight, 80, glyphWidthProfile("0", expansion))
             isSubpixelText = true
         }
 
@@ -629,12 +629,12 @@ internal class LiquidWallpaperRenderer(
                     sizingPaint.typeface = typefaceFor(
                         (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
                         (candidate / density).roundToInt().coerceIn(17, 96),
-                        glyphWidthAxis(glyph, expansion)
+                        glyphWidthProfile(glyph, expansion)
                     )
                     candidateWidth +=
                         sizingPaint.measureText(glyph) *
                         globalWidthScale *
-                        glyphWidthFactor(glyph)
+                        glyphWidthProfile(glyph, expansion)
 
                     val bounds = android.graphics.Rect()
                     sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
@@ -658,7 +658,7 @@ internal class LiquidWallpaperRenderer(
         sizingPaint.typeface = typefaceFor(
             baseWeight,
             (fontSize / density).roundToInt().coerceIn(17, 96),
-            glyphWidthAxis("0", expansion)
+            glyphWidthProfile("0", expansion)
         )
         val metrics = sizingPaint.fontMetrics
         val centerX = clockCenterX * width
@@ -673,10 +673,10 @@ internal class LiquidWallpaperRenderer(
                 sizingPaint.typeface = typefaceFor(
                     (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
                     (fontSize / density).roundToInt().coerceIn(17, 96),
-                    glyphWidthAxis(glyph, expansion)
+                    glyphWidthProfile(glyph, expansion)
                 )
                 sizingPaint.textSize = fontSize
-                sizingPaint.measureText(glyph) * globalWidthScale * glyphWidthFactor(glyph)
+                sizingPaint.measureText(glyph) * globalWidthScale * glyphWidthProfile(glyph, expansion)
             }
         }
         val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
@@ -723,7 +723,7 @@ internal class LiquidWallpaperRenderer(
                     typeface = typefaceFor(
                         weightForGlyph,
                         (fontSize / density).roundToInt().coerceIn(17, 96),
-                        glyphWidthAxis(glyph, expansion)
+                        glyphWidthProfile(glyph, expansion)
                     )
                     textSize = fontSize
                     style = Paint.Style.FILL
@@ -739,7 +739,7 @@ internal class LiquidWallpaperRenderer(
                 if (!originalBounds.isEmpty) {
                     val glyphTransform = Matrix().apply {
                         setScale(
-                            globalWidthScale * glyphWidthFactor(glyph),
+                            globalWidthScale * glyphWidthProfile(glyph, expansion),
                             globalHeightScale * glyphHeightFactor(glyph),
                             originalBounds.centerX(),
                             originalBounds.centerY()
@@ -911,28 +911,39 @@ internal class LiquidWallpaperRenderer(
         }
     }
 
-    private fun glyphWidthFactor(glyph: String): Float = when (glyph) {
-        "1", "7" -> 0.96f
-        "4" -> 0.985f
-        "0", "8" -> 1.015f
-        else -> 1.0f
-    }
-
-    private fun glyphWidthAxis(glyph: String, expansion: Float): Float {
-        val base = when (glyph) {
-            "1" -> 88f
-            "2" -> 94f
-            "3" -> 92f
-            "4" -> 88f
-            "5" -> 93f
-            "6" -> 96f
-            "7" -> 86f
-            "8" -> 97f
-            "9" -> 95f
-            "0" -> 97f
-            else -> 100f
+    /**
+     * The bundled SF Pro asset has no variable wdth axis. Apply width adaptation
+     * to each extracted vector glyph instead, with a separate curve per numeral.
+     */
+    private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
+        val progress = expansion.coerceIn(0f, 1f)
+        val compact = when (glyph) {
+            "1" -> 0.92f
+            "2" -> 0.99f
+            "3" -> 0.98f
+            "4" -> 0.94f
+            "5" -> 0.98f
+            "6" -> 1.00f
+            "7" -> 0.91f
+            "8" -> 1.00f
+            "9" -> 0.99f
+            "0" -> 1.00f
+            else -> 1.00f
         }
-        return (base - expansion.coerceIn(0f, 1f) * 8f).coerceIn(75f, 100f)
+        val expanded = when (glyph) {
+            "1" -> 0.82f
+            "2" -> 0.91f
+            "3" -> 0.90f
+            "4" -> 0.86f
+            "5" -> 0.90f
+            "6" -> 0.93f
+            "7" -> 0.82f
+            "8" -> 0.94f
+            "9" -> 0.92f
+            "0" -> 0.94f
+            else -> 0.94f
+        }
+        return compact + (expanded - compact) * progress
     }
 
     private fun glyphHeightFactor(glyph: String): Float = when (glyph) {
@@ -990,45 +1001,30 @@ internal class LiquidWallpaperRenderer(
     private fun typefaceFor(
         weight: Int,
         opticalSize: Int,
-        width: Float
+        widthProfile: Float
     ): Typeface {
         val safeWeight = weight.coerceIn(100, 900)
-        val safeOpticalSize = opticalSize.coerceIn(17, 96)
-        val safeWidth = width.coerceIn(75f, 125f)
-        val widthKey = (safeWidth * 10f).roundToInt()
-        val key = safeWeight * 1_000_000 + safeOpticalSize * 1_000 + widthKey
-        typefaceCache[key]?.let { return it }
+        typefaceCache[safeWeight]?.let { return it }
 
         val variableFace = try {
-            // If this SF Pro build exposes the width axis, use it. Some
-            // redistributed variable builds omit wdth, so fall back safely
-            // to weight + optical size instead of losing the live clock.
+            // The verified SF Pro asset exposes wght only. Width variation is
+            // performed on extracted glyph paths; opsz is fixed in this asset.
             Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
-                .setFontVariationSettings(
-                    "'wght' $safeWeight, 'wdth' $safeWidth, 'opsz' $safeOpticalSize"
-                )
+                .setFontVariationSettings("'wght' $safeWeight")
                 .build()
-        } catch (widthAxisException: Exception) {
-            try {
-                Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
-                    .setFontVariationSettings(
-                        "'wght' $safeWeight, 'opsz' $safeOpticalSize"
-                    )
-                    .build()
-            } catch (fontException: Exception) {
-                Log.w(
-                    TAG,
-                    "Variable SF Pro unavailable; falling back to the installed light face.",
-                    fontException
-                )
-                fallbackTypeface
-            }
+        } catch (fontException: Exception) {
+            Log.w(
+                TAG,
+                "Variable SF Pro unavailable; falling back to the installed light face.",
+                fontException
+            )
+            fallbackTypeface
         }
 
         if (typefaceCache.size >= 64) {
             typefaceCache.clear()
         }
-        typefaceCache[key] = variableFace
+        typefaceCache[safeWeight] = variableFace
         return variableFace
     }
 

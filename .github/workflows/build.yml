@@ -133,13 +133,16 @@ jobs:
           for tag, values in sorted(axes.items()):
               print(f"  {tag}: min={values[0]}, default={values[1]}, max={values[2]}")
 
-          required = {"wght", "wdth", "opsz"}
-          missing = required - set(axes)
-          if missing:
-              raise SystemExit(
-                  "SF Pro font is missing required adaptive clock axes: "
-                  + ", ".join(sorted(missing))
-              )
+          if "wght" not in axes or axes["wght"][0] >= axes["wght"][2]:
+              raise SystemExit("SF-Pro.ttf must expose a genuine variable wght axis.")
+
+          for optional_axis in ("wdth", "opsz"):
+              axis = axes.get(optional_axis)
+              if axis is None or axis[0] >= axis[2]:
+                  print(
+                      f"{optional_axis} is not variable in this SF Pro asset; "
+                      "the renderer uses per-glyph vector profiles for optical adaptation."
+                  )
           PY
 
       - name: Build debug APK
