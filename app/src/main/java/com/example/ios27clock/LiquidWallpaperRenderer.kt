@@ -334,10 +334,10 @@ internal class LiquidWallpaperRenderer(
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
 
         val relativeScale = (clockScale / maskClockScale).coerceIn(0.40f, 2.8f)
-        // Preserve the typeface's natural proportions. The small vertical bias
-        // communicates adaptive expansion without turning glyphs into bars.
-        previewScaleX = relativeScale.pow(0.94f)
-        previewScaleY = relativeScale.pow(1.06f)
+        // Adaptive expansion is vertical only. Keep the cached glyph width
+        // fixed during the gesture; the new height is committed on release.
+        previewScaleX = 1f
+        previewScaleY = relativeScale.pow(1.18f)
         updatePreviewBounds()
     }
 
