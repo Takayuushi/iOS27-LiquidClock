@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#070B15"
+    android:background="#101820"
     android:orientation="vertical"
     android:paddingTop="10dp"
     android:paddingBottom="12dp">
@@ -25,7 +25,7 @@
         android:paddingTop="5dp"
         android:paddingBottom="10dp"
         android:text="@string/mask_editor_instructions"
-        android:textColor="#BFCBDF"
+        android:textColor="#D2DCE8"
         android:textSize="13sp" />
 
     <com.example.ios27clock.MaskDrawingView
@@ -34,7 +34,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:contentDescription="@string/mask_editor_canvas_description"
-        android:background="#070B15" />
+        android:background="#24313E" />
 
     <TextView
         android:id="@+id/foreground_brush_value"
@@ -61,8 +61,8 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp">
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
         <Button
             android:id="@+id/mask_mode_button"
@@ -70,6 +70,14 @@
             android:layout_height="48dp"
             android:layout_weight="1"
             android:text="@string/mask_mode_paint"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/mask_lasso_button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="@string/mask_lasso"
             android:textAllCaps="false" />
 
         <Button
