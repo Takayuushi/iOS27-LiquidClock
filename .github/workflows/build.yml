@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: android17-build-${{ github.workflow }}-${{ github.ref }}
+  group: android17-build-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
