@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.takayuushi.ios27liquidclock"
+    namespace = "com.example.ios27clock"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.takayuushi.ios27liquidclock"
+        applicationId = "com.example.ios27clock"
         minSdk = 37
         targetSdk = 37
         versionCode = 1
@@ -21,7 +21,6 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
 
