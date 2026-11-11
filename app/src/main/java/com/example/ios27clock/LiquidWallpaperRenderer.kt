@@ -53,8 +53,11 @@ internal class LiquidWallpaperRenderer(
 
         // The whole clock is not stretched as one texture. Each numeral gets
         // its own optical width, weight and height, then is composed as a path.
-        private const val GLOBAL_GLYPH_WIDTH_SCALE = 0.70f
-        private const val GLOBAL_GLYPH_HEIGHT_SCALE = 1.34f
+        // Expanding the clock progressively narrows and lengthens the glyphs.
+        private const val MIN_GLYPH_WIDTH_SCALE = 0.84f
+        private const val MAX_GLYPH_WIDTH_SCALE = 0.66f
+        private const val MIN_GLYPH_HEIGHT_SCALE = 1.18f
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.48f
         private const val TRACKING_EM = -0.030f
         private const val BASE_WEIGHT_MIN = 340
         private const val BASE_WEIGHT_MAX = 560
@@ -578,6 +581,12 @@ internal class LiquidWallpaperRenderer(
             BASE_WEIGHT_MIN +
                 (BASE_WEIGHT_MAX - BASE_WEIGHT_MIN) * scaleProgress
             ).roundToInt()
+        val globalWidthScale =
+            MIN_GLYPH_WIDTH_SCALE +
+                (MAX_GLYPH_WIDTH_SCALE - MIN_GLYPH_WIDTH_SCALE) * scaleProgress
+        val globalHeightScale =
+            MIN_GLYPH_HEIGHT_SCALE +
+                (MAX_GLYPH_HEIGHT_SCALE - MIN_GLYPH_HEIGHT_SCALE) * scaleProgress
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION * clockScale
         val maxHeight = height * MAX_GLYPH_HEIGHT_FRACTION * clockScale
 
@@ -600,7 +609,7 @@ internal class LiquidWallpaperRenderer(
         repeat(28) {
             val candidate = (low + high) / 2f
             sizingPaint.textSize = candidate
-            val tracking = candidate * TRACKING_EM * GLOBAL_GLYPH_WIDTH_SCALE
+            val tracking = candidate * TRACKING_EM * globalWidthScale
             var candidateWidth = 0f
             var visibleHeight = 0f
 
@@ -609,13 +618,13 @@ internal class LiquidWallpaperRenderer(
                 val heightFactor = glyphHeightFactor(glyph)
                 candidateWidth +=
                     sizingPaint.measureText(glyph) *
-                    GLOBAL_GLYPH_WIDTH_SCALE *
+                    globalWidthScale *
                     widthFactor
                 val bounds = android.graphics.Rect()
                 sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
                 visibleHeight = max(
                     visibleHeight,
-                    bounds.height() * GLOBAL_GLYPH_HEIGHT_SCALE * heightFactor
+                    bounds.height() * globalHeightScale * heightFactor
                 )
             }
             candidateWidth += tracking * (glyphs.size - 1).coerceAtLeast(0)
@@ -632,11 +641,11 @@ internal class LiquidWallpaperRenderer(
         val metrics = sizingPaint.fontMetrics
         val centerY = clockCenterY * height
         val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
-        val tracking = fontSize * TRACKING_EM * GLOBAL_GLYPH_WIDTH_SCALE
+        val tracking = fontSize * TRACKING_EM * globalWidthScale
 
         val advances = glyphs.map { glyph ->
             sizingPaint.measureText(glyph) *
-                GLOBAL_GLYPH_WIDTH_SCALE *
+                globalWidthScale *
                 glyphWidthFactor(glyph)
         }
         val totalWidth = advances.sum() +
@@ -661,7 +670,7 @@ internal class LiquidWallpaperRenderer(
             val glyphPaint = Paint(sizingPaint).apply {
                 typeface = typefaceFor(
                     weightForGlyph,
-                    (fontSize / density).roundToInt().coerceIn(6, 144)
+                    (fontSize / density).roundToInt().coerceIn(6, 100)
                 )
                 textSize = fontSize
                 style = Paint.Style.FILL
@@ -681,9 +690,9 @@ internal class LiquidWallpaperRenderer(
             glyphPath.computeBounds(originalBounds, true)
             if (!originalBounds.isEmpty) {
                 val widthScale =
-                    GLOBAL_GLYPH_WIDTH_SCALE * glyphWidthFactor(glyph)
+                    globalWidthScale * glyphWidthFactor(glyph)
                 val heightScale =
-                    GLOBAL_GLYPH_HEIGHT_SCALE * glyphHeightFactor(glyph)
+                    globalHeightScale * glyphHeightFactor(glyph)
                 val transform = Matrix().apply {
                     setScale(
                         widthScale,
