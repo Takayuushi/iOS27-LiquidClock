@@ -34,6 +34,7 @@ internal class LiquidWallpaperRenderer(
     companion object {
         private const val TAG = "LiquidClockRenderer"
         private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
+        private const val FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
         private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
         private const val CLOCK_CENTER_Y_FRACTION = 0.235f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.235f
@@ -118,6 +119,8 @@ internal class LiquidWallpaperRenderer(
     private var surfaceWidth = 0
     private var surfaceHeight = 0
     private var backdrop: Bitmap? = null
+    private var wallpaperSample: Bitmap? = null
+    private var foregroundLayer: Bitmap? = null
     private var glyphMask: Bitmap? = null
     private var glassShader: RuntimeShader? = null
     private var cachedTimeText: String? = null
@@ -190,6 +193,7 @@ internal class LiquidWallpaperRenderer(
                     canvas.restoreToCount(saveCount)
                 }
                 shaderPaint.shader = null
+                drawForegroundLayer(canvas)
                 return
             } catch (exception: RuntimeException) {
                 Log.w(TAG, "AGSL rendering failed; using the crisp glyph fallback.", exception)
@@ -213,6 +217,13 @@ internal class LiquidWallpaperRenderer(
                 )
             }
         }
+        drawForegroundLayer(canvas)
+    }
+
+    private fun drawForegroundLayer(canvas: Canvas) {
+        foregroundLayer?.let { layer ->
+            canvas.drawBitmap(layer, 0f, 0f, bitmapPaint)
+        }
     }
 
     fun release() {
@@ -220,7 +231,11 @@ internal class LiquidWallpaperRenderer(
         glyphMask?.recycle()
         glyphMask = null
         backdrop?.recycle()
+        if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
+        foregroundLayer?.recycle()
         backdrop = null
+        wallpaperSample = null
+        foregroundLayer = null
         cachedTimeText = null
     }
 
@@ -230,41 +245,89 @@ internal class LiquidWallpaperRenderer(
         if (width <= 0 || height <= 0) return
 
         val wallpaperFile = context.filesDir.resolve(SOURCE_FILE_NAME)
+        val foregroundFile = context.filesDir.resolve(FOREGROUND_FILE_NAME)
         val decoded = if (wallpaperFile.exists() && wallpaperFile.length() > 0L) {
             decodeWallpaper(wallpaperFile.absolutePath, width, height)
         } else {
             null
         }
+        val decodedForeground = if (foregroundFile.exists() && foregroundFile.length() > 0L) {
+            decodeWallpaper(foregroundFile.absolutePath, width, height)
+        } else {
+            null
+        }
 
-        val output = Bitmap.createBitmap(
+        val sourceOutput = Bitmap.createBitmap(
             width,
             height,
             Bitmap.Config.ARGB_8888
         )
+        val sourceCanvas = Canvas(sourceOutput)
 
-        val canvas = Canvas(output)
         if (decoded != null) {
-            val scale = max(
-                width.toFloat() / decoded.width,
-                height.toFloat() / decoded.height
-            )
-            val dx = (width - decoded.width * scale) / 2f
-            val dy = (height - decoded.height * scale) / 2f
-            val matrix = Matrix().apply {
-                setScale(scale, scale)
-                postTranslate(dx, dy)
-            }
-            canvas.drawBitmap(decoded, matrix, bitmapPaint)
+            drawCoverBitmap(sourceCanvas, decoded, width, height)
             decoded.recycle()
         } else {
-            drawDefaultBackdrop(canvas, width, height)
+            drawDefaultBackdrop(sourceCanvas, width, height)
         }
 
-        backdrop?.recycle()
-        backdrop = output
+        val foregroundOutput = decodedForeground?.let { foregroundBitmap ->
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { output ->
+                drawCoverBitmap(Canvas(output), foregroundBitmap, width, height)
+                foregroundBitmap.recycle()
+            }
+        }
+
+        val backgroundOutput = if (foregroundOutput != null) {
+            sourceOutput.copy(Bitmap.Config.ARGB_8888, true).also { cutout ->
+                val cutoutPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    xfermode = android.graphics.PorterDuffXfermode(
+                        android.graphics.PorterDuff.Mode.DST_OUT
+                    )
+                }
+                Canvas(cutout).drawBitmap(foregroundOutput, 0f, 0f, cutoutPaint)
+                cutoutPaint.xfermode = null
+            }
+        } else {
+            sourceOutput
+        }
+
+        val oldBackdrop = backdrop
+        val oldSample = wallpaperSample
+        val oldForeground = foregroundLayer
+        if (oldBackdrop != null) oldBackdrop.recycle()
+        if (oldSample != null && oldSample !== oldBackdrop) oldSample.recycle()
+        oldForeground?.recycle()
+
+        backdrop = backgroundOutput
+        wallpaperSample = sourceOutput
+        foregroundLayer = foregroundOutput
+        if (backgroundOutput === sourceOutput) {
+            wallpaperSample = sourceOutput
+        }
+
         cachedTimeText = null
         rebuildGlyphMask(force = true)
         rebuildGlassShader()
+    }
+
+    private fun drawCoverBitmap(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        width: Int,
+        height: Int
+    ) {
+        val scale = max(
+            width.toFloat() / bitmap.width,
+            height.toFloat() / bitmap.height
+        )
+        val dx = (width - bitmap.width * scale) / 2f
+        val dy = (height - bitmap.height * scale) / 2f
+        val matrix = Matrix().apply {
+            setScale(scale, scale)
+            postTranslate(dx, dy)
+        }
+        canvas.drawBitmap(bitmap, matrix, bitmapPaint)
     }
 
     private fun decodeWallpaper(
@@ -434,7 +497,7 @@ internal class LiquidWallpaperRenderer(
             shader.setInputShader(
                 "uWallpaper",
                 BitmapShader(
-                    background,
+                    wallpaperSample ?: background,
                     Shader.TileMode.CLAMP,
                     Shader.TileMode.CLAMP
                 )
