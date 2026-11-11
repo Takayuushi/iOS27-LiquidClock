@@ -372,8 +372,10 @@ internal class LiquidWallpaperRenderer(
         // above the clock; subtracting it from the backdrop created unwanted
         // transparent regions and could expose a rectangular preview patch.
         val oldBackdrop = backdrop
+        val oldSample = wallpaperSample
         val oldForeground = foregroundLayer
-        if (oldBackdrop != null && oldBackdrop !== wallpaperSample) oldBackdrop.recycle()
+        oldBackdrop?.recycle()
+        if (oldSample != null && oldSample !== oldBackdrop) oldSample.recycle()
         oldForeground?.recycle()
 
         backdrop = sourceOutput
@@ -573,7 +575,25 @@ internal class LiquidWallpaperRenderer(
         glyphMask?.recycle()
         glyphMask = mask
         cachedTimeText = timeText
-        rebuildGlassShader()
+        updateGlyphMaskInput()
+    }
+
+    private fun updateGlyphMaskInput() {
+        val shader = glassShader ?: return
+        val mask = glyphMask ?: return
+        try {
+            shader.setInputShader(
+                "uGlyphMask",
+                BitmapShader(
+                    mask,
+                    Shader.TileMode.CLAMP,
+                    Shader.TileMode.CLAMP
+                )
+            )
+        } catch (exception: RuntimeException) {
+            Log.w(TAG, "Could not refresh the glyph mask input.", exception)
+            glassShader = null
+        }
     }
 
     private fun rebuildGlassShader() {
