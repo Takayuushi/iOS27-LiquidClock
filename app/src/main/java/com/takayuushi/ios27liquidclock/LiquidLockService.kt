@@ -142,8 +142,6 @@ class LiquidLockService : Service() {
             stopSelf()
         }
         view.setOnClickListener(dismissListener)
-        view.findViewById<LiquidGlassClockView>(R.id.glass_surface)
-            .setOnClickListener(dismissListener)
 
         val baseFlags =
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
