@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">iOS 27 Liquid Clock</string>
+    <string name="widget_name">Liquid Clock</string>
+    <string name="widget_description">A large glass-inspired clock for your home screen.</string>
+    <string name="start_preview">Start floating preview</string>
+    <string name="stop_preview">Stop floating preview</string>
+    <string name="continue_label">Continue</string>
+    <string name="stop_label">Stop</string>
+    <string name="preview_title">Liquid Glass Clock</string>
+    <string name="preview_subtitle">A live clock with a GPU-rendered glass surface.</string>
+    <string name="overlay_dialog_title">Enable floating preview?</string>
+    <string name="overlay_dialog_message">The preview appears above other apps in a small window. It does not replace or unlock the Android system lock screen. Android will ask you to allow display over other apps.</string>
+    <string name="overlay_permission_required">Allow display over other apps to start the preview.</string>
+    <string name="overlay_permission_denied">Overlay permission was not granted.</string>
+    <string name="overlay_started">Liquid Clock preview started.</string>
+    <string name="overlay_stopped">Liquid Clock preview stopped.</string>
+    <string name="service_start_failed">Unable to start the preview: %1$s</string>
+    <string name="notification_channel_name">Liquid Clock preview</string>
+    <string name="notification_channel_description">Controls the floating Liquid Clock preview.</string>
+    <string name="notification_title">Liquid Clock is active</string>
+    <string name="notification_text">Tap the glass preview to dismiss, or use Stop here.</string>
+    <string name="glass_caption">LIVE GLASS SURFACE</string>
+    <string name="tap_to_dismiss">Tap the glass to dismiss</string>
+</resources>
