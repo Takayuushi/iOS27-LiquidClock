@@ -59,8 +59,8 @@ internal class LiquidWallpaperRenderer(
         private const val MIN_GLYPH_HEIGHT_SCALE = 1.18f
         private const val MAX_GLYPH_HEIGHT_SCALE = 1.48f
         private const val TRACKING_EM = -0.030f
-        private const val BASE_WEIGHT_MIN = 340
-        private const val BASE_WEIGHT_MAX = 560
+        private const val BASE_WEIGHT_MIN = 360
+        private const val BASE_WEIGHT_MAX = 620
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 1.48f
 
@@ -670,7 +670,7 @@ internal class LiquidWallpaperRenderer(
             val glyphPaint = Paint(sizingPaint).apply {
                 typeface = typefaceFor(
                     weightForGlyph,
-                    (fontSize / density).roundToInt().coerceIn(6, 100)
+                    (fontSize / density).roundToInt().coerceIn(6, 96)
                 )
                 textSize = fontSize
                 style = Paint.Style.FILL
