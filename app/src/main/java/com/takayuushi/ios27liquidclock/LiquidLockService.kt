@@ -132,7 +132,7 @@ class LiquidLockService : Service() {
         val width = min(displayWidth - dp(40f), dp(520f))
         val height = dp(286f)
 
-        val view = layoutInflater.inflate(
+        val view = android.view.LayoutInflater.from(this).inflate(
             R.layout.ios27_lock_screen,
             null,
             false
