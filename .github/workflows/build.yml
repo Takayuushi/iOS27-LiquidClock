@@ -36,15 +36,16 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install Android 17 platform and build tools
+        shell: bash
         run: |
+          set -euo pipefail
           sdkmanager --channel=3 --install \
             "platforms;android-37.0" \
             "build-tools;37.0.0"
 
-          if [ -d "$ANDROID_SDK_ROOT/platforms/android-37.0" ] && [ ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
+          if [[ -d "$ANDROID_SDK_ROOT/platforms/android-37.0" && ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]]; then
             ln -s android-37.0 "$ANDROID_SDK_ROOT/platforms/android-37"
           fi
-          ls -la "$ANDROID_SDK_ROOT/platforms"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -52,71 +53,62 @@ jobs:
           gradle-version: '9.6.1'
 
       - name: Verify toolchain
+        shell: bash
         run: |
+          set -euo pipefail
           java -version
           gradle --version
           sdkmanager --list_installed
 
-      - name: Restore embedded thin clock font from Base64
+      - name: Download SF Pro Display Thin OTF font
         shell: bash
         run: |
           set -euo pipefail
 
-          FONT_OUTPUT="app/src/main/res/font/sf_pro_display.ttf"
-          mkdir -p "$(dirname "$FONT_OUTPUT")"
+          FONT_DIR="app/src/main/res/font"
+          FONT_OUTPUT="$FONT_DIR/sf_pro_display.otf"
+          FONT_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
 
-          base64 --decode <<'CLOCK_FONT_BASE64' | gzip --decompress --stdout > "$FONT_OUTPUT"
-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
-CLOCK_FONT_BASE64
+          mkdir -p "$FONT_DIR"
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            "$FONT_URL" \
+            --output "$FONT_OUTPUT"
 
           test -s "$FONT_OUTPUT"
-          printf '%s  %s\n' \
-            "c76ae4cc7f7cbc2272ed38b11b7885e198fc7ef0a66f9d3ce48128ef56aab45e" \
-            "$FONT_OUTPUT" | sha256sum --check --status
 
-          file "$FONT_OUTPUT" | grep -q "TrueType Font data"
+          FONT_BYTES="$(stat -c '%s' "$FONT_OUTPUT")"
+          if [[ "$FONT_BYTES" -lt 1000000 ]]; then
+            echo "Downloaded font is unexpectedly small: ${FONT_BYTES} bytes" >&2
+            exit 1
+          fi
+
+          FONT_DESCRIPTION="$(file "$FONT_OUTPUT")"
+          echo "$FONT_DESCRIPTION"
+          if ! grep -Eqi 'OpenType|font data' <<< "$FONT_DESCRIPTION"; then
+            echo "Downloaded file is not recognized as an OpenType font." >&2
+            exit 1
+          fi
+
+          MAGIC="$(od -An -tx1 -N4 "$FONT_OUTPUT" | tr -d ' \n')"
+          if [[ "$MAGIC" != "4f54544f" && "$MAGIC" != "00010000" ]]; then
+            echo "Unexpected font signature: $MAGIC" >&2
+            exit 1
+          fi
+
+          echo "SF Pro Display Thin ready: $FONT_OUTPUT ($FONT_BYTES bytes)"
 
       - name: Build debug APK
+        shell: bash
         run: |
-          gradle \
-            --no-daemon \
-            --stacktrace \
-            clean \
-            assembleDebug
+          set -euo pipefail
+          gradle --no-daemon --stacktrace clean assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
