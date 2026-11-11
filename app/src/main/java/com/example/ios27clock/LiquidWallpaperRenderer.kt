@@ -57,6 +57,7 @@ internal class LiquidWallpaperRenderer(
             uniform shader uGlyphMask;
             uniform float2 uResolution;
             uniform float uTime;
+            uniform float3 uAccentColor;
 
             half4 main(float2 p) {
                 float coverage = uGlyphMask.eval(p).a;
@@ -123,14 +124,25 @@ internal class LiquidWallpaperRenderer(
                 // digit. White is now a glass reflection, not the base fill.
                 float luminance = dot(refracted, float3(0.2126, 0.7152, 0.0722));
                 float3 saturated = clamp(
-                    mix(float3(luminance), refracted, 1.16),
+                    mix(float3(luminance), refracted, 1.12),
                     0.0,
                     1.0
                 );
-                float3 glassBody = mix(
-                    saturated,
-                    float3(0.90, 0.95, 1.0),
-                    0.20
+
+                // Bright wallpaper areas need an accent-tinted pearl fill so
+                // the translucent clock remains legible over white skies.
+                float brightSurface = smoothstep(0.58, 0.90, luminance);
+                float3 neutralPearl = float3(0.94, 0.955, 1.0);
+                float3 accentPearl = mix(
+                    float3(0.985, 0.91, 0.955),
+                    uAccentColor,
+                    0.30
+                );
+                float3 glassBody = mix(saturated, neutralPearl, 0.18);
+                glassBody = mix(
+                    glassBody,
+                    accentPearl,
+                    brightSurface * 0.72
                 );
 
                 float2 upperLight = normalize(float2(-0.62, -0.78));
@@ -148,6 +160,8 @@ internal class LiquidWallpaperRenderer(
 
                 float innerRim = smoothstep(0.02, 0.24, edge) *
                     (1.0 - smoothstep(0.48, 0.94, edge));
+                float contourBand = smoothstep(0.015, 0.16, edge) *
+                    (1.0 - smoothstep(0.20, 0.48, edge));
 
                 float sweepPosition = p.x / max(uResolution.x, 1.0) -
                     0.30 - 0.045 * sin(uTime * 0.26);
@@ -156,7 +170,18 @@ internal class LiquidWallpaperRenderer(
                 ) * 0.085;
 
                 float3 color = glassBody;
-                color += float3(0.20, 0.42, 0.78) * rim * 0.24;
+                float3 softContrastEdge = mix(
+                    uAccentColor * 0.50,
+                    float3(0.18, 0.14, 0.22),
+                    brightSurface * 0.34
+                );
+                color = mix(
+                    color,
+                    softContrastEdge,
+                    contourBand * mix(0.12, 0.26, brightSurface)
+                );
+                color += uAccentColor * rim * 0.10;
+                color += float3(0.20, 0.42, 0.78) * rim * 0.14;
                 color += float3(0.78, 0.90, 1.0) * innerRim * 0.12;
                 color += float3(1.0, 1.0, 1.0) * topGlint * 0.46;
                 color += float3(0.42, 0.66, 1.0) * lowerGlint * 0.28;
@@ -164,7 +189,7 @@ internal class LiquidWallpaperRenderer(
 
                 // Alpha follows the glyph coverage at every pixel. A clear
                 // mask pixel returns zero alpha, never a rectangular backdrop.
-                float alpha = coverage * (0.92 + rim * 0.08);
+                float alpha = coverage * (0.94 + rim * 0.06);
                 return half4(clamp(color, 0.0, 1.0), alpha);
             }
         """.trimIndent()
@@ -176,6 +201,7 @@ internal class LiquidWallpaperRenderer(
     private var wallpaperSample: Bitmap? = null
     private var foregroundOcclusionMask: Bitmap? = null
     private var glyphMask: Bitmap? = null
+    private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
     private var glassShader: RuntimeShader? = null
     private var cachedTimeText: String? = null
     private var clockCenterX = DEFAULT_CLOCK_X
@@ -412,6 +438,7 @@ internal class LiquidWallpaperRenderer(
         if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
         foregroundOcclusionMask?.recycle()
 
+        adaptiveAccentColor = extractWallpaperAccent(wallpaperOutput)
         backdrop = wallpaperOutput
         wallpaperSample = wallpaperOutput
         foregroundOcclusionMask = occlusionOutput
@@ -644,6 +671,55 @@ internal class LiquidWallpaperRenderer(
         }
     }
 
+    private fun extractWallpaperAccent(bitmap: Bitmap): Int {
+        // Pick the strongest recurring saturated hue as the wallpaper's
+        // secondary accent. Near-white and near-black samples are ignored.
+        val bins = 24
+        val weights = DoubleArray(bins)
+        val red = DoubleArray(bins)
+        val green = DoubleArray(bins)
+        val blue = DoubleArray(bins)
+        val hsv = FloatArray(3)
+        val stepX = max(1, bitmap.width / 72)
+        val stepY = max(1, bitmap.height / 144)
+
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                Color.colorToHSV(pixel, hsv)
+                val saturation = hsv[1]
+                val value = hsv[2]
+                if (saturation >= 0.28f && value >= 0.22f && value <= 0.98f) {
+                    val bin = ((hsv[0] / 360f) * bins)
+                        .toInt()
+                        .coerceIn(0, bins - 1)
+                    val weight = saturation.toDouble() *
+                        (0.45 + value.toDouble() * 0.55)
+                    weights[bin] += weight
+                    red[bin] += Color.red(pixel) * weight
+                    green[bin] += Color.green(pixel) * weight
+                    blue[bin] += Color.blue(pixel) * weight
+                }
+                x += stepX
+            }
+            y += stepY
+        }
+
+        var best = 0
+        for (index in 1 until bins) {
+            if (weights[index] > weights[best]) best = index
+        }
+        if (weights[best] <= 0.0) return Color.rgb(210, 165, 205)
+
+        return Color.rgb(
+            (red[best] / weights[best]).toInt().coerceIn(0, 255),
+            (green[best] / weights[best]).toInt().coerceIn(0, 255),
+            (blue[best] / weights[best]).toInt().coerceIn(0, 255)
+        )
+    }
+
     private fun rebuildGlassShader() {
         val background = wallpaperSample ?: return
         val mask = glyphMask ?: return
@@ -670,6 +746,12 @@ internal class LiquidWallpaperRenderer(
                 "uResolution",
                 surfaceWidth.toFloat(),
                 surfaceHeight.toFloat()
+            )
+            shader.setFloatUniform(
+                "uAccentColor",
+                Color.red(adaptiveAccentColor) / 255f,
+                Color.green(adaptiveAccentColor) / 255f,
+                Color.blue(adaptiveAccentColor) / 255f
             )
             glassShader = shader
         } catch (exception: RuntimeException) {
