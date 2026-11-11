@@ -343,13 +343,10 @@ internal class LiquidWallpaperRenderer(
 
         val wallpaperFile = context.filesDir.resolve(SOURCE_FILE_NAME)
         val manualForegroundFile = context.filesDir.resolve(MANUAL_FOREGROUND_FILE_NAME)
-        val automaticForegroundFile = context.filesDir.resolve(FOREGROUND_FILE_NAME)
-        val foregroundFile = if (
-            manualForegroundFile.exists() && manualForegroundFile.length() > 0L
-        ) {
-            manualForegroundFile
-        } else {
-            automaticForegroundFile
+        // Only a mask deliberately painted and saved by the user may cover the
+        // clock. Never apply an automatic ML mask implicitly.
+        val foregroundFile = manualForegroundFile.takeIf {
+            it.exists() && it.length() > 0L
         }
 
         val decoded = if (wallpaperFile.exists() && wallpaperFile.length() > 0L) {
