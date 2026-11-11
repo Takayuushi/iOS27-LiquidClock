@@ -77,16 +77,26 @@ class MainActivity : Activity() {
 
         try {
             copySelectedImage(uri)
-            sendBroadcast(
-                Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
-                    .setPackage(packageName)
-            )
-            updateSelectionStatus()
-            Toast.makeText(
-                this,
-                R.string.wallpaper_imported,
-                Toast.LENGTH_SHORT
-            ).show()
+            selectionStatus.setText(R.string.wallpaper_preparing_depth)
+
+            val sourceFile = File(filesDir, SOURCE_FILE_NAME)
+            WallpaperDepthProcessor.process(this, sourceFile) { depthReady ->
+                sendBroadcast(
+                    Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
+                        .setPackage(packageName)
+                )
+                updateSelectionStatus()
+
+                Toast.makeText(
+                    this,
+                    if (depthReady) {
+                        R.string.wallpaper_depth_ready
+                    } else {
+                        R.string.wallpaper_depth_fallback
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
