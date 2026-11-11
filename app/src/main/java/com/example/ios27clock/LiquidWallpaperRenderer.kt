@@ -561,9 +561,9 @@ internal class LiquidWallpaperRenderer(
 
         glyphBounds.set(
             (startX - fontSize * 0.04f).coerceAtLeast(0f),
-            (minTop - fontSize * 0.045f).coerceAtLeast(0).toFloat(),
+            (minTop.toFloat() - fontSize * 0.045f).coerceAtLeast(0f),
             (startX + totalWidth + fontSize * 0.04f).coerceAtMost(width.toFloat()),
-            (maxBottom + fontSize * 0.045f).coerceAtMost(height).toFloat()
+            (maxBottom.toFloat() + fontSize * 0.045f).coerceAtMost(height.toFloat())
         )
 
         cursorX = startX
