@@ -19,6 +19,7 @@
     <string name="mask_undo">Undo</string>
     <string name="mask_clear">Clear</string>
     <string name="mask_save">Save selection</string>
+    <string name="cancel">Cancel</string>
     <string name="mask_editor_saved">Foreground selection saved.</string>
     <string name="mask_editor_no_wallpaper">Choose a wallpaper before editing its foreground.</string>
     <string name="mask_editor_load_failed">Could not open wallpaper: %1$s</string>
