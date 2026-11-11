@@ -18,14 +18,13 @@ import android.view.View
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.max
-import kotlin.math.min
 
 /**
- * Paint-to-select foreground editor.
+ * Foreground mask editor with brush and polygon-lasso selection.
  *
- * The user paints the exact pixels that should be composited above the clock.
- * All strokes are stored in source-image coordinates, so the saved cut-out
- * remains aligned when the live wallpaper applies its center-crop transform.
+ * The whole wallpaper always remains visible in the editor. The image uses
+ * the same center-crop transform as the live wallpaper renderer, so the mask
+ * lines up exactly when exported and composited above the clock.
  */
 class MaskDrawingView @JvmOverloads constructor(
     context: Context,
@@ -33,19 +32,24 @@ class MaskDrawingView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private data class BrushStroke(
-        val path: Path,
-        val start: PointF,
-        val erase: Boolean,
-        val width: Float
+    private data class SelectionAction(
+        val path: Path? = null,
+        val start: PointF? = null,
+        val erase: Boolean = false,
+        val width: Float = 0f,
+        val lasso: Boolean = false,
+        val clear: Boolean = false
     )
 
     private var sourceBitmap: Bitmap? = null
     private var maskBitmap: Bitmap? = null
+    private var baseMaskBitmap: Bitmap? = null
     private var maskCanvas: Canvas? = null
-    private val strokes = mutableListOf<BrushStroke>()
-    private var currentStroke: BrushStroke? = null
+
+    private val actions = mutableListOf<SelectionAction>()
+    private var currentAction: SelectionAction? = null
     private var eraseMode = false
+    private var lassoMode = false
     private var brushSizeDp = 64f
     private val imageRect = RectF()
 
@@ -53,7 +57,7 @@ class MaskDrawingView @JvmOverloads constructor(
 
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = PorterDuffColorFilter(
-            Color.argb(176, 38, 190, 255),
+            Color.argb(186, 30, 170, 255),
             PorterDuff.Mode.SRC_IN
         )
     }
@@ -64,13 +68,19 @@ class MaskDrawingView @JvmOverloads constructor(
         strokeWidth = resources.displayMetrics.density * 1.5f
     }
 
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
+    private val lassoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(96, 218, 255)
+        style = Paint.Style.STROKE
+        strokeWidth = resources.displayMetrics.density * 2.2f
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        setShadowLayer(3f, 0f, 1f, Color.BLACK)
     }
 
-    private val erasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    private val lassoStartPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+        setShadowLayer(3f, 0f, 1f, Color.BLACK)
     }
 
     private val exportMaskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -97,6 +107,7 @@ class MaskDrawingView @JvmOverloads constructor(
             loadExistingCutout(existingManualCutout, source.width, source.height)
         }
 
+        baseMaskBitmap = requireNotNull(maskBitmap).copy(Bitmap.Config.ARGB_8888, true)
         invalidate()
     }
 
@@ -128,82 +139,99 @@ class MaskDrawingView @JvmOverloads constructor(
 
     private fun loadExistingCutout(file: File, targetWidth: Int, targetHeight: Int) {
         val existing = decodeImage(file) ?: return
-        val mask = maskBitmap ?: run {
+        try {
+            val copyPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+            }
+            val target = RectF(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat())
+            maskCanvas?.drawBitmap(existing, null, target, copyPaint)
+        } finally {
             existing.recycle()
-            return
         }
-
-        val copyPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
-        }
-        val scaled = RectF(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat())
-        maskCanvas?.drawBitmap(existing, null, scaled, copyPaint)
-        existing.recycle()
     }
 
     fun setEraseMode(erase: Boolean) {
         eraseMode = erase
+        lassoMode = false
+        invalidate()
     }
 
+    fun setLassoMode(enabled: Boolean) {
+        lassoMode = enabled
+        invalidate()
+    }
+
+    fun isLassoMode(): Boolean = lassoMode
+
     fun setBrushSizeDp(size: Float) {
-        brushSizeDp = size.coerceIn(10f, 180f)
+        brushSizeDp = size.coerceIn(4f, 180f)
+        invalidate()
     }
 
     fun undo() {
-        if (strokes.isNotEmpty()) {
-            strokes.removeAt(strokes.lastIndex)
-            currentStroke = null
+        if (actions.isNotEmpty()) {
+            actions.removeAt(actions.lastIndex)
+            currentAction = null
             redrawMask()
             invalidate()
         }
     }
 
     fun clearSelection() {
-        strokes.clear()
-        currentStroke = null
-        maskBitmap?.eraseColor(Color.TRANSPARENT)
+        currentAction = null
+        actions.add(SelectionAction(clear = true))
+        redrawMask()
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(Color.rgb(7, 11, 21))
 
-        val source = sourceBitmap ?: return
+        val source = sourceBitmap ?: run {
+            canvas.drawColor(Color.rgb(20, 24, 32))
+            return
+        }
+
+        // Center-crop fills the complete editor viewport with the source image.
+        // There are no black letterbox regions that can be mistaken for missing
+        // or transparent parts of the foreground selection.
         updateImageRect(source)
-
         canvas.drawBitmap(source, null, imageRect, imagePaint)
+
         maskBitmap?.let { mask ->
             canvas.drawBitmap(mask, null, imageRect, overlayPaint)
         }
 
-        currentStroke?.let { stroke ->
-            drawStrokePreview(canvas, stroke)
-        }
+        currentAction?.takeIf { it.lasso }?.let { drawLassoPreview(canvas, it) }
 
-        if (isEnabled) {
+        if (!lassoMode && lastTouchX >= 0f && lastTouchY >= 0f) {
             val brushRadiusPx = brushSizeDp * resources.displayMetrics.density / 2f
-            cursorPaint.color = if (eraseMode) Color.rgb(255, 178, 84) else Color.WHITE
+            cursorPaint.color = if (eraseMode) {
+                Color.rgb(255, 178, 84)
+            } else {
+                Color.WHITE
+            }
             canvas.drawCircle(lastTouchX, lastTouchY, brushRadiusPx, cursorPaint)
         }
     }
 
-    private var lastTouchX = -1000f
-    private var lastTouchY = -1000f
+    private var lastTouchX = -1f
+    private var lastTouchY = -1f
 
     private fun updateImageRect(bitmap: Bitmap) {
-        val availableWidth = width.toFloat()
-        val availableHeight = height.toFloat()
-        if (availableWidth <= 0f || availableHeight <= 0f) return
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        if (viewWidth <= 0f || viewHeight <= 0f) return
 
-        val scale = min(
-            availableWidth / bitmap.width,
-            availableHeight / bitmap.height
+        // Match LiquidWallpaperRenderer.drawCoverBitmap() exactly.
+        val scale = max(
+            viewWidth / bitmap.width,
+            viewHeight / bitmap.height
         )
         val renderedWidth = bitmap.width * scale
         val renderedHeight = bitmap.height * scale
-        val left = (availableWidth - renderedWidth) / 2f
-        val top = (availableHeight - renderedHeight) / 2f
+        val left = (viewWidth - renderedWidth) / 2f
+        val top = (viewHeight - renderedHeight) / 2f
         imageRect.set(left, top, left + renderedWidth, top + renderedHeight)
     }
 
@@ -213,20 +241,30 @@ class MaskDrawingView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (!imageRect.contains(event.x, event.y)) return false
+                if (event.x < 0f || event.y < 0f ||
+                    event.x > width.toFloat() || event.y > height.toFloat()
+                ) return false
 
                 val point = viewToImage(event.x, event.y, source) ?: return false
                 val path = Path().apply { moveTo(point.x, point.y) }
-                val scale = imageRect.width() / source.width
-                val widthInImage = brushSizeDp *
-                    resources.displayMetrics.density / scale
 
-                currentStroke = BrushStroke(
-                    path = path,
-                    start = point,
-                    erase = eraseMode,
-                    width = widthInImage
-                )
+                if (lassoMode) {
+                    currentAction = SelectionAction(
+                        path = path,
+                        lasso = true
+                    )
+                } else {
+                    val scale = imageRect.width() / source.width
+                    val widthInImage = brushSizeDp *
+                        resources.displayMetrics.density / scale
+                    currentAction = SelectionAction(
+                        path = path,
+                        start = point,
+                        erase = eraseMode,
+                        width = widthInImage
+                    )
+                }
+
                 lastTouchX = event.x
                 lastTouchY = event.y
                 parent?.requestDisallowInterceptTouchEvent(true)
@@ -235,25 +273,34 @@ class MaskDrawingView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val stroke = currentStroke ?: return false
+                val action = currentAction ?: return false
                 val point = viewToImage(event.x, event.y, source) ?: return true
-                stroke.path.lineTo(point.x, point.y)
+                action.path?.lineTo(point.x, point.y)
                 lastTouchX = event.x
                 lastTouchY = event.y
-                redrawMask()
+                if (!action.lasso) redrawMask()
                 invalidate()
                 return true
             }
 
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
-                currentStroke?.let { stroke ->
-                    strokes.add(stroke)
-                    currentStroke = null
+                currentAction?.let { action ->
+                    if (action.lasso) {
+                        action.path?.close()
+                    }
+                    actions.add(
+                        action.copy(
+                            path = action.path?.let(::Path),
+                            start = action.start?.let { PointF(it.x, it.y) }
+                        )
+                    )
+                    currentAction = null
                     redrawMask()
                 }
-                lastTouchX = -1000f
-                lastTouchY = -1000f
+
+                lastTouchX = -1f
+                lastTouchY = -1f
                 parent?.requestDisallowInterceptTouchEvent(false)
                 invalidate()
                 performClick()
@@ -270,6 +317,7 @@ class MaskDrawingView @JvmOverloads constructor(
 
     private fun viewToImage(x: Float, y: Float, source: Bitmap): PointF? {
         if (imageRect.width() <= 0f || imageRect.height() <= 0f) return null
+
         return PointF(
             ((x - imageRect.left) / imageRect.width() * source.width)
                 .coerceIn(0f, source.width.toFloat()),
@@ -278,71 +326,90 @@ class MaskDrawingView @JvmOverloads constructor(
         )
     }
 
-    private fun drawStrokePreview(canvas: Canvas, stroke: BrushStroke) {
+    private fun drawLassoPreview(canvas: Canvas, action: SelectionAction) {
+        val path = action.path ?: return
         val source = sourceBitmap ?: return
         updateImageRect(source)
 
         val save = canvas.save()
-        canvas.clipRect(imageRect)
+        canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
         canvas.translate(imageRect.left, imageRect.top)
         canvas.scale(
             imageRect.width() / source.width,
             imageRect.height() / source.height
         )
+        canvas.drawPath(path, lassoPaint)
 
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (stroke.erase) Color.rgb(255, 178, 84) else Color.rgb(38, 190, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = stroke.width
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-            alpha = 190
+        val start = action.path?.let {
+            val bounds = RectF()
+            it.computeBounds(bounds, true)
+            PointF(bounds.left, bounds.top)
         }
-        canvas.drawPath(stroke.path, paint)
+        if (start != null) {
+            canvas.drawCircle(start.x, start.y, 5f, lassoStartPaint)
+        }
         canvas.restoreToCount(save)
     }
 
     private fun redrawMask() {
         val target = maskCanvas ?: return
-        val source = sourceBitmap ?: return
+        val base = baseMaskBitmap
 
         target.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        if (base != null && !base.isRecycled) {
+            target.drawBitmap(base, 0f, 0f, null)
+        }
 
-        for (stroke in strokes + listOfNotNull(currentStroke)) {
+        for (action in actions + listOfNotNull(currentAction?.takeUnless { it.lasso })) {
+            if (action.clear) {
+                target.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                continue
+            }
+
+            val path = action.path ?: continue
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
-                style = Paint.Style.STROKE
-                strokeWidth = stroke.width
+                style = if (action.lasso) Paint.Style.FILL else Paint.Style.STROKE
+                strokeWidth = action.width
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
-                if (stroke.erase) {
+                if (action.erase) {
                     xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
                 }
             }
 
-            target.drawCircle(
-                stroke.start.x,
-                stroke.start.y,
-                stroke.width / 2f,
-                if (stroke.erase) erasePaint else fillPaint
-            )
-            target.drawPath(stroke.path, paint)
+            if (!action.lasso) {
+                action.start?.let { start ->
+                    target.drawCircle(
+                        start.x,
+                        start.y,
+                        action.width / 2f,
+                        paint
+                    )
+                }
+            }
+            target.drawPath(path, paint)
             paint.xfermode = null
         }
     }
 
     fun writeForegroundCutout(destination: File) {
-        val source = sourceBitmap ?: throw IllegalStateException("No wallpaper is loaded.")
-        val mask = maskBitmap ?: throw IllegalStateException("No manual mask is available.")
+        val source = sourceBitmap
+            ?: throw IllegalStateException("No wallpaper is loaded.")
+        val mask = maskBitmap
+            ?: throw IllegalStateException("No manual mask is available.")
 
         val output = source.copy(Bitmap.Config.ARGB_8888, true)
             ?: throw IllegalStateException("Could not allocate the foreground image.")
 
         try {
+            // DST_IN multiplies the wallpaper alpha by the selection alpha.
+            // Pixels outside the lasso/brush selection remain transparent; the
+            // live wallpaper's original background therefore stays visible.
             Canvas(output).drawBitmap(mask, 0f, 0f, exportMaskPaint)
             FileOutputStream(destination).use { stream ->
                 check(output.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                    "Could not write the foreground mask image."
+                    "Could not write the foreground image."
                 }
                 stream.fd.sync()
             }
@@ -354,10 +421,12 @@ class MaskDrawingView @JvmOverloads constructor(
     fun release() {
         sourceBitmap?.recycle()
         maskBitmap?.recycle()
+        baseMaskBitmap?.recycle()
         sourceBitmap = null
         maskBitmap = null
+        baseMaskBitmap = null
         maskCanvas = null
-        strokes.clear()
-        currentStroke = null
+        actions.clear()
+        currentAction = null
     }
 }
