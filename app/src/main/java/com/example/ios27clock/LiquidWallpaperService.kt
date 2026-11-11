@@ -123,13 +123,14 @@ class LiquidWallpaperService : WallpaperService() {
                 MotionEvent.ACTION_DOWN -> {
                     val x = event.x
                     val y = event.y
-
-                    if (renderer.isClockHit(x, y)) {
-                        draggingClock = true
+                    // Clear stale state before each new pointer sequence.
+                    draggingClock = renderer.isClockHit(x, y)
+                    pinchActive = false
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
+                    if (draggingClock) {
                         activePointerId = event.getPointerId(0)
                         lastTouchX = x
                         lastTouchY = y
-                        pinchActive = false
                     }
                 }
 
@@ -137,6 +138,7 @@ class LiquidWallpaperService : WallpaperService() {
                     if (draggingClock && event.pointerCount >= 2) {
                         pinchStartDistance = pointerDistance(event)
                         pinchActive = pinchStartDistance > MIN_PINCH_DISTANCE_PX
+                        if (pinchActive) renderer.beginScaleGesture()
                     }
                 }
 
@@ -149,7 +151,6 @@ class LiquidWallpaperService : WallpaperService() {
                             pinchStartDistance > MIN_PINCH_DISTANCE_PX
                         ) {
                             renderer.scaleClock(currentDistance / pinchStartDistance)
-                            pinchStartDistance = currentDistance
                         }
                     } else {
                         val index = event.findPointerIndex(activePointerId)
@@ -175,6 +176,9 @@ class LiquidWallpaperService : WallpaperService() {
                         }
                     } else {
                         pinchStartDistance = pointerDistanceExcluding(event, event.actionIndex)
+                        if (pinchStartDistance > MIN_PINCH_DISTANCE_PX) {
+                            renderer.beginScaleGesture()
+                        }
                     }
                 }
 
@@ -188,6 +192,7 @@ class LiquidWallpaperService : WallpaperService() {
                     draggingClock = false
                     pinchActive = false
                     activePointerId = MotionEvent.INVALID_POINTER_ID
+                    pinchStartDistance = 0f
                 }
             }
         }
