@@ -1,6 +1,7 @@
 package com.example.ios27clock
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.widget.Button
 import android.widget.SeekBar
@@ -102,6 +103,7 @@ class ForegroundMaskEditorActivity : Activity() {
             })
         }
         drawingView.setBrushSizeDp(64f)
+        showOneTimeGuide()
 
         findViewById<Button>(R.id.mask_cancel_button).setOnClickListener {
             finish()
@@ -110,6 +112,20 @@ class ForegroundMaskEditorActivity : Activity() {
         findViewById<Button>(R.id.mask_save_button).setOnClickListener {
             saveSelection()
         }
+    }
+
+    private fun showOneTimeGuide() {
+        val preferences = getSharedPreferences("mask_editor_guide", MODE_PRIVATE)
+        if (preferences.getBoolean("shown", false)) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.mask_editor_title)
+            .setMessage(R.string.mask_editor_instructions)
+            .setPositiveButton(R.string.got_it) { dialog, _ -> dialog.dismiss() }
+            .setCancelable(false)
+            .show()
+
+        preferences.edit().putBoolean("shown", true).apply()
     }
 
     private fun updateLassoButton() {
