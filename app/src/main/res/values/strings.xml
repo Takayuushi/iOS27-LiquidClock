@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">iOS 27 Liquid Clock</string>
     <string name="widget_name">Liquid Clock</string>
-    <string name="widget_description">A large glass-inspired clock for your home screen.</string>
+    <string name="widget_description">An oversized SF Pro clock rendered to a transparent bitmap.</string>
     <string name="start_preview">Start floating preview</string>
     <string name="stop_preview">Stop floating preview</string>
     <string name="continue_label">Continue</string>
