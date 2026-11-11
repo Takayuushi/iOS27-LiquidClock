@@ -12,6 +12,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
@@ -173,7 +174,7 @@ internal class LiquidWallpaperRenderer(
     private var surfaceHeight = 0
     private var backdrop: Bitmap? = null
     private var wallpaperSample: Bitmap? = null
-    private var foregroundLayer: Bitmap? = null
+    private var foregroundOcclusionMask: Bitmap? = null
     private var glyphMask: Bitmap? = null
     private var glassShader: RuntimeShader? = null
     private var cachedTimeText: String? = null
@@ -201,6 +202,21 @@ internal class LiquidWallpaperRenderer(
             PorterDuff.Mode.SRC_IN
         )
     }
+
+    private val clockOcclusionPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    }
+
+    private val fallbackGlyphPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        color = Color.WHITE
+        alpha = 218
+    }
+
+    private val clockLayerBounds = RectF()
 
     private val clockPreferences = context.getSharedPreferences(
         "liquid_clock_composition",
@@ -269,57 +285,66 @@ internal class LiquidWallpaperRenderer(
 
         rebuildGlyphMask(force = false)
 
+        // Keep the original selected wallpaper as the only background image.
+        // The user selection is an alpha mask applied to the clock layer only.
         val background = backdrop ?: return
         canvas.drawBitmap(background, 0f, 0f, bitmapPaint)
 
-        val mask = glyphMask
-        val shader = glassShader
-        if (canvas.isHardwareAccelerated && shader != null && mask != null &&
-            !glyphBounds.isEmpty
-        ) {
-            try {
-                shader.setFloatUniform(
-                    "uResolution",
-                    width.toFloat(),
-                    height.toFloat()
-                )
-                shader.setFloatUniform("uTime", timeSeconds)
-                shaderPaint.shader = shader
+        val mask = glyphMask ?: return
+        if (glyphBounds.isEmpty) return
 
-                val shadowOffset = max(2f, height * 0.0015f)
-                val shadowSave = canvas.save()
-                canvas.translate(0f, shadowOffset)
-                canvas.drawBitmap(mask, 0f, 0f, shadowPaint)
-                canvas.restoreToCount(shadowSave)
+        val shadowOffset = max(2f, height * 0.0015f)
+        clockLayerBounds.set(glyphBounds)
+        clockLayerBounds.inset(-shadowOffset * 2f, -shadowOffset * 2f)
+        clockLayerBounds.intersect(
+            0f,
+            0f,
+            width.toFloat(),
+            height.toFloat()
+        )
 
-                // The AGSL shader itself returns glyph-mask alpha. Drawing only
-                // within glyphBounds avoids saveLayer side effects and guarantees
-                // there is no rectangular shader surface behind the numerals.
-                canvas.drawRect(glyphBounds, shaderPaint)
-
-                shaderPaint.shader = null
-                drawForegroundLayer(canvas)
-                return
-            } catch (exception: RuntimeException) {
-                Log.w(TAG, "AGSL rendering failed; using the masked text fallback.", exception)
-                shaderPaint.shader = null
-            }
-        }
-
-        if (mask != null) {
+        // Draw the clock in isolation. DST_OUT then removes only the clock
+        // pixels beneath the user-selected object. The untouched wallpaper
+        // remains visible below, so the selected object never replaces it.
+        val layerSave = canvas.saveLayer(clockLayerBounds, null)
+        try {
             val shadowSave = canvas.save()
-            canvas.translate(0f, max(2f, height * 0.0015f))
+            canvas.translate(0f, shadowOffset)
             canvas.drawBitmap(mask, 0f, 0f, shadowPaint)
             canvas.restoreToCount(shadowSave)
-            canvas.drawBitmap(mask, 0f, 0f, bitmapPaint)
-        }
 
-        drawForegroundLayer(canvas)
-    }
+            var shaderDrawn = false
+            val shader = glassShader
+            if (canvas.isHardwareAccelerated && shader != null) {
+                try {
+                    shader.setFloatUniform(
+                        "uResolution",
+                        width.toFloat(),
+                        height.toFloat()
+                    )
+                    shader.setFloatUniform("uTime", timeSeconds)
+                    shaderPaint.shader = shader
+                    canvas.drawRect(glyphBounds, shaderPaint)
+                    shaderPaint.shader = null
+                    shaderDrawn = true
+                } catch (exception: RuntimeException) {
+                    shaderPaint.shader = null
+                    Log.w(TAG, "AGSL rendering failed; showing a visible clock fallback.", exception)
+                }
+            }
 
-    private fun drawForegroundLayer(canvas: Canvas) {
-        foregroundLayer?.let { layer ->
-            canvas.drawBitmap(layer, 0f, 0f, bitmapPaint)
+            // If hardware shader rendering is unavailable, draw readable
+            // numerals instead of silently showing wallpaper without a clock.
+            if (!shaderDrawn) {
+                canvas.drawBitmap(mask, 0f, 0f, fallbackGlyphPaint)
+            }
+
+            foregroundOcclusionMask?.let { occlusionMask ->
+                canvas.drawBitmap(occlusionMask, 0f, 0f, clockOcclusionPaint)
+            }
+        } finally {
+            canvas.restoreToCount(layerSave)
+            shaderPaint.shader = null
         }
     }
 
@@ -329,10 +354,10 @@ internal class LiquidWallpaperRenderer(
         glyphMask = null
         backdrop?.recycle()
         if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
-        foregroundLayer?.recycle()
+        foregroundOcclusionMask?.recycle()
         backdrop = null
         wallpaperSample = null
-        foregroundLayer = null
+        foregroundOcclusionMask = null
         cachedTimeText = null
     }
 
@@ -342,58 +367,54 @@ internal class LiquidWallpaperRenderer(
         if (width <= 0 || height <= 0) return
 
         val wallpaperFile = context.filesDir.resolve(SOURCE_FILE_NAME)
-        val manualForegroundFile = context.filesDir.resolve(MANUAL_FOREGROUND_FILE_NAME)
-        // Only a mask deliberately painted and saved by the user may cover the
-        // clock. Never apply an automatic ML mask implicitly.
-        val foregroundFile = manualForegroundFile.takeIf {
-            it.exists() && it.length() > 0L
+        val manualMaskFile = context.filesDir.resolve(MANUAL_FOREGROUND_FILE_NAME)
+
+        val decodedWallpaper = if (
+            wallpaperFile.exists() && wallpaperFile.length() > 0L
+        ) {
+            decodeWallpaper(wallpaperFile.absolutePath, width, height)
+        } else {
+            null
         }
 
-        val decoded = if (wallpaperFile.exists() && wallpaperFile.length() > 0L) {
-            decodeWallpaper(wallpaperFile.absolutePath, width, height)
-        } else null
-
-        val decodedForeground = foregroundFile
-            ?.takeIf { it.exists() && it.length() > 0L }
+        val decodedMask = manualMaskFile
+            .takeIf { it.exists() && it.length() > 0L }
             ?.let { decodeWallpaper(it.absolutePath, width, height) }
 
-        val sourceOutput = Bitmap.createBitmap(
+        val wallpaperOutput = Bitmap.createBitmap(
             width,
             height,
             Bitmap.Config.ARGB_8888
         )
 
-        if (decoded != null) {
-            drawCoverBitmap(Canvas(sourceOutput), decoded, width, height)
-            decoded.recycle()
+        if (decodedWallpaper != null) {
+            drawCoverBitmap(Canvas(wallpaperOutput), decodedWallpaper, width, height)
+            decodedWallpaper.recycle()
         } else {
-            drawDefaultBackdrop(Canvas(sourceOutput), width, height)
+            Log.e(TAG, "Selected wallpaper could not be decoded; using the fallback background.")
+            drawDefaultBackdrop(Canvas(wallpaperOutput), width, height)
         }
 
-        val foregroundOutput = decodedForeground?.let { foregroundBitmap ->
+        // This is only a per-pixel alpha mask. Never draw it as an image.
+        // Its alpha erases clock pixels where the selected object overlaps.
+        val occlusionOutput = decodedMask?.let { sourceMask ->
             Bitmap.createBitmap(
                 width,
                 height,
                 Bitmap.Config.ARGB_8888
             ).also { output ->
-                drawCoverBitmap(Canvas(output), foregroundBitmap, width, height)
-                foregroundBitmap.recycle()
+                drawCoverBitmap(Canvas(output), sourceMask, width, height)
+                sourceMask.recycle()
             }
         }
 
-        // Keep the original image intact. The subject is drawn a second time
-        // above the clock; subtracting it from the backdrop created unwanted
-        // transparent regions and could expose a rectangular preview patch.
-        val oldBackdrop = backdrop
-        val oldSample = wallpaperSample
-        val oldForeground = foregroundLayer
-        oldBackdrop?.recycle()
-        if (oldSample != null && oldSample !== oldBackdrop) oldSample.recycle()
-        oldForeground?.recycle()
+        backdrop?.recycle()
+        if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
+        foregroundOcclusionMask?.recycle()
 
-        backdrop = sourceOutput
-        wallpaperSample = sourceOutput
-        foregroundLayer = foregroundOutput
+        backdrop = wallpaperOutput
+        wallpaperSample = wallpaperOutput
+        foregroundOcclusionMask = occlusionOutput
 
         cachedTimeText = null
         rebuildGlyphMask(force = true)
