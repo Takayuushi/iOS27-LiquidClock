@@ -16,7 +16,6 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -36,7 +35,6 @@
 
         <receiver
             android:name=".LiquidGlassWidgetProvider"
-            android:description="@string/widget_description"
             android:exported="true"
             android:label="@string/widget_name">
             <intent-filter>
