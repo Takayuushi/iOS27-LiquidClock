@@ -60,54 +60,40 @@ jobs:
           gradle --version
           sdkmanager --list_installed
 
-      - name: Download SF Pro Display Thin OTF font
+      - name: Ingest Official SF Pro Fonts from Repository
         shell: bash
         run: |
           set -euo pipefail
 
           FONT_DIR="app/src/main/res/font"
-          FONT_OUTPUT="$FONT_DIR/sf_pro_display.otf"
-          FONT_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
-
-          mkdir -p "$FONT_DIR"
-
-          curl \
-            --fail \
-            --show-error \
-            --silent \
-            --location \
-            --retry 3 \
-            --retry-all-errors \
-            "$FONT_URL" \
-            --output "$FONT_OUTPUT"
-
-          test -s "$FONT_OUTPUT"
-
-          FONT_BYTES="$(stat -c '%s' "$FONT_OUTPUT")"
-          if [[ "$FONT_BYTES" -lt 1000000 ]]; then
-            echo "Downloaded font is unexpectedly small: ${FONT_BYTES} bytes" >&2
-            exit 1
-          fi
-
-          FONT_DESCRIPTION="$(file "$FONT_OUTPUT")"
-          echo "$FONT_DESCRIPTION"
-          if ! grep -Eqi 'OpenType|font data' <<< "$FONT_DESCRIPTION"; then
-            echo "Downloaded file is not recognized as an OpenType font." >&2
-            exit 1
-          fi
-
-          MAGIC="$(od -An -tx1 -N4 "$FONT_OUTPUT" | tr -d ' \n')"
-          if [[ "$MAGIC" != "4f54544f" && "$MAGIC" != "00010000" ]]; then
-            echo "Unexpected font signature: $MAGIC" >&2
-            exit 1
-          fi
-
           ASSET_FONT_DIR="app/src/main/assets/fonts"
-          mkdir -p "$ASSET_FONT_DIR"
-          cp "$FONT_OUTPUT" "$ASSET_FONT_DIR/sf_pro_display.otf"
+          mkdir -p "$FONT_DIR" "$ASSET_FONT_DIR"
+
+          THIN_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
+          BOLD_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Bold.otf"
+
+          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
+            "$THIN_URL" --output "$FONT_DIR/sf_pro_display_thin.otf"
+          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
+            "$BOLD_URL" --output "$FONT_DIR/sf_pro_display_bold.otf"
+
+          for FONT in "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display_bold.otf"; do
+            test -s "$FONT"
+            MAGIC="$(od -An -tx1 -N4 "$FONT" | tr -d ' \n')"
+            if [[ "$MAGIC" != "4f54544f" && "$MAGIC" != "00010000" ]]; then
+              echo "Invalid OpenType/TrueType signature in $FONT: $MAGIC" >&2
+              exit 1
+            fi
+            file "$FONT"
+          done
+
+          cp "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display.otf"
+          cp "$FONT_DIR/sf_pro_display_thin.otf" "$ASSET_FONT_DIR/sf_pro_display.otf"
+          test -s "$FONT_DIR/sf_pro_display.otf"
+          test -s "$FONT_DIR/sf_pro_display_bold.otf"
           test -s "$ASSET_FONT_DIR/sf_pro_display.otf"
 
-          echo "SF Pro Display Thin ready for Android resources and Canvas renderer."
+          echo "SF Pro Display Thin and Bold assets downloaded and validated."
 
       - name: Build debug APK
         shell: bash
