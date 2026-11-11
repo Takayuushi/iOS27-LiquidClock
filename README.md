@@ -8,7 +8,7 @@ An Android live-wallpaper clock experiment for modern Samsung Galaxy devices, ta
 - Users choose a wallpaper image through the system document picker. The app copies it into private storage so the wallpaper engine can render it without depending on a temporary document URI permission.
 - LiquidWallpaperService draws the wallpaper and clock into the live wallpaper surface. Home-screen icons and launcher controls are naturally composited above the wallpaper by Android.
 - LiquidWallpaperRenderer creates a glyph alpha mask for the time and uses AGSL RuntimeShader to sample the selected wallpaper inside the glyphs, adding chromatic refraction, rim lighting, and a subtle animated sheen.
-- The clock is drawn once per screen frame using a cached wallpaper bitmap and glyph mask; the shader animation updates at a modest 10 fps while the wallpaper is visible. Rendering stops when the wallpaper is not visible.
+- The clock is drawn with a cached wallpaper bitmap and glyph mask. AGSL is evaluated only inside the computed glyph bounds, while the subtle material shimmer updates at 30 fps when the wallpaper is visible. Rendering stops when the wallpaper is not visible. Wallpaper decoding is downsampled to the live surface dimensions to limit memory use.
 - SF Pro Display Thin is loaded from the workflow-provisioned app asset. A system thin font fallback is used only if the asset is unavailable.
 
 ## Lock Screen boundary
