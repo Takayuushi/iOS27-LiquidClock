@@ -10,7 +10,6 @@ import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.RenderEffect
 import android.util.AttributeSet
@@ -91,10 +90,6 @@ class MaskDrawingView @JvmOverloads constructor(
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
         setShadowLayer(3f, 0f, 1f, Color.BLACK)
-    }
-
-    private val exportMaskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
     }
 
     fun loadImage(sourceFile: File, existingManualCutout: File) {
@@ -414,27 +409,17 @@ class MaskDrawingView @JvmOverloads constructor(
     }
 
     fun writeForegroundCutout(destination: File) {
-        val source = sourceBitmap
-            ?: throw IllegalStateException("No wallpaper is loaded.")
         val mask = maskBitmap
-            ?: throw IllegalStateException("No manual mask is available.")
+            ?: throw IllegalStateException("No selection mask is available.")
 
-        val output = source.copy(Bitmap.Config.ARGB_8888, true)
-            ?: throw IllegalStateException("Could not allocate the foreground image.")
-
-        try {
-            // DST_IN multiplies the wallpaper alpha by the selection alpha.
-            // Pixels outside the lasso/brush selection remain transparent; the
-            // live wallpaper's original background therefore stays visible.
-            Canvas(output).drawBitmap(mask, 0f, 0f, exportMaskPaint)
-            FileOutputStream(destination).use { stream ->
-                check(output.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                    "Could not write the foreground image."
-                }
-                stream.fd.sync()
+        // Store the transparent selection mask only. The renderer uses its
+        // alpha to hide clock pixels beneath the chosen object; it never draws
+        // this bitmap over the wallpaper.
+        FileOutputStream(destination).use { stream ->
+            check(mask.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                "Could not write the selection mask."
             }
-        } finally {
-            output.recycle()
+            stream.fd.sync()
         }
     }
 
