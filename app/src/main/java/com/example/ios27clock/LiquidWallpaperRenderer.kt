@@ -837,17 +837,17 @@ internal class LiquidWallpaperRenderer(
 
     /** Widths are optical advances in a single normalized cap-height grid. */
     private fun vectorDigitAdvanceEm(glyph: String): Float = when (glyph) {
-        "0" -> 0.36f
-        "1" -> 0.29f
-        "2" -> 0.35f
-        "3" -> 0.35f
-        "4" -> 0.39f
-        "5" -> 0.36f
-        "6" -> 0.36f
-        "7" -> 0.34f
-        "8" -> 0.37f
-        "9" -> 0.36f
-        else -> 0.34f
+        "0" -> 0.43f
+        "1" -> 0.38f
+        "2" -> 0.39f
+        "3" -> 0.39f
+        "4" -> 0.42f
+        "5" -> 0.39f
+        "6" -> 0.41f
+        "7" -> 0.39f
+        "8" -> 0.43f
+        "9" -> 0.41f
+        else -> 0.39f
     }
 
     /**
@@ -869,43 +869,52 @@ internal class LiquidWallpaperRenderer(
 
         when (glyph) {
             "0" -> {
+                // Broad, softly squared outer bowl with a tall rounded
+                // rectangular counter. Side, top and bottom walls stay near
+                // the same optical thickness.
                 path.fillType = Path.FillType.EVEN_ODD
                 path.addRoundRect(
-                    RectF(x(0.04f), y(0.015f), x(0.96f), y(0.985f)),
-                    h * 0.16f, h * 0.16f, Path.Direction.CW
+                    RectF(x(0.04f), y(0.012f), x(0.96f), y(0.988f)),
+                    h * 0.145f, h * 0.145f, Path.Direction.CW
                 )
                 path.addRoundRect(
-                    RectF(x(0.235f), y(0.12f), x(0.765f), y(0.88f)),
-                    h * 0.085f, h * 0.085f, Path.Direction.CCW
+                    RectF(x(0.27f), y(0.115f), x(0.73f), y(0.885f)),
+                    h * 0.075f, h * 0.075f, Path.Direction.CCW
                 )
             }
             "1" -> {
-                path.moveTo(x(0.20f), y(0.235f))
-                path.lineTo(x(0.52f), y(0.065f))
-                path.lineTo(x(0.52f), y(0.925f))
-                path.moveTo(x(0.19f), y(0.925f))
-                path.lineTo(x(0.82f), y(0.925f))
+                // A narrower angled flag flows into a straight stem. The
+                // short foot is optically centred rather than spanning the
+                // entire advance box.
+                path.moveTo(x(0.18f), y(0.235f))
+                path.cubicTo(x(0.29f), y(0.19f), x(0.43f), y(0.085f), x(0.55f), y(0.065f))
+                path.lineTo(x(0.55f), y(0.925f))
+                path.moveTo(x(0.30f), y(0.925f))
+                path.lineTo(x(0.79f), y(0.925f))
             }
             "2" -> {
-                path.moveTo(x(0.15f), y(0.245f))
-                path.cubicTo(x(0.16f), y(0.075f), x(0.78f), y(0.025f), x(0.86f), y(0.22f))
-                path.cubicTo(x(0.88f), y(0.405f), x(0.72f), y(0.585f), x(0.50f), y(0.755f))
-                path.lineTo(x(0.15f), y(0.925f))
-                path.lineTo(x(0.86f), y(0.925f))
+                path.moveTo(x(0.12f), y(0.235f))
+                path.cubicTo(x(0.14f), y(0.075f), x(0.75f), y(0.025f), x(0.87f), y(0.205f))
+                path.cubicTo(x(0.99f), y(0.385f), x(0.78f), y(0.565f), x(0.54f), y(0.735f))
+                path.lineTo(x(0.16f), y(0.925f))
+                path.lineTo(x(0.87f), y(0.925f))
             }
             "3" -> {
-                path.moveTo(x(0.15f), y(0.16f))
-                path.cubicTo(x(0.34f), y(0.025f), x(0.82f), y(0.035f), x(0.85f), y(0.265f))
-                path.cubicTo(x(0.87f), y(0.425f), x(0.68f), y(0.49f), x(0.50f), y(0.50f))
-                path.cubicTo(x(0.70f), y(0.505f), x(0.87f), y(0.59f), x(0.85f), y(0.79f))
-                path.cubicTo(x(0.83f), y(0.975f), x(0.34f), y(0.975f), x(0.15f), y(0.91f))
+                // Two balanced lobes share a smooth right-hand spine. Avoid
+                // reversing the tangent at the waist: that created the
+                // swollen, pinched joint in the previous version.
+                path.moveTo(x(0.13f), y(0.16f))
+                path.cubicTo(x(0.32f), y(0.035f), x(0.73f), y(0.035f), x(0.86f), y(0.19f))
+                path.cubicTo(x(0.96f), y(0.31f), x(0.95f), y(0.44f), x(0.82f), y(0.50f))
+                path.cubicTo(x(0.95f), y(0.56f), x(0.97f), y(0.70f), x(0.86f), y(0.82f))
+                path.cubicTo(x(0.72f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
             }
             "4" -> {
                 path.moveTo(x(0.70f), y(0.925f))
                 path.lineTo(x(0.70f), y(0.075f))
-                path.moveTo(x(0.13f), y(0.595f))
-                path.lineTo(x(0.87f), y(0.595f))
-                path.moveTo(x(0.13f), y(0.595f))
+                path.moveTo(x(0.10f), y(0.60f))
+                path.lineTo(x(0.91f), y(0.60f))
+                path.moveTo(x(0.12f), y(0.60f))
                 path.lineTo(x(0.66f), y(0.075f))
             }
             "5" -> {
@@ -930,15 +939,17 @@ internal class LiquidWallpaperRenderer(
             }
             "8" -> {
                 path.fillType = Path.FillType.EVEN_ODD
-                path.moveTo(x(0.50f), y(0.015f))
-                path.cubicTo(x(0.20f), y(0.015f), x(0.055f), y(0.12f), x(0.055f), y(0.27f))
-                path.cubicTo(x(0.055f), y(0.405f), x(0.22f), y(0.47f), x(0.50f), y(0.50f))
-                path.cubicTo(x(0.22f), y(0.53f), x(0.055f), y(0.60f), x(0.055f), y(0.75f))
-                path.cubicTo(x(0.055f), y(0.90f), x(0.20f), y(0.985f), x(0.50f), y(0.985f))
-                path.cubicTo(x(0.80f), y(0.985f), x(0.945f), y(0.90f), x(0.945f), y(0.75f))
-                path.cubicTo(x(0.945f), y(0.60f), x(0.78f), y(0.53f), x(0.50f), y(0.50f))
-                path.cubicTo(x(0.78f), y(0.47f), x(0.945f), y(0.405f), x(0.945f), y(0.27f))
-                path.cubicTo(x(0.945f), y(0.12f), x(0.80f), y(0.015f), x(0.50f), y(0.015f))
+                // A broader upper bowl and slightly fuller lower bowl, with
+                // tall rounded-square counters and a controlled waist.
+                path.moveTo(x(0.50f), y(0.012f))
+                path.cubicTo(x(0.22f), y(0.012f), x(0.055f), y(0.115f), x(0.055f), y(0.265f))
+                path.cubicTo(x(0.055f), y(0.405f), x(0.235f), y(0.465f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.235f), y(0.535f), x(0.055f), y(0.605f), x(0.055f), y(0.755f))
+                path.cubicTo(x(0.055f), y(0.905f), x(0.22f), y(0.988f), x(0.50f), y(0.988f))
+                path.cubicTo(x(0.78f), y(0.988f), x(0.945f), y(0.905f), x(0.945f), y(0.755f))
+                path.cubicTo(x(0.945f), y(0.605f), x(0.765f), y(0.535f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.765f), y(0.465f), x(0.945f), y(0.405f), x(0.945f), y(0.265f))
+                path.cubicTo(x(0.945f), y(0.115f), x(0.78f), y(0.012f), x(0.50f), y(0.012f))
                 path.close()
                 path.addRoundRect(
                     RectF(x(0.265f), y(0.115f), x(0.735f), y(0.415f)),
