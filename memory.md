@@ -14,12 +14,13 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Production switched in commit `19f727982706117a6c62622e948da67f8296b0ff` (“Use Apple's official SF Pro variable font and display faces”), 12 Nov 2026 at 12:18 UTC. Build #190 was the first production CI run to install the official Apple package (font step passed; later unrelated Kotlin compile error); build #192 was the first successful APK using it.
 - Digit Lab must also download the same official Apple DMG. Its digit-only subset is acceptable only when it retains and validates both `wght` and `wdth` axes. GitHub is the CI/source-code host, not the font provider.
 
-### Production / Digit Lab renderer parity
-- Digit Lab exists only as a separate test APK, but it must exercise the **current production renderer**, not an old or independently maintained approximation.
-- Whenever the production `LiquidWallpaperRenderer.kt` changes, sync that exact source into `digit-lab/app/src/main/java/com/example/ios27clock/LiquidWallpaperRenderer.kt`.
-- The only intentional renderer difference allowed in Digit Lab is its test-only fixed-time override (`setTestTimeOverride` / `currentTimeText` hook). Keep the actual glyph geometry, custom digit paths, SDF generation, AGSL shader, material/reflection calculations, spacing and transforms identical.
-- Do not call the renderers “identical” until a source comparison verifies that removing only the Digit Lab test-time hook makes the files match (or every additional difference is explicitly listed and justified).
-- Keep the Digit Lab package ID, isolated preferences/files and no-`WallpaperManager` behaviour. Do not add Digit Lab testing controls or fixed-time hooks to the production app.
+### Production / Digit Lab relationship — test bench only
+- **The production iOS 27 Liquid Clock app is the only product being developed and maintained.** Digit Lab is a disposable, separate testing APK used only to inspect all digits/material effects without waiting for the real clock to tick.
+- Do not treat Digit Lab as a second app/product, create a parallel feature roadmap, or spend ongoing maintenance effort polishing its UI or architecture.
+- When the user is actively using Digit Lab to validate a production renderer change, refresh its copied renderer from the current production `LiquidWallpaperRenderer.kt` so the test result is meaningful. Then retain only the test-only fixed-time override (`setTestTimeOverride` / `currentTimeText` hook) needed by the harness.
+- The parity requirement is **for valid test sessions**, not a standing requirement to keep the test APK continuously maintained. Do not let Digit Lab changes drive production design; production remains the source of truth.
+- Keep its separate package ID, isolated image/preferences storage and no-`WallpaperManager` behaviour so it cannot alter the real app or installed wallpaper.
+- Do not add Digit Lab test controls or fixed-time hooks to the production app.
 
 ### Current work to resume after a new chat
 - User reported the production clock's `0` still has a false white light band and a cracked upper inner curve; the `1` still has a badly wrong silhouette. The user has previously seen the `7` drawn correctly, so do not blindly redesign glyphs or assume the official font changed.
