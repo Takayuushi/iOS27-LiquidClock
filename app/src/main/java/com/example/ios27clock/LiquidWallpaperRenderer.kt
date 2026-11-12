@@ -54,10 +54,10 @@ internal class LiquidWallpaperRenderer(
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
         private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val SF_PRO_WIDTH_COMPRESSED = 30
-        private const val SF_PRO_WIDTH_CONDENSED = 75
+        private const val SF_PRO_WIDTH_COMPRESSED = 47
+        private const val SF_PRO_WIDTH_CONDENSED = 60
         private const val SF_PRO_WIDTH_REGULAR = 100
-        private const val SF_PRO_WIDTH_EXPANDED = 150
+        private const val SF_PRO_WIDTH_EXPANDED = 132
         private const val CLOCK_GLYPH_WIDTH_SCALE = 1.00f
         private const val CLOCK_GLYPH_HEIGHT_SCALE = 1.04f
 
@@ -86,6 +86,7 @@ internal class LiquidWallpaperRenderer(
         uniform float2 uResolution;
         uniform float2 uClockCenter;
         uniform float2 uSdfOrigin;
+        uniform float uSdfScale;
         uniform float2 uTilt;
         uniform float uSdfRange;
         uniform float uFrosted;
@@ -101,10 +102,10 @@ internal class LiquidWallpaperRenderer(
 
             // A compact signed-distance field supplies stable normals and a
             // distance-controlled bevel around outside contours and counters.
-            float2 sdfPoint = p - uSdfOrigin;
+            float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
             float sdf = uGlyphSdf.eval(sdfPoint).a;
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
-            float2 sampleStep = float2(1.5, 1.5);
+            float2 sampleStep = float2(0.75, 0.75);
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -125,7 +126,7 @@ internal class LiquidWallpaperRenderer(
             float waveB = cos(p.x * 0.0028 - uTime * 0.11);
             float solidMode = clamp(uFrosted, 0.0, 1.0);
             float displacement = (1.8 + edgeBand * 8.6 + innerBevel * 2.4) *
-                mix(1.0, 0.48, frosted);
+                mix(1.0, 0.48, solidMode);
             float2 warp = normal * displacement +
                 tilt * 1.25 +
                 float2(waveA * 0.45, waveB * 0.35);
@@ -159,7 +160,7 @@ internal class LiquidWallpaperRenderer(
             float3 transmitted = mix(
                 refracted,
                 diffuseTransmission,
-                mix(0.10, 0.04, solidMode)
+                mix(0.10, 0.76, solidMode)
             );
 
             float luminance = dot(transmitted, float3(0.2126, 0.7152, 0.0722));
@@ -861,7 +862,7 @@ internal class LiquidWallpaperRenderer(
         val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
         var cursorX = centerX - totalWidth * 0.5f
 
-        val composedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
+        val composedPath = Path().apply { fillType = Path.FillType.WINDING }
         val composedBounds = RectF()
         val colonCenters = mutableListOf<Pair<Float, Float>>()
         var hasBounds = false
@@ -1170,14 +1171,32 @@ internal class LiquidWallpaperRenderer(
         val top = (bounds.top.roundToInt() - padding).coerceIn(0, source.height - 1)
         val right = (bounds.right.roundToInt() + padding).coerceIn(left + 1, source.width)
         val bottom = (bounds.bottom.roundToInt() + padding).coerceIn(top + 1, source.height)
-        val sdfWidth = right - left
-        val sdfHeight = bottom - top
+
+        val cropWidth = right - left
+        val cropHeight = bottom - top
+        val sdfScale = 0.5f
+        val sdfWidth = max(1, (cropWidth * sdfScale).roundToInt())
+        val sdfHeight = max(1, (cropHeight * sdfScale).roundToInt())
         val pixelCountLong = sdfWidth.toLong() * sdfHeight.toLong()
-        if (pixelCountLong <= 0L || pixelCountLong > 1_500_000L) return null
+        if (pixelCountLong <= 0L || pixelCountLong > 900_000L) return null
+
+        val sampleBitmap = Bitmap.createBitmap(
+            sdfWidth,
+            sdfHeight,
+            Bitmap.Config.ARGB_8888
+        )
+        val sampleCanvas = Canvas(sampleBitmap)
+        sampleCanvas.drawBitmap(
+            source,
+            Rect(left, top, right, bottom),
+            Rect(0, 0, sdfWidth, sdfHeight),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        )
 
         val pixelCount = pixelCountLong.toInt()
         val sourcePixels = IntArray(pixelCount)
-        source.getPixels(sourcePixels, 0, sdfWidth, left, top, sdfWidth, sdfHeight)
+        sampleBitmap.getPixels(sourcePixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
+        sampleBitmap.recycle()
 
         val maxUnits = (SDF_RANGE_PX * 3f).roundToInt()
         val infinity = (maxUnits + 1).toShort()
@@ -1200,9 +1219,10 @@ internal class LiquidWallpaperRenderer(
             } else {
                 -distanceToInside[index].toInt()
             }
-            val signedPixels = signedUnits / 3f
+            // One SDF pixel represents two output pixels.
+            val signedOutputPixels = signedUnits / 3f / sdfScale
             val encoded = (
-                0.5f + signedPixels / (2f * SDF_RANGE_PX)
+                0.5f + signedOutputPixels / (2f * SDF_RANGE_PX)
                 ).coerceIn(0f, 1f)
             sdfPixels[index] = Color.argb(
                 (encoded * 255f).roundToInt(),
@@ -1496,6 +1516,7 @@ internal class LiquidWallpaperRenderer(
                 BitmapShader(sdf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             )
             shader.setFloatUniform("uSdfOrigin", glyphSdfOriginX, glyphSdfOriginY)
+            shader.setFloatUniform("uSdfScale", if (glyphSdf != null) 0.5f else 1f)
             shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
         } catch (exception: RuntimeException) {
             Log.w(TAG, "Could not refresh glyph mask/SDF inputs.", exception)
