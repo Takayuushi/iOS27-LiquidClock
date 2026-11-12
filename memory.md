@@ -116,3 +116,46 @@ Changes:
 - **Last verified CI build:** #264 — success
 - **On-device verification of build #264:** not yet reported
 - **Top next priorities:** verify shine against the reference; test horizontal/vertical pinch independence and persistence; investigate the known Typeface/SDF memory failures.
+
+
+## New issue reported and root cause (13 Nov 2026)
+
+### Preview unexpectedly replaced the installed wallpaper
+
+**Confirmed root cause in the previous code:**
+- `MainActivity` imported a candidate image directly into `liquid_clock_wallpaper_source.img`.
+- `ClockAppearanceActivity.WallpaperClockPreview` read that same file.
+- The installed `LiquidWallpaperService` renderer also read that same file.
+- `MainActivity` broadcast `ACTION_WALLPAPER_SOURCE_CHANGED` immediately after import; the installed service handled it by calling `renderer.reloadWallpaper()`.
+- The foreground-mask editor also broadcast the same action after saving a candidate depth mask.
+- Clock Studio additionally wrote preview appearance/geometry into the same `liquid_clock_composition` preferences used by the installed wallpaper, and its `onDestroy()` could broadcast appearance changes without an explicit Apply action.
+
+This explains why simply importing/selecting a new wallpaper for preview could replace the background on the already-installed live wallpaper. The screenshot from 13 Nov 2026 shows the former Spider-Man wallpaper replaced by the blue diagonal-light wallpaper on the One UI home/lock wallpaper surface.
+
+### Fix committed in this iteration
+
+- Introduced `WallpaperStorage.kt` and `ClockWallpaperContent` to separate:
+  - candidate/preview image and foreground mask;
+  - immutable applied image and foreground mask;
+  - preview composition preferences and applied composition preferences.
+- The in-app Clock Studio preview uses candidate files and preview preferences.
+- The Android system wallpaper preview engine (`Engine.isPreview == true`) also uses candidate files.
+- The installed wallpaper engine uses only the applied snapshot. A one-time migration seeds it from the legacy shared source on upgraded installations.
+- Importing an image or editing its foreground mask no longer broadcasts a refresh to the installed wallpaper service.
+- Preview appearance/size/position changes are staged in preview preferences. Closing Clock Studio no longer broadcasts or commits them.
+- Only the explicit **Apply current** action copies the candidate image, foreground mask and composition preferences to the applied snapshot, then notifies the active service and opens Android's native wallpaper preview.
+- The renderer remains shared; only its selected source files and preference store differ between preview and applied engine instances.
+
+### Verification state
+
+- Code commit and GitHub Actions build status: pending at time of writing.
+- Device behaviour is not yet verified. Test that importing and previewing another image never changes the installed wallpaper; then tap Apply current and confirm the Android wallpaper preview/apply flow changes it only at that point.
+- On first upgrade, the app can only migrate the currently stored legacy source into the applied snapshot. If the previous shared-source bug already replaced Spider-Man, the original image cannot be reconstructed from the overwritten app-private file; re-import Spider-Man as the candidate and use Apply current once to restore it.
+
+### Next regression checks
+
+1. With the app live wallpaper already active, import a different image and open/close Clock Studio. The installed wallpaper must remain unchanged.
+2. Edit/save a preview foreground mask. The active wallpaper must remain unchanged.
+3. Change font, weight, colour, material, clock position or pinch dimensions in Clock Studio, then exit without Apply. The installed wallpaper must retain its previous composition.
+4. Tap Apply current. Confirm the system preview shows the candidate; set it and verify the applied wallpaper and foreground occlusion update.
+5. Reopen Clock Studio. It should initialize from the last applied composition while still showing the currently selected candidate wallpaper.

@@ -42,7 +42,7 @@ import kotlin.math.hypot
 class ClockAppearanceActivity : Activity() {
 
     companion object {
-        private const val PREFS = "liquid_clock_composition"
+        private const val PREFS = "liquid_clock_preview_composition"
         private const val KEY_FONT_STYLE = "clock_font_style"
         private const val KEY_FONT_WEIGHT = "clock_font_weight"
         private const val KEY_COLOR = "clock_color"
@@ -75,7 +75,6 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var colorTiles: List<FrameLayout>
     private var swatches: IntArray = FALLBACK_SWATCHES.copyOf()
     private val previewTypefaceCache = LinkedHashMap<Int, Typeface>()
-    private var pendingWallpaperCommit = false
     private var previewRendererReleased = false
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
@@ -98,6 +97,7 @@ class ClockAppearanceActivity : Activity() {
         super.onCreate(savedInstanceState)
         ClockDiagnostics.record("Clock Studio opened")
 
+        WallpaperStorage.resetPreviewComposition(this)
         selectedStyle = preferences.getInt(KEY_FONT_STYLE, 0).coerceIn(0, 3)
         selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(100, 900)
         selectedColor = preferences.getInt(KEY_COLOR, Color.WHITE)
@@ -548,14 +548,25 @@ class ClockAppearanceActivity : Activity() {
 
     private fun applyCurrentWallpaper() {
         saveAppearancePreferences()
-        // The editor preview owns the only in-app renderer. Release all its
-        // buffers before Android creates the wallpaper preview surface.
-        releasePreviewRenderer()
-        pendingWallpaperCommit = false
+        if (!WallpaperStorage.commitPreviewToApplied(this)) {
+            Toast.makeText(
+                this,
+                "Could not save the selected wallpaper. The current wallpaper was left unchanged.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        // Only this explicit action copies the staged wallpaper and settings
+        // into the files/preferences read by the installed wallpaper engine.
         sendBroadcast(
-            Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
+            Intent(LiquidWallpaperService.ACTION_APPLIED_CONTENT_CHANGED)
                 .setPackage(packageName)
         )
+
+        // The editor preview owns the in-app renderer. Release its buffers
+        // before Android creates the native wallpaper preview surface.
+        releasePreviewRenderer()
 
         val component = ComponentName(this, LiquidWallpaperService::class.java)
         val previewIntent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
@@ -595,8 +606,7 @@ class ClockAppearanceActivity : Activity() {
         )
         try {
             preview.reloadAppearance(rebuildDistanceField = rebuildDistanceField)
-            pendingWallpaperCommit = true
-            ClockDiagnostics.record("Appearance refresh completed")
+            ClockDiagnostics.record("Appearance preview refreshed; applied settings remain unchanged")
             return true
         } catch (memoryError: OutOfMemoryError) {
             ClockDiagnostics.report("appearance-refresh-out-of-memory", memoryError)
@@ -823,14 +833,8 @@ class ClockAppearanceActivity : Activity() {
     }
 
     override fun onDestroy() {
-        ClockDiagnostics.record("Clock Studio closing; pendingCommit=$pendingWallpaperCommit")
+        ClockDiagnostics.record("Clock Studio closing; preview changes were not applied")
         releasePreviewRenderer()
-        if (pendingWallpaperCommit) {
-            sendBroadcast(
-                Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
-                    .setPackage(packageName)
-            )
-        }
         super.onDestroy()
     }
 

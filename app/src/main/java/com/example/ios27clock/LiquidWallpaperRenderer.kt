@@ -37,14 +37,12 @@ import kotlin.math.roundToInt
  * 3. The selected-object mask erases only clock pixels beneath the object
  */
 internal class LiquidWallpaperRenderer(
-    private val context: Context
+    private val context: Context,
+    private val wallpaperContent: ClockWallpaperContent = ClockWallpaperContent.PREVIEW
 ) {
 
     companion object {
         private const val TAG = "LiquidClockRenderer"
-        private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
-        private const val FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
-        private const val MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
         private const val FONT_ASSET_PATH = "fonts/sf_pro_display_thin.otf"
         private const val VARIABLE_FONT_ASSET_PATH = "fonts/SF-Pro.ttf"
 
@@ -455,7 +453,7 @@ internal class LiquidWallpaperRenderer(
     private val clockLayerBounds = RectF()
 
     private val clockPreferences = context.getSharedPreferences(
-        "liquid_clock_composition",
+        wallpaperContent.compositionPreferencesName,
         Context.MODE_PRIVATE
     )
 
@@ -501,6 +499,19 @@ internal class LiquidWallpaperRenderer(
     }
 
     fun reloadWallpaper() {
+        rebuildBackdrop()
+    }
+
+    fun reloadAppliedState() {
+        clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
+            .coerceIn(0.10f, 0.90f)
+        clockCenterY = clockPreferences.getFloat("center_y", DEFAULT_CLOCK_Y)
+            .coerceIn(0.10f, 0.78f)
+        clockScale = clockPreferences.getFloat("clock_scale", 1f)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        clockWidthScale = clockPreferences.getFloat("clock_width_scale", 1f)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+        readAppearancePreferences()
         rebuildBackdrop()
     }
 
@@ -815,8 +826,8 @@ internal class LiquidWallpaperRenderer(
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
 
-        val wallpaperFile = context.filesDir.resolve(SOURCE_FILE_NAME)
-        val manualMaskFile = context.filesDir.resolve(MANUAL_FOREGROUND_FILE_NAME)
+        val wallpaperFile = context.filesDir.resolve(wallpaperContent.sourceFileName)
+        val manualMaskFile = context.filesDir.resolve(wallpaperContent.manualForegroundFileName)
 
         val decodedWallpaper = if (
             wallpaperFile.exists() && wallpaperFile.length() > 0L

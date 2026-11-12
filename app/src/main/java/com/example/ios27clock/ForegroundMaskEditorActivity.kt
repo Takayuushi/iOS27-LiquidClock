@@ -11,9 +11,9 @@ import java.io.File
 class ForegroundMaskEditorActivity : Activity() {
 
     companion object {
-        const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
+        const val SOURCE_FILE_NAME = WallpaperStorage.PREVIEW_SOURCE_FILE_NAME
         const val MANUAL_FOREGROUND_FILE_NAME =
-            "liquid_clock_wallpaper_manual_foreground.png"
+            WallpaperStorage.PREVIEW_MANUAL_FOREGROUND_FILE_NAME
     }
 
     private lateinit var drawingView: MaskDrawingView
@@ -157,9 +157,8 @@ class ForegroundMaskEditorActivity : Activity() {
                 temporary.delete()
             }
 
-            sendBroadcast(
-                android.content.Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
-                    .setPackage(packageName)
+            ClockDiagnostics.record(
+                "Preview foreground mask saved; installed wallpaper mask was not modified."
             )
 
             setResult(RESULT_OK)

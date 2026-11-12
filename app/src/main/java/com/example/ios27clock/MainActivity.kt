@@ -14,8 +14,9 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_PICK_WALLPAPER = 4101
-        private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
-        private const val MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
+        private const val SOURCE_FILE_NAME = WallpaperStorage.PREVIEW_SOURCE_FILE_NAME
+        private const val MANUAL_FOREGROUND_FILE_NAME =
+            WallpaperStorage.PREVIEW_MANUAL_FOREGROUND_FILE_NAME
         private const val AUTO_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
     }
 
@@ -93,9 +94,8 @@ class MainActivity : Activity() {
             // produced false-positive masks that could cover the entire clock.
             File(filesDir, AUTO_FOREGROUND_FILE_NAME).delete()
 
-            sendBroadcast(
-                Intent(LiquidWallpaperService.ACTION_WALLPAPER_SOURCE_CHANGED)
-                    .setPackage(packageName)
+            ClockDiagnostics.record(
+                "Preview wallpaper imported; installed wallpaper snapshot was not modified."
             )
             updateSelectionStatus()
 

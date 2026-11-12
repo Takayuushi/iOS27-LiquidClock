@@ -22,10 +22,8 @@ import kotlin.math.sin
 class LiquidWallpaperService : WallpaperService() {
 
     companion object {
-        const val ACTION_WALLPAPER_SOURCE_CHANGED =
-            "com.example.ios27clock.action.WALLPAPER_SOURCE_CHANGED"
-        const val ACTION_APPEARANCE_CHANGED =
-            "com.example.ios27clock.action.APPEARANCE_CHANGED"
+        const val ACTION_APPLIED_CONTENT_CHANGED =
+            "com.example.ios27clock.action.APPLIED_CONTENT_CHANGED"
 
         private const val TAG = "LiquidWallpaperService"
         private const val FRAME_INTERVAL_MS = 33L
@@ -39,7 +37,7 @@ class LiquidWallpaperService : WallpaperService() {
     private inner class LiquidEngine : Engine() {
 
         private val handler = Handler(Looper.getMainLooper())
-        private val renderer = LiquidWallpaperRenderer(this@LiquidWallpaperService)
+        private lateinit var renderer: LiquidWallpaperRenderer
         private val sensorManager =
             this@LiquidWallpaperService.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         private val rotationSensor =
@@ -73,10 +71,8 @@ class LiquidWallpaperService : WallpaperService() {
 
         private val wallpaperUpdatedReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == ACTION_APPEARANCE_CHANGED) {
-                    renderer.reloadAppearance()
-                } else {
-                    renderer.reloadWallpaper()
+                if (intent?.action == ACTION_APPLIED_CONTENT_CHANGED) {
+                    renderer.reloadAppliedState()
                 }
                 drawFrame()
             }
@@ -93,11 +89,26 @@ class LiquidWallpaperService : WallpaperService() {
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+
+            val wallpaperContent = if (isPreview) {
+                ClockWallpaperContent.PREVIEW
+            } else {
+                if (!WallpaperStorage.ensureAppliedSnapshot(this@LiquidWallpaperService)) {
+                    ClockDiagnostics.record(
+                        "No committed wallpaper snapshot was available; using the renderer fallback."
+                    )
+                }
+                ClockWallpaperContent.APPLIED
+            }
+            renderer = LiquidWallpaperRenderer(this@LiquidWallpaperService, wallpaperContent)
+            ClockDiagnostics.record(
+                "Wallpaper engine created: preview=$isPreview source=$wallpaperContent"
+            )
+
             setTouchEventsEnabled(true)
 
             val updateFilter = IntentFilter().apply {
-                addAction(ACTION_WALLPAPER_SOURCE_CHANGED)
-                addAction(ACTION_APPEARANCE_CHANGED)
+                addAction(ACTION_APPLIED_CONTENT_CHANGED)
             }
             registerReceiver(
                 wallpaperUpdatedReceiver,
