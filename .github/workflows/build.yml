@@ -158,3 +158,49 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  preview-emulator:
+    name: Render live wallpaper preview on Android 17 emulator
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: iOS27-LiquidClock-Android17-debug
+          path: app/build/outputs/apk/debug
+
+      - name: Launch wallpaper preview and capture screenshot
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 37
+          target: google_apis
+          arch: x86_64
+          profile: pixel_8
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -no-audio
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p preview-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.example.ios27clock/.PreviewTestActivity
+            sleep 12
+            adb exec-out screencap -p > preview-artifacts/live-wallpaper-preview.png
+            adb logcat -d -t 6000 > preview-artifacts/logcat.txt
+            adb shell dumpsys wallpaper > preview-artifacts/wallpaper-service.txt
+
+            if [[ ! -s preview-artifacts/live-wallpaper-preview.png ]]; then
+              echo "Emulator screenshot was not created." >&2
+              exit 1
+            fi
+
+      - name: Upload emulator preview and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS27-LiquidClock-Android17-preview
+          path: preview-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
