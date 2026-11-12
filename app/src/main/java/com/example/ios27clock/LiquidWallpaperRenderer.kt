@@ -1044,6 +1044,7 @@ internal class LiquidWallpaperRenderer(
         val replacement = try {
             createGlyphSdf(mask, glyphBounds)
         } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("glyph-sdf-allocation-out-of-memory", memoryError)
             Log.w(
                 TAG,
                 "SDF allocation skipped; keeping the previous bevel field.",
