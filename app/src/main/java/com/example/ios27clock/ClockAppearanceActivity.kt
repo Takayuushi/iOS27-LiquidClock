@@ -618,6 +618,9 @@ class ClockAppearanceActivity : Activity() {
     }
 
     private fun refreshFontTiles() {
+        // TextViews retain their assigned face, so discard stale cache entries
+        // before creating the four current width previews for this weight.
+        previewTypefaceCache.clear()
         fontTiles.forEachIndexed { index, tile ->
             tile.typeface = officialSfProTypeface(
                 selectedWeight,
@@ -659,7 +662,7 @@ class ClockAppearanceActivity : Activity() {
             ClockDiagnostics.report("font-tile-typeface-allocation", memoryError)
             Typeface.create("sans-serif", Typeface.NORMAL)
         }
-        if (previewTypefaceCache.size >= 32) previewTypefaceCache.clear()
+        if (previewTypefaceCache.size >= WIDTH_COORDINATES.size) previewTypefaceCache.clear()
         previewTypefaceCache[cacheKey] = face
         return face
     }
