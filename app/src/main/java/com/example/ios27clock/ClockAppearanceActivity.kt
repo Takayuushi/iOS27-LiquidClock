@@ -276,7 +276,7 @@ class ClockAppearanceActivity : Activity() {
                     // wallpaper is refreshed once after the editor closes.
                     if (fromUser && !weightPreviewQueued) {
                         weightPreviewQueued = true
-                        previewHandler.postDelayed(weightPreviewRunnable, 140L)
+                        previewHandler.postDelayed(weightPreviewRunnable, 180L)
                     }
                 }
 
@@ -694,10 +694,10 @@ class ClockAppearanceActivity : Activity() {
             super.onSizeChanged(w, h, oldw, oldh)
             if (w > 0 && h > 0) {
                 // The live wallpaper uses native screen resolution. This
-                // secondary editor preview uses 42% resolution to avoid two
-                // simultaneous full-screen masks and SDF buffers in memory.
-                renderWidth = max(1, (w * 0.42f).toInt())
-                renderHeight = max(1, (h * 0.42f).toInt())
+                // secondary editor preview uses 55% resolution for smoother edges; the SDF
+                // budget and mask-only slider updates keep memory bounded.
+                renderWidth = max(1, (w * 0.55f).toInt())
+                renderHeight = max(1, (h * 0.55f).toInt())
                 renderer.setViewport(renderWidth, renderHeight)
             }
         }
@@ -713,7 +713,7 @@ class ClockAppearanceActivity : Activity() {
             )
             renderer.draw(canvas, seconds)
             canvas.restoreToCount(save)
-            if (visibility == View.VISIBLE) postInvalidateDelayed(66L)
+            if (visibility == View.VISIBLE) postInvalidateDelayed(40L)
         }
 
         fun reloadAppearance() {
