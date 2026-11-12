@@ -138,10 +138,20 @@ jobs:
 
           for optional_axis in ("wdth", "opsz"):
               axis = axes.get(optional_axis)
-              if axis is None or axis[0] >= axis[2]:
+              if axis is None:
                   print(
-                      f"{optional_axis} is not variable in this SF Pro asset; "
-                      "the renderer uses per-glyph vector profiles for optical adaptation."
+                      f"{optional_axis} axis is absent. The renderer must not request "
+                      "this axis from the font and must use explicit per-glyph optical "
+                      "profiles when width adaptation is needed."
+                  )
+              elif axis[0] >= axis[2]:
+                  raise SystemExit(
+                      f"{optional_axis} axis exists but has no usable range: {axis}"
+                  )
+              else:
+                  print(
+                      f"{optional_axis} variable axis verified: "
+                      f"min={axis[0]}, default={axis[1]}, max={axis[2]}"
                   )
           PY
 
