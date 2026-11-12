@@ -675,41 +675,21 @@ internal class LiquidWallpaperRenderer(
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         val glyphs = timeText.map { it.toString() }
-        // Width profiles transition smoothly from the compact lock-screen
-        // clock to the expanded presentation as the user increases its height.
         val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
             .coerceIn(0f, 1f)
-        val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
-        val fontWeight = 780
-        val font = typefaceFor(fontWeight, 28, 1f)
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = height * MAX_GLYPH_HEIGHT_FRACTION
-        val trackingEm = 0.018f
-        val colonAdvanceEm = 0.19f
+        val trackingEm = TRACKING_EM * 0.55f
+        val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
 
-        val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = Color.WHITE
-            textAlign = Paint.Align.LEFT
-            style = Paint.Style.FILL
-            typeface = font
-            isSubpixelText = true
-        }
+        fun advanceFor(glyph: String, size: Float): Float =
+            if (glyph == ":") size * colonAdvanceEm
+            else size * digitAdvanceEm(glyph) * glyphWidthProfile(glyph, expansion)
 
         fun measureLine(size: Float): Float {
-            sizingPaint.textSize = size
             val tracking = size * trackingEm
-            val naturalWidth = glyphs.sumOf { glyph ->
-                val advance = if (glyph == ":") {
-                    size * colonAdvanceEm
-                } else {
-                    sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
-                }
-                advance.toDouble()
-            }.toFloat() + tracking * (glyphs.size - 1).coerceAtLeast(0)
-
-            // The final line transform narrows the full composition by
-            // CLOCK_GLYPH_WIDTH_SCALE. Include it during fitting so that the
-            // fitter uses the available width instead of leaving a blank band.
+            val naturalWidth = glyphs.sumOf { advanceFor(it, size).toDouble() }.toFloat() +
+                tracking * (glyphs.size - 1).coerceAtLeast(0)
             return naturalWidth * CLOCK_GLYPH_WIDTH_SCALE
         }
 
@@ -719,20 +699,11 @@ internal class LiquidWallpaperRenderer(
             val candidate = (low + high) * 0.5f
             if (measureLine(candidate) <= maxWidth) low = candidate else high = candidate
         }
-        val fontSize = low
-        sizingPaint.textSize = fontSize
-        val metrics = sizingPaint.fontMetrics
+        val glyphHeight = low
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
-        val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
-        val tracking = fontSize * trackingEm
-        val advances = glyphs.map { glyph ->
-            if (glyph == ":") {
-                fontSize * colonAdvanceEm
-            } else {
-                sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
-            }
-        }
+        val tracking = glyphHeight * trackingEm
+        val advances = glyphs.map { advanceFor(it, glyphHeight) }
         val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
         var cursorX = centerX - totalWidth * 0.5f
         val composedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
@@ -741,8 +712,8 @@ internal class LiquidWallpaperRenderer(
 
         glyphs.forEachIndexed { index, glyph ->
             if (glyph == ":") {
-                val radius = fontSize * COLON_DOT_RADIUS_EM
-                val offset = fontSize * COLON_DOT_OFFSET_EM
+                val radius = glyphHeight * COLON_DOT_RADIUS_EM * 1.08f
+                val offset = glyphHeight * COLON_DOT_OFFSET_EM
                 val dotX = cursorX + advances[index] * 0.5f
                 composedPath.addCircle(dotX, centerY - offset, radius, Path.Direction.CW)
                 composedPath.addCircle(dotX, centerY + offset, radius, Path.Direction.CW)
@@ -755,43 +726,28 @@ internal class LiquidWallpaperRenderer(
                     hasBounds = true
                 } else composedBounds.union(colonBounds)
             } else {
-                val glyphPaint = Paint(sizingPaint).apply {
-                    typeface = font
-                    textSize = fontSize
-                    style = Paint.Style.FILL
-                    strokeWidth = 0f
-                }
-                val glyphPath = Path()
-                glyphPaint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, glyphPath)
-                val glyphBounds = RectF()
-                glyphPath.computeBounds(glyphBounds, true)
-                if (!glyphBounds.isEmpty) {
-                    val opticalWidth = glyphWidthProfile(glyph, expansion)
-                    val glyphTransform = Matrix().apply {
-                        setScale(
-                            opticalWidth,
-                            1f,
-                            glyphBounds.centerX(),
-                            glyphBounds.centerY()
-                        )
-                    }
-                    val opticalPath = Path()
-                    glyphPath.transform(glyphTransform, opticalPath)
-                    composedPath.addPath(opticalPath)
-                    opticalPath.computeBounds(glyphBounds, true)
+                val sideInset = advances[index] * 0.035f
+                val digitBounds = RectF(
+                    cursorX + sideInset,
+                    centerY - glyphHeight * 0.5f,
+                    cursorX + advances[index] - sideInset,
+                    centerY + glyphHeight * 0.5f
+                )
+                val digitPath = buildLockScreenDigitPath(glyph, digitBounds)
+                val digitBoundsActual = RectF()
+                digitPath.computeBounds(digitBoundsActual, true)
+                if (!digitBoundsActual.isEmpty) {
+                    composedPath.addPath(digitPath)
                     if (!hasBounds) {
-                        composedBounds.set(glyphBounds)
+                        composedBounds.set(digitBoundsActual)
                         hasBounds = true
-                    } else composedBounds.union(glyphBounds)
+                    } else composedBounds.union(digitBoundsActual)
                 }
             }
             cursorX += advances[index] + tracking
         }
 
         if (hasBounds) {
-            // The iPhone reference is slightly taller but materially narrower.
-            // Apply that fixed typographic proportion before the user-controlled
-            // vertical expansion; pinch still has no horizontal scale component.
             val naturalShapeTransform = Matrix().apply {
                 setScale(
                     CLOCK_GLYPH_WIDTH_SCALE,
@@ -804,8 +760,6 @@ internal class LiquidWallpaperRenderer(
             composedPath.transform(naturalShapeTransform, naturalShapePath)
             naturalShapePath.computeBounds(composedBounds, true)
 
-            // Enforce the ceiling against the real post-normalization glyph
-            // bounds so the clock cannot crop or exceed the usable viewport.
             val allowedScaleY = (
                 height * MAX_COMMITTED_HEIGHT_FRACTION /
                     composedBounds.height().coerceAtLeast(1f)
@@ -821,7 +775,7 @@ internal class LiquidWallpaperRenderer(
             naturalShapePath.transform(verticalTransform, finalPath)
             finalPath.computeBounds(composedBounds, true)
 
-            val inset = max(2f, fontSize * 0.025f)
+            val inset = max(2f, glyphHeight * 0.025f)
             glyphBounds.set(
                 (composedBounds.left - inset).coerceAtLeast(0f),
                 (composedBounds.top - inset).coerceAtLeast(0f),
@@ -854,6 +808,107 @@ internal class LiquidWallpaperRenderer(
         previewScaleY = 1f
         cachedTimeText = timeText
         updateGlyphMaskInput()
+    }
+
+    /**
+     * One coherent vector numeral family replaces mixed platform font glyphs.
+     * Every digit uses the same round-capped stroke construction and optical
+     * proportions, so the clock no longer changes character between numbers.
+     */
+    private fun digitAdvanceEm(glyph: String): Float = when (glyph) {
+        "1" -> 0.54f
+        "4", "7" -> 0.62f
+        else -> 0.66f
+    }
+
+    private fun buildLockScreenDigitPath(glyph: String, bounds: RectF): Path {
+        val left = bounds.left
+        val top = bounds.top
+        val right = bounds.right
+        val bottom = bounds.bottom
+        val w = bounds.width().coerceAtLeast(1f)
+        val h = bounds.height().coerceAtLeast(1f)
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
+        val centerline = Path()
+
+        when (glyph) {
+            "0" -> centerline.addRoundRect(
+                RectF(left + w * 0.16f, top + h * 0.025f, right - w * 0.16f, bottom - h * 0.025f),
+                w * 0.34f, h * 0.23f, Path.Direction.CW
+            )
+            "1" -> {
+                centerline.moveTo(left + w * 0.27f, top + h * 0.22f)
+                centerline.lineTo(left + w * 0.53f, top + h * 0.045f)
+                centerline.lineTo(left + w * 0.53f, bottom - h * 0.055f)
+                centerline.lineTo(left + w * 0.20f, bottom - h * 0.055f)
+            }
+            "2" -> {
+                centerline.moveTo(left + w * 0.14f, top + h * 0.24f)
+                centerline.cubicTo(left + w * 0.17f, top + h * 0.045f, left + w * 0.77f, top + h * 0.005f, right - w * 0.13f, top + h * 0.25f)
+                centerline.cubicTo(right - w * 0.055f, top + h * 0.43f, left + w * 0.55f, top + h * 0.66f, left + w * 0.13f, bottom - h * 0.055f)
+                centerline.lineTo(right - w * 0.10f, bottom - h * 0.055f)
+            }
+            "3" -> {
+                centerline.moveTo(left + w * 0.15f, top + h * 0.16f)
+                centerline.cubicTo(left + w * 0.42f, top + h * 0.005f, right - w * 0.09f, top + h * 0.075f, right - w * 0.12f, top + h * 0.29f)
+                centerline.cubicTo(right - w * 0.14f, top + h * 0.44f, left + w * 0.59f, cy, left + w * 0.43f, cy)
+                centerline.cubicTo(left + w * 0.70f, cy, right - w * 0.055f, top + h * 0.59f, right - w * 0.13f, bottom - h * 0.22f)
+                centerline.cubicTo(right - w * 0.19f, bottom + h * 0.015f, left + w * 0.39f, bottom + h * 0.005f, left + w * 0.13f, bottom - h * 0.15f)
+            }
+            "4" -> {
+                centerline.moveTo(left + w * 0.70f, bottom - h * 0.045f)
+                centerline.lineTo(left + w * 0.70f, top + h * 0.045f)
+                centerline.lineTo(left + w * 0.12f, top + h * 0.64f)
+                centerline.lineTo(right - w * 0.075f, top + h * 0.64f)
+            }
+            "5" -> {
+                centerline.moveTo(right - w * 0.12f, top + h * 0.055f)
+                centerline.lineTo(left + w * 0.20f, top + h * 0.055f)
+                centerline.lineTo(left + w * 0.16f, top + h * 0.44f)
+                centerline.cubicTo(left + w * 0.42f, top + h * 0.36f, right - w * 0.055f, top + h * 0.40f, right - w * 0.12f, top + h * 0.68f)
+                centerline.cubicTo(right - w * 0.18f, bottom + h * 0.02f, left + w * 0.37f, bottom + h * 0.015f, left + w * 0.12f, bottom - h * 0.16f)
+            }
+            "6" -> {
+                centerline.moveTo(right - w * 0.12f, top + h * 0.12f)
+                centerline.cubicTo(left + w * 0.46f, top - h * 0.015f, left + w * 0.12f, top + h * 0.32f, left + w * 0.13f, top + h * 0.66f)
+                centerline.cubicTo(left + w * 0.14f, bottom + h * 0.015f, right - w * 0.08f, bottom + h * 0.02f, right - w * 0.12f, top + h * 0.69f)
+                centerline.cubicTo(right - w * 0.15f, top + h * 0.46f, left + w * 0.40f, top + h * 0.43f, left + w * 0.14f, top + h * 0.61f)
+            }
+            "7" -> {
+                centerline.moveTo(left + w * 0.10f, top + h * 0.055f)
+                centerline.lineTo(right - w * 0.09f, top + h * 0.055f)
+                centerline.lineTo(left + w * 0.38f, bottom - h * 0.045f)
+            }
+            "8" -> {
+                centerline.addRoundRect(
+                    RectF(left + w * 0.17f, top + h * 0.035f, right - w * 0.17f, cy + h * 0.035f),
+                    w * 0.25f, h * 0.15f, Path.Direction.CW
+                )
+                centerline.addRoundRect(
+                    RectF(left + w * 0.13f, cy - h * 0.035f, right - w * 0.13f, bottom - h * 0.035f),
+                    w * 0.26f, h * 0.16f, Path.Direction.CW
+                )
+            }
+            "9" -> {
+                centerline.addRoundRect(
+                    RectF(left + w * 0.13f, top + h * 0.035f, right - w * 0.13f, top + h * 0.58f),
+                    w * 0.27f, h * 0.25f, Path.Direction.CW
+                )
+                centerline.moveTo(right - w * 0.18f, top + h * 0.42f)
+                centerline.lineTo(right - w * 0.20f, bottom - h * 0.045f)
+            }
+            else -> return Path()
+        }
+
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = w * GLYPH_STROKE_FRACTION
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            strokeMiter = 1f
+        }
+        return Path().also { filled -> stroke.getFillPath(centerline, filled) }
     }
 
     /**
