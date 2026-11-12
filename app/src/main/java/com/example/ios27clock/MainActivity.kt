@@ -1,8 +1,6 @@
 package com.example.ios27clock
 
 import android.app.Activity
-import android.app.WallpaperManager
-import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -34,15 +32,17 @@ class MainActivity : Activity() {
         }
 
         findViewById<Button>(R.id.clock_appearance_button).setOnClickListener {
-            startActivity(Intent(this, ClockAppearanceActivity::class.java))
+            val wallpaper = File(filesDir, SOURCE_FILE_NAME)
+            if (!wallpaper.exists() || wallpaper.length() == 0L) {
+                Toast.makeText(this, R.string.wallpaper_not_selected, Toast.LENGTH_SHORT).show()
+                openWallpaperPicker()
+            } else {
+                startActivity(Intent(this, ClockAppearanceActivity::class.java))
+            }
         }
 
         findViewById<Button>(R.id.edit_foreground_button).setOnClickListener {
             openForegroundMaskEditor()
-        }
-
-        findViewById<Button>(R.id.apply_live_wallpaper_button).setOnClickListener {
-            openLiveWallpaperPreview()
         }
 
         updateSelectionStatus()
@@ -145,36 +145,6 @@ class MainActivity : Activity() {
             return
         }
         startActivity(Intent(this, ForegroundMaskEditorActivity::class.java))
-    }
-
-    private fun openLiveWallpaperPreview() {
-        val component = ComponentName(
-            this,
-            LiquidWallpaperService::class.java
-        )
-
-        val previewIntent = Intent(
-            WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER
-        ).putExtra(
-            WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-            component
-        )
-
-        try {
-            startActivity(previewIntent)
-        } catch (exception: Exception) {
-            try {
-                startActivity(
-                    Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-                )
-            } catch (fallbackException: Exception) {
-                Toast.makeText(
-                    this,
-                    R.string.live_wallpaper_preview_unavailable,
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
     }
 
     private fun updateSelectionStatus() {
