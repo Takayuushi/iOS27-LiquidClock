@@ -49,7 +49,8 @@ internal class LiquidWallpaperRenderer(
         private const val VARIABLE_FONT_ASSET_PATH = "fonts/SF-Pro.ttf"
 
         private const val DEFAULT_CLOCK_X = 0.50f
-        private const val DEFAULT_CLOCK_Y = 0.36f
+        private const val DEFAULT_CLOCK_Y = 0.31f
+        private const val LEGACY_DEFAULT_CLOCK_Y = 0.36f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
         private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
@@ -283,10 +284,26 @@ internal class LiquidWallpaperRenderer(
     init {
         clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
             .coerceIn(0.10f, 0.90f)
-        clockCenterY = clockPreferences.getFloat("center_y", DEFAULT_CLOCK_Y)
-            .coerceIn(0.10f, 0.78f)
+        val savedCenterY = clockPreferences.getFloat("center_y", DEFAULT_CLOCK_Y)
+        val positionMigrationDone = clockPreferences.getBoolean("reference_position_v1", false)
+        // Move only the untouched legacy default. A position the user dragged
+        // manually is kept exactly as saved.
+        clockCenterY = if (
+            !positionMigrationDone &&
+            savedCenterY == LEGACY_DEFAULT_CLOCK_Y
+        ) {
+            DEFAULT_CLOCK_Y
+        } else {
+            savedCenterY.coerceIn(0.10f, 0.78f)
+        }
         clockScale = clockPreferences.getFloat("clock_scale", 1f)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        if (!positionMigrationDone) {
+            clockPreferences.edit()
+                .putBoolean("reference_position_v1", true)
+                .putFloat("center_y", clockCenterY)
+                .apply()
+        }
     }
 
     fun setViewport(width: Int, height: Int) {
@@ -659,7 +676,7 @@ internal class LiquidWallpaperRenderer(
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         val glyphs = timeText.map { it.toString() }
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
-        val fontWeight = 720
+        val fontWeight = 780
         val font = typefaceFor(fontWeight, 28, 1f)
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = height * MAX_GLYPH_HEIGHT_FRACTION
@@ -677,10 +694,19 @@ internal class LiquidWallpaperRenderer(
         fun measureLine(size: Float): Float {
             sizingPaint.textSize = size
             val tracking = size * trackingEm
-            return glyphs.sumOf { glyph ->
-                (if (glyph == ":") size * colonAdvanceEm
-                else sizingPaint.measureText(glyph)).toDouble()
+            val naturalWidth = glyphs.sumOf { glyph ->
+                val advance = if (glyph == ":") {
+                    size * colonAdvanceEm
+                } else {
+                    sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+                }
+                advance.toDouble()
             }.toFloat() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+
+            // The final line transform narrows the full composition by
+            // CLOCK_GLYPH_WIDTH_SCALE. Include it during fitting so that the
+            // fitter uses the available width instead of leaving a blank band.
+            return naturalWidth * CLOCK_GLYPH_WIDTH_SCALE
         }
 
         var low = 1f
@@ -697,7 +723,11 @@ internal class LiquidWallpaperRenderer(
         val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
         val tracking = fontSize * trackingEm
         val advances = glyphs.map { glyph ->
-            if (glyph == ":") fontSize * colonAdvanceEm else sizingPaint.measureText(glyph)
+            if (glyph == ":") {
+                fontSize * colonAdvanceEm
+            } else {
+                sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+            }
         }
         val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
         var cursorX = centerX - totalWidth * 0.5f
@@ -732,7 +762,19 @@ internal class LiquidWallpaperRenderer(
                 val glyphBounds = RectF()
                 glyphPath.computeBounds(glyphBounds, true)
                 if (!glyphBounds.isEmpty) {
-                    composedPath.addPath(glyphPath)
+                    val opticalWidth = glyphWidthProfile(glyph, expansion)
+                    val glyphTransform = Matrix().apply {
+                        setScale(
+                            opticalWidth,
+                            1f,
+                            glyphBounds.centerX(),
+                            glyphBounds.centerY()
+                        )
+                    }
+                    val opticalPath = Path()
+                    glyphPath.transform(glyphTransform, opticalPath)
+                    composedPath.addPath(opticalPath)
+                    opticalPath.computeBounds(glyphBounds, true)
                     if (!hasBounds) {
                         composedBounds.set(glyphBounds)
                         hasBounds = true
@@ -1026,29 +1068,29 @@ internal class LiquidWallpaperRenderer(
     private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
         val progress = expansion.coerceIn(0f, 1f)
         val compact = when (glyph) {
-            "1" -> 0.84f
-            "2" -> 1.00f
-            "3" -> 1.00f
-            "4" -> 0.98f
-            "5" -> 1.00f
-            "6" -> 1.00f
-            "7" -> 0.92f
-            "8" -> 1.00f
-            "9" -> 1.00f
-            "0" -> 1.02f
+            "1" -> 0.94f
+            "2" -> 1.08f
+            "3" -> 1.04f
+            "4" -> 1.08f
+            "5" -> 1.04f
+            "6" -> 1.04f
+            "7" -> 0.96f
+            "8" -> 1.08f
+            "9" -> 1.04f
+            "0" -> 1.07f
             else -> 1.00f
         }
         val expanded = when (glyph) {
-            "1" -> 0.84f
-            "2" -> 1.00f
-            "3" -> 1.00f
-            "4" -> 0.98f
-            "5" -> 1.00f
-            "6" -> 1.01f
-            "7" -> 0.92f
-            "8" -> 1.01f
-            "9" -> 1.01f
-            "0" -> 1.05f
+            "1" -> 0.97f
+            "2" -> 1.13f
+            "3" -> 1.07f
+            "4" -> 1.12f
+            "5" -> 1.07f
+            "6" -> 1.08f
+            "7" -> 0.98f
+            "8" -> 1.12f
+            "9" -> 1.08f
+            "0" -> 1.11f
             else -> 1.00f
         }
         return compact + (expanded - compact) * progress
