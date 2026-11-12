@@ -367,7 +367,12 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Production app source, manifest, Gradle settings and runtime behaviour are unchanged.
 
 ### Build and verification
-- Standalone project commit/build: pending.
+- Initial project commit: `33817d94e83a560b9723891657da461db152d440`.
+- Follow-up Kotlin fix commit: `3437c376d0963a6a7924568e892f32bb14e0b639`.
+- Standalone Digit Lab GitHub Actions run #2 completed successfully: [run #2](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43308081024).
+- APK artifact: `liquid-clock-digit-lab-debug`, ID `13985425247`, 5.36 MB; expires 12 Dec 2026.
+- The first run #1 failed only because the pinch enum was nested inside an inner View class; the enum was moved to the Activity scope and run #2 passed compilation and artifact upload.
+- This verifies APK compilation and upload, not yet on-device UI or rendering behaviour.
 - After install, use the same wallpaper and inspect `0123456789`, `00:00`, `11:11`, `22:22`, `55:55`, `88:88`, `99:99` in both materials.
 - If the production renderer changes later, sync it into the Digit Lab snapshot, keeping only the test-time override as a harness addition.
 
@@ -376,3 +381,9 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - First standalone build run #1 reached Kotlin compilation but failed with `Enum class is prohibited here`: the pinch-axis enum had been declared inside the inner preview View class.
 - Moved the enum to the enclosing Activity scope. No renderer, production app or preview behaviour changed.
 - The follow-up standalone Digit Lab build is pending.
+
+
+### Standalone Digit Lab current handover
+- Latest standalone lab source SHA: `3437c376d0963a6a7924568e892f32bb14e0b639`.
+- Latest verified Digit Lab APK build: run #2 — success; artifact ID `13985425247`.
+- On-device installation and visual quality checks remain pending.
