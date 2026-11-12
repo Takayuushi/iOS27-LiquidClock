@@ -114,9 +114,9 @@ internal class LiquidWallpaperRenderer(
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
             float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 3.8);
-            float innerBevel = 1.0 - smoothstep(0.6, 10.5, max(signedDistance, 0.0));
-            float outerLip = 1.0 - smoothstep(0.5, 4.5, max(-signedDistance, 0.0));
+            float edgeBand = exp(-abs(signedDistance) / 2.8);
+            float innerBevel = 1.0 - smoothstep(0.5, 13.0, max(signedDistance, 0.0));
+            float outerLip = 1.0 - smoothstep(0.25, 3.8, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(1.0, 18.0, signedDistance);
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
@@ -146,7 +146,7 @@ internal class LiquidWallpaperRenderer(
             // Eight-tap, wide-radius sampling gives Solid a genuine frosted
             // appearance: the wallpaper remains recognizable, but details
             // diffuse instead of showing through as a sharp second image.
-            float blurRadius = 11.5;
+            float blurRadius = 20.0;
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(blurRadius * 0.7071, blurRadius * 0.7071);
@@ -193,27 +193,27 @@ internal class LiquidWallpaperRenderer(
             ) * edgeBand;
             float keySpecular = pow(facing, 13.0) * edgeBand;
             float fillSpecular = pow(oppositeFacing, 9.0) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.14;
+            float bevelShade = innerBevel * (1.0 - facing) * 0.24;
 
             float3 colour = body;
             colour *= mix(0.94, 1.035, interiorVolume);
-            colour += uAccentColor * fresnel * 0.12;
-            colour += float3(0.94, 0.95, 1.0) * innerBevel * 0.14;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.72, 0.42, solidMode);
-            colour += uAccentColor * fillSpecular * mix(0.20, 0.13, solidMode);
-            colour -= float3(0.10, 0.11, 0.16) * bevelShade;
-            colour += float3(1.0, 1.0, 1.0) * outerLip * 0.035;
+            colour += uAccentColor * fresnel * 0.18;
+            colour += float3(0.97, 0.98, 1.0) * innerBevel * 0.22;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.92, 0.56, solidMode);
+            colour += uAccentColor * fillSpecular * mix(0.28, 0.18, solidMode);
+            colour -= float3(0.12, 0.14, 0.20) * bevelShade;\n            colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.16;
+            colour += float3(1.0, 1.0, 1.0) * outerLip * 0.10;
 
             // Glass stays highly transmissive. Frosted mode has a denser veil
             // so it visibly diffuses the wallpaper, but never becomes opaque paint.
-            float glassOpacity = mix(0.28, 0.36, interiorVolume);
-            float solidOpacity = 0.70;
+            float glassOpacity = mix(0.34, 0.43, interiorVolume);
+            float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.16, 0.09, solidMode) +
-                    outerLip * 0.06
+                    edgeBand * mix(0.22, 0.13, solidMode) +
+                    outerLip * 0.10
                 ),
                 0.0,
                 1.0
@@ -235,6 +235,8 @@ internal class LiquidWallpaperRenderer(
     private var foregroundOcclusionMask: Bitmap? = null
     private var glyphMask: Bitmap? = null
     private var glyphSdf: Bitmap? = null
+    private val retiredGlyphMasks = mutableListOf<Bitmap>()
+    private val retiredGlyphSdfs = mutableListOf<Bitmap>()
     private var glyphSdfOriginX = 0f
     private var glyphSdfOriginY = 0f
     private var glyphSdfScale = 1f
@@ -355,18 +357,21 @@ internal class LiquidWallpaperRenderer(
             previousStyle != clockFontStyle || previousWeight != clockFontWeight
 
         if (glyphAppearanceChanged) {
-            // The cache contains only the current weight/width instance. Do not
-            // allocate a new full SDF while the user is actively dragging.
             typefaceCache.clear()
             cachedTimeText = null
             if (surfaceWidth > 0 && surfaceHeight > 0) {
-                rebuildGlyphMask(
-                    force = true,
-                    rebuildDistanceField = rebuildDistanceField
-                )
+                try {
+                    rebuildGlyphMask(
+                        force = true,
+                        rebuildDistanceField = rebuildDistanceField
+                    )
+                } catch (memoryError: OutOfMemoryError) {
+                    Log.e(TAG, "Clock weight preview ran out of memory; keeping the last rendered mask.", memoryError)
+                } catch (exception: RuntimeException) {
+                    Log.e(TAG, "Clock weight preview could not rebuild its glyph mask.", exception)
+                }
             }
         } else if (rebuildDistanceField && glyphSdfStale && surfaceWidth > 0) {
-            // On release, finish the bevel once using the final selected weight.
             rebuildGlyphSdf()
         }
 
@@ -596,10 +601,14 @@ internal class LiquidWallpaperRenderer(
 
     fun release() {
         glassShader = null
-        glyphMask?.recycle()
+        glyphMask?.takeUnless { it.isRecycled }?.recycle()
         glyphMask = null
-        glyphSdf?.recycle()
+        glyphSdf?.takeUnless { it.isRecycled }?.recycle()
         glyphSdf = null
+        retiredGlyphMasks.forEach { if (!it.isRecycled) it.recycle() }
+        retiredGlyphMasks.clear()
+        retiredGlyphSdfs.forEach { if (!it.isRecycled) it.recycle() }
+        retiredGlyphSdfs.clear()
         backdrop?.recycle()
         if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
         foregroundOcclusionMask?.recycle()
@@ -773,15 +782,7 @@ internal class LiquidWallpaperRenderer(
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
 
-        if (rebuildDistanceField) {
-            glyphSdf?.let { if (!it.isRecycled) it.recycle() }
-            glyphSdf = null
-            glyphSdfOriginX = 0f
-            glyphSdfOriginY = 0f
-            glyphSdfScale = 1f
-        }
-        glyphMask?.let { if (!it.isRecycled) it.recycle() }
-        glyphMask = null
+        val previousMask = glyphMask
 
         val mask = try {
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -999,6 +1000,8 @@ internal class LiquidWallpaperRenderer(
             glyphSdfStale = true
             updateGlyphMaskInput()
         }
+        retireGlyphMask(previousMask)
+
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
         gestureOffsetX = 0f
@@ -1006,31 +1009,62 @@ internal class LiquidWallpaperRenderer(
         previewScaleX = 1f
         previewScaleY = 1f
         cachedTimeText = timeText
-        updateGlyphMaskInput()
     }
 
     private fun rebuildGlyphSdf() {
-        glyphSdf?.let { if (!it.isRecycled) it.recycle() }
-        glyphSdf = null
-        glyphSdfOriginX = 0f
-        glyphSdfOriginY = 0f
-        glyphSdfScale = 1f
-
         val mask = glyphMask
-        if (mask != null && !mask.isRecycled && !glyphBounds.isEmpty) {
-            glyphSdf = try {
-                createGlyphSdf(mask, glyphBounds)
-            } catch (memoryError: OutOfMemoryError) {
-                Log.w(
-                    TAG,
-                    "SDF allocation skipped; keeping the live clock mask available.",
-                    memoryError
-                )
-                null
-            }
+        if (mask == null || mask.isRecycled || glyphBounds.isEmpty) {
+            glyphSdfStale = false
+            return
         }
-        glyphSdfStale = false
-        updateGlyphMaskInput()
+
+        val previousSdf = glyphSdf
+        val previousOriginX = glyphSdfOriginX
+        val previousOriginY = glyphSdfOriginY
+        val previousScale = glyphSdfScale
+
+        val replacement = try {
+            createGlyphSdf(mask, glyphBounds)
+        } catch (memoryError: OutOfMemoryError) {
+            Log.w(
+                TAG,
+                "SDF allocation skipped; keeping the previous bevel field.",
+                memoryError
+            )
+            null
+        }
+
+        if (replacement != null) {
+            glyphSdf = replacement
+            glyphSdfStale = false
+            updateGlyphMaskInput()
+            retireGlyphSdf(previousSdf)
+        } else {
+            glyphSdf = previousSdf
+            glyphSdfOriginX = previousOriginX
+            glyphSdfOriginY = previousOriginY
+            glyphSdfScale = previousScale
+            glyphSdfStale = previousSdf != null
+            updateGlyphMaskInput()
+        }
+    }
+
+    private fun retireGlyphMask(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled || bitmap === glyphMask) return
+        retiredGlyphMasks += bitmap
+        while (retiredGlyphMasks.size > 2) {
+            val oldest = retiredGlyphMasks.removeAt(0)
+            if (!oldest.isRecycled) oldest.recycle()
+        }
+    }
+
+    private fun retireGlyphSdf(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled || bitmap === glyphSdf) return
+        retiredGlyphSdfs += bitmap
+        while (retiredGlyphSdfs.size > 2) {
+            val oldest = retiredGlyphSdfs.removeAt(0)
+            if (!oldest.isRecycled) oldest.recycle()
+        }
     }
 
     /** Widths are optical advances in a single normalized cap-height grid. */
@@ -1650,6 +1684,10 @@ internal class LiquidWallpaperRenderer(
                 Color.red(clockColor) / 255f,
                 Color.green(clockColor) / 255f,
                 Color.blue(clockColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uTintStrength",
+                if (clockColor == Color.WHITE) 0f else 0.16f
             )
             shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
             shader.setFloatUniform(
