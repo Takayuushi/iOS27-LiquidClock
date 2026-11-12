@@ -675,6 +675,10 @@ internal class LiquidWallpaperRenderer(
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         val glyphs = timeText.map { it.toString() }
+        // Width profiles transition smoothly from the compact lock-screen
+        // clock to the expanded presentation as the user increases its height.
+        val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
+            .coerceIn(0f, 1f)
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
         val fontWeight = 780
         val font = typefaceFor(fontWeight, 28, 1f)
