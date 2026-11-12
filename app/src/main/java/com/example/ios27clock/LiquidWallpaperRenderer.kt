@@ -995,7 +995,16 @@ internal class LiquidWallpaperRenderer(
         glyphMask = mask
         glyphSdfOriginX = 0f
         glyphSdfOriginY = 0f
-        glyphSdf = if (!glyphBounds.isEmpty) createGlyphSdf(mask, glyphBounds) else null
+        glyphSdf = if (!glyphBounds.isEmpty) {
+            try {
+                createGlyphSdf(mask, glyphBounds)
+            } catch (memoryError: OutOfMemoryError) {
+                Log.w(TAG, "SDF allocation skipped to preserve the live clock after a weight change.", memoryError)
+                null
+            }
+        } else {
+            null
+        }
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
         gestureOffsetX = 0f
