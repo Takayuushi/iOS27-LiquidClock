@@ -80,6 +80,9 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
     private lateinit var solidOption: TextView
+    private lateinit var appearancePanel: View
+    private lateinit var expandControlsButton: TextView
+    private var controlsHidden = false
 
     private var selectedStyle = 0
     private var selectedWeight = 400
@@ -93,6 +96,7 @@ class ClockAppearanceActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ClockDiagnostics.record("Clock Studio opened")
 
         selectedStyle = preferences.getInt(KEY_FONT_STYLE, 0).coerceIn(0, 3)
         selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(100, 900)
@@ -111,7 +115,9 @@ class ClockAppearanceActivity : Activity() {
             setBackgroundColor(Color.BLACK)
         }
 
-        preview = WallpaperClockPreview(this)
+        preview = WallpaperClockPreview(this) {
+            collapseAppearanceControls()
+        }
         root.addView(
             preview,
             FrameLayout.LayoutParams(
@@ -150,8 +156,9 @@ class ClockAppearanceActivity : Activity() {
         root.addView(backButton)
 
 
+        appearancePanel = buildAppearancePanel()
         root.addView(
-            buildAppearancePanel(),
+            appearancePanel,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -159,7 +166,61 @@ class ClockAppearanceActivity : Activity() {
             )
         )
 
+        expandControlsButton = TextView(this).apply {
+            text = "⌃"
+            textSize = 27f
+            setTextColor(Color.rgb(31, 49, 70))
+            gravity = Gravity.CENTER
+            background = circleBackground(0xE6EAF4FF.toInt())
+            elevation = dp(16).toFloat()
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(dp(54), dp(48), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+                .apply { bottomMargin = dp(16) }
+            contentDescription = "Show clock controls"
+            setOnClickListener { expandAppearanceControls() }
+        }
+        root.addView(expandControlsButton)
+
         setContentView(root)
+    }
+
+    private fun collapseAppearanceControls() {
+        if (controlsHidden || !::appearancePanel.isInitialized) return
+        controlsHidden = true
+        ClockDiagnostics.record("Clock preview interaction: collapsing appearance controls")
+        appearancePanel.animate().cancel()
+        val distance = appearancePanel.height.toFloat().coerceAtLeast(dp(420).toFloat())
+        appearancePanel.animate()
+            .translationY(distance)
+            .setDuration(240L)
+            .withEndAction {
+                appearancePanel.visibility = View.GONE
+                expandControlsButton.alpha = 0f
+                expandControlsButton.visibility = View.VISIBLE
+                expandControlsButton.animate().alpha(1f).setDuration(150L).start()
+            }
+            .start()
+    }
+
+    private fun expandAppearanceControls() {
+        if (!controlsHidden || !::appearancePanel.isInitialized) return
+        controlsHidden = false
+        ClockDiagnostics.record("Clock appearance controls expanded")
+        appearancePanel.visibility = View.VISIBLE
+        appearancePanel.translationY = appearancePanel.height.toFloat()
+            .coerceAtLeast(dp(420).toFloat())
+        appearancePanel.animate()
+            .translationY(0f)
+            .setDuration(260L)
+            .start()
+        expandControlsButton.animate()
+            .alpha(0f)
+            .setDuration(120L)
+            .withEndAction {
+                expandControlsButton.visibility = View.GONE
+                expandControlsButton.alpha = 1f
+            }
+            .start()
     }
 
     private fun buildAppearancePanel(): View {
@@ -250,16 +311,39 @@ class ClockAppearanceActivity : Activity() {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     selectedWeight = progress + 100
                     weightLabel.text = selectedWeight.toString()
+                    if (fromUser && progress % 40 == 0) {
+                        ClockDiagnostics.record("Weight slider moved to $selectedWeight")
+                    }
                 }
 
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                    ClockDiagnostics.record("Weight slider started at $selectedWeight")
+                }
 
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                    refreshFontTiles()
-                    // Build the final glyph mask and bevel exactly once per drag.
-                    // Rebuilding a full-screen path every 180ms caused excessive
-                    // bitmap churn and could destabilize the hardware preview.
-                    persistAppearance(rebuildDistanceField = true)
+                    ClockDiagnostics.record("Weight slider released at $selectedWeight; refreshing font tiles")
+                    try {
+                        refreshFontTiles()
+                        // Build the final glyph mask and bevel exactly once per drag.
+                        // Rebuilding a full-screen path every 180ms caused excessive
+                        // bitmap churn and could destabilize the hardware preview.
+                        persistAppearance(rebuildDistanceField = true)
+                        ClockDiagnostics.record("Weight slider update completed at $selectedWeight")
+                    } catch (memoryError: OutOfMemoryError) {
+                        ClockDiagnostics.report("weight-slider-out-of-memory", memoryError)
+                        Toast.makeText(
+                            this@ClockAppearanceActivity,
+                            "Preview ran out of memory. A diagnostic was saved.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } catch (exception: RuntimeException) {
+                        ClockDiagnostics.report("weight-slider-update", exception)
+                        Toast.makeText(
+                            this@ClockAppearanceActivity,
+                            "Preview update failed. A diagnostic was saved.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             })
         }
@@ -495,8 +579,28 @@ class ClockAppearanceActivity : Activity() {
 
     private fun persistAppearance(rebuildDistanceField: Boolean = true) {
         saveAppearancePreferences()
-        preview.reloadAppearance(rebuildDistanceField = rebuildDistanceField)
-        pendingWallpaperCommit = true
+        ClockDiagnostics.record(
+            "Appearance refresh started: style=$selectedStyle weight=$selectedWeight glass=$glassMode sdf=$rebuildDistanceField"
+        )
+        try {
+            preview.reloadAppearance(rebuildDistanceField = rebuildDistanceField)
+            pendingWallpaperCommit = true
+            ClockDiagnostics.record("Appearance refresh completed")
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("appearance-refresh-out-of-memory", memoryError)
+            Toast.makeText(
+                this,
+                "Preview ran out of memory. A diagnostic was saved.",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (exception: RuntimeException) {
+            ClockDiagnostics.report("appearance-refresh", exception)
+            Toast.makeText(
+                this,
+                "Preview update failed. A diagnostic was saved.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun refreshFontTiles() {
@@ -535,6 +639,10 @@ class ClockAppearanceActivity : Activity() {
                 )
                 .build()
         } catch (exception: Exception) {
+            ClockDiagnostics.record("SF Pro preview face fallback: ${exception.javaClass.simpleName}")
+            Typeface.create("sans-serif", Typeface.NORMAL)
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("font-tile-typeface-allocation", memoryError)
             Typeface.create("sans-serif", Typeface.NORMAL)
         }
         if (previewTypefaceCache.size >= 32) previewTypefaceCache.clear()
@@ -698,6 +806,7 @@ class ClockAppearanceActivity : Activity() {
     }
 
     override fun onDestroy() {
+        ClockDiagnostics.record("Clock Studio closing; pendingCommit=$pendingWallpaperCommit")
         releasePreviewRenderer()
         if (pendingWallpaperCommit) {
             sendBroadcast(
@@ -708,7 +817,10 @@ class ClockAppearanceActivity : Activity() {
         super.onDestroy()
     }
 
-    private class WallpaperClockPreview(context: Context) : View(context) {
+    private class WallpaperClockPreview(
+        context: Context,
+        private val onClockInteraction: () -> Unit
+    ) : View(context) {
         private val renderer = LiquidWallpaperRenderer(context)
         private var renderWidth = 0
         private var renderHeight = 0
@@ -726,7 +838,8 @@ class ClockAppearanceActivity : Activity() {
                 // view resolution instead of scaling a soft, reduced bitmap.
                 renderWidth = w
                 renderHeight = h
-                renderer.setViewport(renderWidth, renderHeight)
+                    renderer.setViewport(renderWidth, renderHeight)
+                ClockDiagnostics.record("Editor preview viewport: ${renderWidth}x${renderHeight}")
             }
         }
 
@@ -737,6 +850,7 @@ class ClockAppearanceActivity : Activity() {
         private var lastTouchX = 0f
         private var lastTouchY = 0f
         private var pinchStartDistance = 0f
+        private var lastFrameErrorReportAt = 0L
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
@@ -753,12 +867,21 @@ class ClockAppearanceActivity : Activity() {
                 // Keep the editor alive if a device cannot allocate a transient
                 // glyph/SDF buffer; the next interaction can retry the render.
                 Log.e("ClockAppearancePreview", "Preview ran out of memory while rendering.", memoryError)
+                reportFrameFailure("preview-frame-out-of-memory", memoryError)
             } catch (exception: RuntimeException) {
                 Log.e("ClockAppearancePreview", "Preview frame failed; keeping the editor interactive.", exception)
+                reportFrameFailure("preview-frame", exception)
             } finally {
                 canvas.restoreToCount(save)
             }
             if (visibility == View.VISIBLE) postInvalidateDelayed(40L)
+        }
+
+        private fun reportFrameFailure(tag: String, throwable: Throwable) {
+            val now = SystemClock.uptimeMillis()
+            if (now - lastFrameErrorReportAt < 5_000L) return
+            lastFrameErrorReportAt = now
+            ClockDiagnostics.report(tag, throwable)
         }
 
         private fun renderX(viewX: Float): Float =
@@ -783,6 +906,8 @@ class ClockAppearanceActivity : Activity() {
                     val y = renderY(event.y)
                     if (!renderer.isClockHit(x, y)) return false
 
+                    onClockInteraction()
+                    ClockDiagnostics.record("Clock preview touch started at x=${x.toInt()} y=${y.toInt()}")
                     activePointerId = event.getPointerId(0)
                     lastTouchX = x
                     lastTouchY = y
