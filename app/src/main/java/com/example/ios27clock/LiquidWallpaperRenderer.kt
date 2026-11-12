@@ -674,119 +674,68 @@ internal class LiquidWallpaperRenderer(
         val mask = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+
         val glyphs = timeText.map { it.toString() }
-
-        // Measure each real font outline once, at a common reference size.
-        // Layout uses the actual advance and outline bounds, never guessed
-        // per-character widths. This prevents the 4/0 pair from colliding.
-        val fontPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            typeface = typefaceFor(650, 1000, 1f)
-            textSize = 1000f
-            style = Paint.Style.FILL
-            isSubpixelText = true
-        }
-        val zeroPath = Path()
-        fontPaint.getTextPath("0", 0, 1, 0f, 0f, zeroPath)
-        val zeroBounds = RectF()
-        zeroPath.computeBounds(zeroBounds, true)
-        val referenceHeight = zeroBounds.height().coerceAtLeast(1f)
-
-        data class GlyphMetric(
-            val path: Path,
-            val advanceEm: Float
-        )
-        val metrics = glyphs.map { glyph ->
-            if (glyph == ":") {
-                null
-            } else {
-                val outline = Path()
-                fontPaint.getTextPath(glyph, 0, glyph.length, 0f, 0f, outline)
-                val outlineBounds = RectF()
-                outline.computeBounds(outlineBounds, true)
-                val measuredAdvance = fontPaint.measureText(glyph)
-                val occupiedAdvance = max(measuredAdvance, outlineBounds.right)
-                GlyphMetric(
-                    path = outline,
-                    advanceEm = occupiedAdvance / referenceHeight
-                )
-            }
-        }
-
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
-        // Tracking is a real inter-glyph gap, not part of the glyph outline.
-        // A slightly more generous gap matters most between 4 and 0.
-        val trackingEm = 0.050f
-        val colonAdvanceEm = 0.19f
-        val colonGapEm = 0.035f
-        val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
-            .coerceIn(0f, 1f)
+        val trackingEm = 0.032f
+        val colonAdvanceEm = 0.13f
+        val colonExtraGapEm = 0.035f
+        val totalAdvanceEm = glyphs.sumOf {
+            (if (it == ":") colonAdvanceEm else vectorDigitAdvanceEm(it)).toDouble()
+        }.toFloat() + trackingEm * (glyphs.size - 1).coerceAtLeast(0) +
+            colonExtraGapEm * glyphs.count { it == ":" }
 
-        fun advanceEm(index: Int): Float =
-            if (glyphs[index] == ":") colonAdvanceEm else metrics[index]?.advanceEm ?: 0.5f
-
-        fun measureLine(capHeight: Float): Float {
-            val advances = glyphs.indices.sumOf { (advanceEm(it) * capHeight).toDouble() }.toFloat()
-            val gaps = trackingEm * capHeight * (glyphs.size - 1).coerceAtLeast(0)
-            val colonExtra = glyphs.count { it == ":" } * colonGapEm * capHeight
-            return (advances + gaps + colonExtra) * CLOCK_GLYPH_WIDTH_SCALE
-        }
-
-        var low = 1f
-        var high = maxBaseHeight
-        repeat(28) {
-            val candidate = (low + high) * 0.5f
-            if (measureLine(candidate) <= maxWidth) low = candidate else high = candidate
-        }
-        val capHeight = low
+        // One common cap height is fitted to the available line width. The
+        // individual advances are part of this vector family, not estimates
+        // taken from a system font or independent per-glyph stretch factors.
+        val capHeight = min(maxBaseHeight, maxWidth / totalAdvanceEm.coerceAtLeast(0.1f))
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
-        val baseline = centerY + capHeight * 0.5f
-        val advances = glyphs.indices.map { advanceEm(it) * capHeight }
-        val tracking = trackingEm * capHeight
-        val colonExtraGap = colonGapEm * capHeight
+        val tracking = capHeight * trackingEm
+        val colonExtraGap = capHeight * colonExtraGapEm
+        val advances = glyphs.map { glyph ->
+            capHeight * if (glyph == ":") colonAdvanceEm else vectorDigitAdvanceEm(glyph)
+        }
         val totalWidth = advances.sum() +
             tracking * (glyphs.size - 1).coerceAtLeast(0) +
             colonExtraGap * glyphs.count { it == ":" }
         var cursorX = centerX - totalWidth * 0.5f
+        val top = centerY - capHeight * 0.5f
+        val strokeWidth = capHeight * 0.092f
 
-        val composedPath = Path()
-        val colonPath = Path()
-        val composedBounds = RectF()
+        data class GlyphShape(val path: Path, val filled: Boolean)
+        val shapes = mutableListOf<GlyphShape>()
+        val baseBounds = RectF()
         var hasBounds = false
-        val commonScale = capHeight / referenceHeight
+        val colonCenters = mutableListOf<Pair<Float, Float>>()
 
         glyphs.forEachIndexed { index, glyph ->
             if (glyph == ":") {
-                val radius = capHeight * COLON_DOT_RADIUS_EM * 1.08f
-                val offset = capHeight * COLON_DOT_OFFSET_EM
+                val dotOffset = capHeight * COLON_DOT_OFFSET_EM
                 val dotX = cursorX + advances[index] * 0.5f
-                colonPath.addCircle(dotX, centerY - offset, radius, Path.Direction.CW)
-                colonPath.addCircle(dotX, centerY + offset, radius, Path.Direction.CW)
-                val colonBounds = RectF(
-                    dotX - radius, centerY - offset - radius,
-                    dotX + radius, centerY + offset + radius
-                )
-                if (!hasBounds) {
-                    composedBounds.set(colonBounds)
-                    hasBounds = true
-                } else composedBounds.union(colonBounds)
+                colonCenters += dotX to (centerY - dotOffset)
+                colonCenters += dotX to (centerY + dotOffset)
             } else {
-                val metric = metrics[index]
-                val placedGlyph = Path()
-                val transform = Matrix().apply {
-                    setScale(commonScale, commonScale)
-                    postTranslate(cursorX, baseline)
+                val digitBounds = RectF(
+                    cursorX,
+                    top,
+                    cursorX + advances[index],
+                    top + capHeight
+                )
+                val isFilled = glyph == "0" || glyph == "8"
+                val digitPath = buildVectorDigitPath(glyph, digitBounds)
+                shapes += GlyphShape(digitPath, isFilled)
+                val pathBounds = RectF()
+                digitPath.computeBounds(pathBounds, true)
+                if (!isFilled && !pathBounds.isEmpty) {
+                    pathBounds.inset(-strokeWidth * 0.5f, -strokeWidth * 0.5f)
                 }
-                metric?.path?.transform(transform, placedGlyph)
-                val glyphBounds = RectF()
-                placedGlyph.computeBounds(glyphBounds, true)
-                if (!glyphBounds.isEmpty) {
-                    composedPath.addPath(placedGlyph)
+                if (!pathBounds.isEmpty) {
                     if (!hasBounds) {
-                        composedBounds.set(glyphBounds)
+                        baseBounds.set(pathBounds)
                         hasBounds = true
-                    } else composedBounds.union(glyphBounds)
+                    } else baseBounds.union(pathBounds)
                 }
             }
             cursorX += advances[index] + tracking +
@@ -794,63 +743,76 @@ internal class LiquidWallpaperRenderer(
         }
 
         if (hasBounds) {
-            val naturalShapeTransform = Matrix().apply {
-                setScale(
-                    CLOCK_GLYPH_WIDTH_SCALE,
-                    CLOCK_GLYPH_HEIGHT_SCALE,
-                    centerX,
-                    centerY
-                )
-            }
-            val naturalShapePath = Path()
-            composedPath.transform(naturalShapeTransform, naturalShapePath)
-            naturalShapePath.computeBounds(composedBounds, true)
-            val naturalColonPath = Path()
-            colonPath.transform(naturalShapeTransform, naturalColonPath)
-            val naturalColonBounds = RectF()
-            naturalColonPath.computeBounds(naturalColonBounds, true)
-            if (!naturalColonBounds.isEmpty) composedBounds.union(naturalColonBounds)
-
+            // Measure the rendered outlines, including the common stroke,
+            // before committing the vertical expansion. This retains the
+            // established hard viewport ceiling and never scales X.
+            val totalShapeHeightScale = CLOCK_GLYPH_HEIGHT_SCALE
+            val naturalBounds = RectF(baseBounds)
+            naturalBounds.top = centerY + (baseBounds.top - centerY) * totalShapeHeightScale
+            naturalBounds.bottom = centerY + (baseBounds.bottom - centerY) * totalShapeHeightScale
             val allowedScaleY = (
                 height * MAX_COMMITTED_HEIGHT_FRACTION /
-                    composedBounds.height().coerceAtLeast(1f)
+                    naturalBounds.height().coerceAtLeast(1f)
                 ).coerceAtLeast(1f)
             val committedScaleY = clockScale.coerceAtMost(allowedScaleY)
             if (committedScaleY != clockScale) {
                 clockScale = committedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
             }
-            val verticalTransform = Matrix().apply {
-                setScale(1f, committedScaleY, centerX, centerY)
-            }
-            val finalPath = Path()
-            naturalShapePath.transform(verticalTransform, finalPath)
-            finalPath.computeBounds(composedBounds, true)
-            val finalColonPath = Path()
-            naturalColonPath.transform(verticalTransform, finalColonPath)
-            val finalColonBounds = RectF()
-            finalColonPath.computeBounds(finalColonBounds, true)
-            if (!finalColonBounds.isEmpty) composedBounds.union(finalColonBounds)
+            val finalScaleY = totalShapeHeightScale * committedScaleY
 
-            val inset = max(2f, capHeight * 0.025f)
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = strokeWidth
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                strokeMiter = 1f
+            }
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+
+            maskCanvas.save()
+            maskCanvas.scale(CLOCK_GLYPH_WIDTH_SCALE, finalScaleY, centerX, centerY)
+            shapes.forEach { shape ->
+                maskCanvas.drawPath(shape.path, if (shape.filled) fillPaint else strokePaint)
+            }
+            maskCanvas.restore()
+
+            // Keep the colon dots circular while moving them with the
+            // vertical expansion. The dots must not turn into tall ovals.
+            val dotRadius = capHeight * COLON_DOT_RADIUS_EM * 1.08f
+            colonCenters.forEach { (dotX, originalY) ->
+                val finalY = centerY + (originalY - centerY) * finalScaleY
+                maskCanvas.drawCircle(
+                    centerX + (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
+                    finalY,
+                    dotRadius,
+                    fillPaint
+                )
+            }
+
+            val finalBounds = RectF(
+                centerX + (baseBounds.left - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
+                centerY + (baseBounds.top - centerY) * finalScaleY,
+                centerX + (baseBounds.right - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
+                centerY + (baseBounds.bottom - centerY) * finalScaleY
+            )
+            colonCenters.forEach { (dotX, originalY) ->
+                val finalX = centerX + (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE
+                val finalY = centerY + (originalY - centerY) * finalScaleY
+                finalBounds.union(
+                    RectF(finalX - dotRadius, finalY - dotRadius,
+                        finalX + dotRadius, finalY + dotRadius)
+                )
+            }
+            val inset = max(2f, capHeight * 0.018f)
             glyphBounds.set(
-                (composedBounds.left - inset).coerceAtLeast(0f),
-                (composedBounds.top - inset).coerceAtLeast(0f),
-                (composedBounds.right + inset).coerceAtMost(width.toFloat()),
-                (composedBounds.bottom + inset).coerceAtMost(height.toFloat())
-            )
-            maskCanvas.drawPath(
-                finalPath,
-                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.FILL
-                }
-            )
-            maskCanvas.drawPath(
-                finalColonPath,
-                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.FILL
-                }
+                (finalBounds.left - inset).coerceAtLeast(0f),
+                (finalBounds.top - inset).coerceAtLeast(0f),
+                (finalBounds.right + inset).coerceAtMost(width.toFloat()),
+                (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
         } else {
             glyphBounds.setEmpty()
@@ -871,6 +833,132 @@ internal class LiquidWallpaperRenderer(
         previewScaleY = 1f
         cachedTimeText = timeText
         updateGlyphMaskInput()
+    }
+
+    /** Widths are optical advances in a single normalized cap-height grid. */
+    private fun vectorDigitAdvanceEm(glyph: String): Float = when (glyph) {
+        "0" -> 0.36f
+        "1" -> 0.29f
+        "2" -> 0.34f
+        "3" -> 0.34f
+        "4" -> 0.37f
+        "5" -> 0.34f
+        "6" -> 0.36f
+        "7" -> 0.33f
+        "8" -> 0.37f
+        "9" -> 0.36f
+        else -> 0.34f
+    }
+
+    /**
+     * Custom iOS-inspired display numerals. Each digit is built on the same
+     * cap-height grid and uses the same stroke weight, round caps and joins.
+     * 0 and 8 are filled silhouettes with real counters; other digits are
+     * continuous centerline contours rendered with the shared stroke paint.
+     */
+    private fun buildVectorDigitPath(glyph: String, bounds: RectF): Path {
+        val l = bounds.left
+        val t = bounds.top
+        val w = bounds.width()
+        val h = bounds.height()
+        val r = bounds.right
+        val b = bounds.bottom
+        fun x(fraction: Float) = l + w * fraction
+        fun y(fraction: Float) = t + h * fraction
+        val path = Path()
+
+        when (glyph) {
+            "0" -> {
+                path.fillType = Path.FillType.EVEN_ODD
+                path.addRoundRect(
+                    RectF(x(0.04f), y(0.015f), x(0.96f), y(0.985f)),
+                    h * 0.16f, h * 0.16f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(x(0.235f), y(0.12f), x(0.765f), y(0.88f)),
+                    h * 0.085f, h * 0.085f, Path.Direction.CCW
+                )
+            }
+            "1" -> {
+                path.moveTo(x(0.20f), y(0.235f))
+                path.lineTo(x(0.52f), y(0.065f))
+                path.lineTo(x(0.52f), y(0.925f))
+                path.moveTo(x(0.19f), y(0.925f))
+                path.lineTo(x(0.82f), y(0.925f))
+            }
+            "2" -> {
+                path.moveTo(x(0.11f), y(0.245f))
+                path.cubicTo(x(0.13f), y(0.075f), x(0.76f), y(0.025f), x(0.89f), y(0.22f))
+                path.cubicTo(x(1.00f), y(0.405f), x(0.76f), y(0.585f), x(0.52f), y(0.755f))
+                path.lineTo(x(0.12f), y(0.925f))
+                path.lineTo(x(0.90f), y(0.925f))
+            }
+            "3" -> {
+                path.moveTo(x(0.13f), y(0.16f))
+                path.cubicTo(x(0.34f), y(0.025f), x(0.84f), y(0.035f), x(0.87f), y(0.265f))
+                path.cubicTo(x(0.89f), y(0.425f), x(0.69f), y(0.49f), x(0.49f), y(0.50f))
+                path.cubicTo(x(0.71f), y(0.505f), x(0.91f), y(0.59f), x(0.88f), y(0.79f))
+                path.cubicTo(x(0.85f), y(0.985f), x(0.34f), y(0.985f), x(0.11f), y(0.83f))
+            }
+            "4" -> {
+                path.moveTo(x(0.70f), y(0.925f))
+                path.lineTo(x(0.70f), y(0.075f))
+                path.moveTo(x(0.08f), y(0.595f))
+                path.lineTo(x(0.92f), y(0.595f))
+                path.moveTo(x(0.10f), y(0.595f))
+                path.lineTo(x(0.66f), y(0.075f))
+            }
+            "5" -> {
+                path.moveTo(x(0.90f), y(0.075f))
+                path.lineTo(x(0.13f), y(0.075f))
+                path.lineTo(x(0.13f), y(0.455f))
+                path.cubicTo(x(0.36f), y(0.385f), x(0.78f), y(0.40f), x(0.88f), y(0.595f))
+                path.cubicTo(x(0.995f), y(0.81f), x(0.76f), y(0.975f), x(0.49f), y(0.935f))
+                path.cubicTo(x(0.31f), y(0.925f), x(0.17f), y(0.875f), x(0.10f), y(0.80f))
+            }
+            "6" -> {
+                path.moveTo(x(0.82f), y(0.095f))
+                path.cubicTo(x(0.49f), y(0.09f), x(0.13f), y(0.34f), x(0.13f), y(0.65f))
+                path.cubicTo(x(0.13f), y(0.89f), x(0.36f), y(0.965f), x(0.60f), y(0.93f))
+                path.cubicTo(x(0.88f), y(0.89f), x(0.92f), y(0.66f), x(0.76f), y(0.545f))
+                path.cubicTo(x(0.60f), y(0.43f), x(0.31f), y(0.49f), x(0.13f), y(0.67f))
+            }
+            "7" -> {
+                path.moveTo(x(0.08f), y(0.075f))
+                path.lineTo(x(0.92f), y(0.075f))
+                path.cubicTo(x(0.73f), y(0.36f), x(0.53f), y(0.65f), x(0.31f), y(0.925f))
+            }
+            "8" -> {
+                path.fillType = Path.FillType.EVEN_ODD
+                path.moveTo(x(0.50f), y(0.015f))
+                path.cubicTo(x(0.20f), y(0.015f), x(0.055f), y(0.12f), x(0.055f), y(0.27f))
+                path.cubicTo(x(0.055f), y(0.405f), x(0.22f), y(0.47f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.22f), y(0.53f), x(0.055f), y(0.60f), x(0.055f), y(0.75f))
+                path.cubicTo(x(0.055f), y(0.90f), x(0.20f), y(0.985f), x(0.50f), y(0.985f))
+                path.cubicTo(x(0.80f), y(0.985f), x(0.945f), y(0.90f), x(0.945f), y(0.75f))
+                path.cubicTo(x(0.945f), y(0.60f), x(0.78f), y(0.53f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.78f), y(0.47f), x(0.945f), y(0.405f), x(0.945f), y(0.27f))
+                path.cubicTo(x(0.945f), y(0.12f), x(0.80f), y(0.015f), x(0.50f), y(0.015f))
+                path.close()
+                path.addRoundRect(
+                    RectF(x(0.265f), y(0.115f), x(0.735f), y(0.415f)),
+                    h * 0.055f, h * 0.055f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(x(0.265f), y(0.585f), x(0.735f), y(0.885f)),
+                    h * 0.055f, h * 0.055f, Path.Direction.CW
+                )
+            }
+            "9" -> {
+                path.addRoundRect(
+                    RectF(x(0.08f), y(0.035f), x(0.92f), y(0.59f)),
+                    h * 0.17f, h * 0.17f, Path.Direction.CW
+                )
+                path.moveTo(x(0.86f), y(0.43f))
+                path.cubicTo(x(0.88f), y(0.64f), x(0.70f), y(0.83f), x(0.42f), y(0.93f))
+            }
+        }
+        return path
     }
     /**
      * Builds a compact signed-distance field around the current glyph bounds.
