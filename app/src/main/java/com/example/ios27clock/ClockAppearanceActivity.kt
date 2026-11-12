@@ -242,6 +242,7 @@ class ClockAppearanceActivity : Activity() {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     selectedWeight = progress + 100
                     weightLabel.text = "Weight  ·  $selectedWeight"
+                    if (fromUser) persistAppearance(notifyWallpaper = false)
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
@@ -300,7 +301,7 @@ class ClockAppearanceActivity : Activity() {
             }
         }
 
-        fontTiles.forEach(row::addView)
+        fontTiles.forEach { tile -> row.addView(tile) }
         return row
     }
 
@@ -394,7 +395,7 @@ class ClockAppearanceActivity : Activity() {
         return outer
     }
 
-    private fun persistAppearance() {
+    private fun persistAppearance(notifyWallpaper: Boolean = true) {
         preferences.edit()
             .putInt(KEY_FONT_STYLE, selectedStyle)
             .putInt(KEY_FONT_WEIGHT, selectedWeight)
@@ -403,10 +404,12 @@ class ClockAppearanceActivity : Activity() {
             .apply()
 
         preview.reloadAppearance()
-        sendBroadcast(
-            Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
-                .setPackage(packageName)
-        )
+        if (notifyWallpaper) {
+            sendBroadcast(
+                Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
+                    .setPackage(packageName)
+            )
+        }
     }
 
     private fun refreshFontTiles() {
