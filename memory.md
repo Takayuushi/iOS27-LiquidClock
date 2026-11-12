@@ -267,7 +267,34 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Kept the 5:7 chamfer metric introduced in build #270.
 
 ### Verification state
-- Code commit and CI build for this pass: pending.
-- Device comparison pending. Inspect the `1` silhouette against the first reference screenshot, and check inner edges on `0`, `5`, and the narrow strokes.
+- Commit `0b9ff7b080a1f05a8d75aca9f3abb9747bf7ecd5`; GitHub Actions build #271 completed successfully and uploaded artifact `iOS27-LiquidClock-Android17-debug` (ID `13982136419`): [run #271](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43301561208).
+- The user tested the build and reported that the inner curves still show bright fractured wallpaper streaks and the `1` remains too narrow compared with the reference.
+- The next correction pass is now focused on widening the `1` using its advance cell and smoothing the glass face with local diffusion instead of chromatic splitting.
+- Device comparison for the next correction is pending. Inspect the `1` silhouette against the original reference screenshot, and check inner edges on `0`, `9`, and `2`.
 - Confirm inner wallpaper lines bend smoothly and do not split into bright shards; the glass should remain visibly reflective.
 - Preserve preview/applied wallpaper isolation, tap-anywhere controller dismissal, clock dragging, horizontal and vertical pinch, and Solid/Frosted mode.
+
+
+## Widen reference numeral 1 and smooth glass interior streaks (13 Nov 2026)
+
+### User feedback after build #271
+- The lower `0` still looks unpolished, with bright broken-looking streaks; similar cracks/bleeding remain along the curves of `9` and `2`.
+- The new `1` still does not match the reference; the rendered ones remain much too narrow.
+- Screenshots compared: `2:09` and `2:11` over the diagonal blue/black/orange wallpaper.
+
+### Root cause
+- The dedicated `1` path was still fitted into the original SF Pro outline's narrow `pathBounds`. Although its internal shape was custom, it inherited the narrow width of the font's original `1`, so its flag and foot could not reach the reference proportions.
+- The apparent fractures inside `0`, `9`, and `2` are strongly correlated with high-contrast wallpaper streaks crossing the transparent glass. The current refracted sample retains too much sharp local contrast, while even a small red/blue split can make those lines appear doubled.
+
+### Implemented in this pass
+- Refit the custom `1` to a wider rectangle based on the glyph's measured advance cell, capped below the advance so it does not collide with adjacent digits. The clock's tracking and overall layout remain unchanged.
+- Widened the stem and extended the baseline foot of the custom `1` to better match the reference's display numeral.
+- Increased the SDF finite-difference sample step used for refraction normals to 4px to smooth direction changes around curved inner/outer edges. The surface-lighting normal itself remains unchanged.
+- Replaced the remaining red/blue chromatic samples with four short-range (8px) wallpaper samples blended at 24% into the Glass face. This provides mild local optical diffusion without turning the Glass mode into the broad Frosted mode.
+- Increased the accent-derived glass body contribution and body opacity slightly to stop high-contrast wallpaper lines from cutting too harshly through the glass.
+- Kept the broad face reflection bands, layout, digit positions, wallpaper isolation, controller gesture handling, and horizontal/vertical pinch unchanged.
+
+### Verification
+- Code commit and CI build for this pass: pending.
+- On-device test must confirm the `1` is wider and closer to the reference, and that the diagonal streaks inside `0`, `9`, and `2` look continuous/softened rather than fractured.
+- Watch for excessive blur, opaque/frosted appearance, muddy glass colour, glyph collisions, or loss of reflective shine. If any occur, adjust diffusion mix/radius first rather than increasing edge dispersion.

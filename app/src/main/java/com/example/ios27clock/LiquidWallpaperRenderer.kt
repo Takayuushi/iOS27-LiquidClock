@@ -114,7 +114,7 @@ internal class LiquidWallpaperRenderer(
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
             // A slightly wider finite-difference baseline filters single-pixel
             // SDF stair-steps before they become visible as fractured refraction.
-            float2 sampleStep = float2(3.15, 3.15) * uSdfScale;
+            float2 sampleStep = float2(4.0, 4.0) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -176,37 +176,27 @@ internal class LiquidWallpaperRenderer(
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
 
-            // Split the refracted light by wavelength. The shift is strongest
-            // at the curved perimeter, where real glass bends light most.
-            float solidDispersionEdge =
-                exp(-abs(signedDistance - 2.0) / 7.5);
-            // Keep the colour split restrained; the previous displacement
-            // produced rainbow fringes that looked like digital chromatic
-            // aberration instead of a coherent glass lens.
-            float glassDispersionAmount =
-                0.025 + glassRim * 0.28 + glassLens * 0.08;
-            // Preserve the previously approved Solid dispersion response.
-            float solidDispersionAmount =
-                0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
-            float dispersionAmount = mix(
-                glassDispersionAmount,
-                solidDispersionAmount,
-                solidMode
-            );
-            float2 dispersion = refractionNormal * dispersionAmount;
-            float red = uWallpaper.eval(
-                clamp(samplePoint + dispersion, float2(0.0), uResolution)
-            ).r;
-            float blue = uWallpaper.eval(
-                clamp(samplePoint - dispersion, float2(0.0), uResolution)
-            ).b;
-            // Keep the refracted colour together as one optical image; only
-            // a restrained fraction of channel separation survives at edges.
-            float3 refracted = mix(
-                center,
-                float3(red, center.g, blue),
-                0.18
-            );
+            // A small four-direction optical diffusion softens high-contrast
+            // wallpaper lines under the curved lens. It is much tighter than
+            // the frosted material's blur and avoids red/blue edge splitting.
+            float glassSoftRadius = 8.0;
+            float2 glassSoftX = float2(glassSoftRadius, 0.0);
+            float2 glassSoftY = float2(0.0, glassSoftRadius);
+            float3 glassSoft = (
+                uWallpaper.eval(
+                    clamp(samplePoint + glassSoftX, float2(0.0), uResolution)
+                ).rgb +
+                uWallpaper.eval(
+                    clamp(samplePoint - glassSoftX, float2(0.0), uResolution)
+                ).rgb +
+                uWallpaper.eval(
+                    clamp(samplePoint + glassSoftY, float2(0.0), uResolution)
+                ).rgb +
+                uWallpaper.eval(
+                    clamp(samplePoint - glassSoftY, float2(0.0), uResolution)
+                ).rgb
+            ) * 0.25;
+            float3 refracted = mix(center, glassSoft, 0.24);
 
             // Solid retains its approved frosted-glass diffusion.
             float blurRadius = 38.0;
@@ -266,7 +256,7 @@ internal class LiquidWallpaperRenderer(
             // The selected accent is sampled from this wallpaper, not a fixed
             // lavender material. A little more of it gives the transparent
             // surface a legible body without turning it opaque or frosted.
-            glassFace = mix(glassFace, uAccentColor, 0.095);
+            glassFace = mix(glassFace, uAccentColor, 0.12);
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
                 milkyFrost,
@@ -380,7 +370,7 @@ internal class LiquidWallpaperRenderer(
             // Increase the transparent face contribution modestly. The
             // wallpaper is still visible through it, but it no longer vanishes
             // on dark sections of a high-contrast wallpaper.
-            float glassOpacity = mix(0.43, 0.54, glassLens);
+            float glassOpacity = mix(0.47, 0.58, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
@@ -1123,13 +1113,37 @@ internal class LiquidWallpaperRenderer(
                             pathBounds.centerY()
                         )
                     }
+                    val oneCenterX = cursorX + advances[index] * 0.5f
+                    val oneBounds = if (glyph == "1") {
+                        val oneWidth = max(
+                            fontSize * 0.24f,
+                            pathBounds.width() * 2f
+                        ).coerceAtMost(advances[index] * 0.92f)
+                        RectF(
+                            oneCenterX - oneWidth * 0.5f,
+                            pathBounds.top,
+                            oneCenterX + oneWidth * 0.5f,
+                            pathBounds.bottom
+                        )
+                    } else {
+                        pathBounds
+                    }
                     val sourceGlyphPath = if (glyph == "1") {
-                        buildReferenceOnePath(pathBounds)
+                        buildReferenceOnePath(oneBounds)
                     } else {
                         glyphPath
                     }
                     val opticalPath = Path()
-                    sourceGlyphPath.transform(condensedTransform, opticalPath)
+                    val shapeCenterX = if (glyph == "1") oneCenterX else pathBounds.centerX()
+                    val shapeTransform = Matrix().apply {
+                        setScale(
+                            compactWidth,
+                            glyphHeightFactor(glyph),
+                            shapeCenterX,
+                            pathBounds.centerY()
+                        )
+                    }
+                    sourceGlyphPath.transform(shapeTransform, opticalPath)
                     if (glyph == "2") {
                         digitTwoPath = Path(opticalPath)
                     } else {
@@ -1504,14 +1518,14 @@ internal class LiquidWallpaperRenderer(
                 x(0.42f), y(0.075f),
                 x(0.55f), y(0.055f)
             )
-            lineTo(x(0.67f), y(0.055f))
-            lineTo(x(0.67f), y(0.875f))
-            lineTo(x(0.84f), y(0.875f))
-            lineTo(x(0.84f), y(0.975f))
-            lineTo(x(0.16f), y(0.975f))
-            lineTo(x(0.16f), y(0.875f))
-            lineTo(x(0.48f), y(0.875f))
-            lineTo(x(0.48f), y(0.245f))
+            lineTo(x(0.69f), y(0.055f))
+            lineTo(x(0.69f), y(0.875f))
+            lineTo(x(0.93f), y(0.875f))
+            lineTo(x(0.93f), y(0.975f))
+            lineTo(x(0.12f), y(0.975f))
+            lineTo(x(0.12f), y(0.875f))
+            lineTo(x(0.47f), y(0.875f))
+            lineTo(x(0.47f), y(0.245f))
             cubicTo(
                 x(0.39f), y(0.285f),
                 x(0.25f), y(0.345f),
