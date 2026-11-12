@@ -905,9 +905,9 @@ internal class LiquidWallpaperRenderer(
                 // swollen, pinched joint in the previous version.
                 path.moveTo(x(0.13f), y(0.16f))
                 path.cubicTo(x(0.32f), y(0.035f), x(0.73f), y(0.035f), x(0.86f), y(0.19f))
-                path.cubicTo(x(0.96f), y(0.31f), x(0.95f), y(0.44f), x(0.82f), y(0.50f))
-                path.cubicTo(x(0.95f), y(0.56f), x(0.97f), y(0.70f), x(0.86f), y(0.82f))
-                path.cubicTo(x(0.72f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
+                path.cubicTo(x(0.95f), y(0.29f), x(0.93f), y(0.42f), x(0.86f), y(0.50f))
+                path.cubicTo(x(0.93f), y(0.58f), x(0.95f), y(0.71f), x(0.85f), y(0.82f))
+                path.cubicTo(x(0.71f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
             }
             "4" -> {
                 path.moveTo(x(0.70f), y(0.925f))
