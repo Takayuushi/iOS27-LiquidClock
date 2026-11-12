@@ -112,12 +112,12 @@ Changes:
 ## Status snapshot
 
 - **Last known active branch:** `feature/live-wallpaper-big-clock`
-- **Last code commit:** `512180ae17d990f68f711f93caa2194b06948998`
-- **Last verified CI build:** #273 — success
-- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13984475435`
-- **Build run:** [GitHub Actions #273](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43305462651)
-- **On-device verification of repeated-digit fix:** pending
-- **Top next priorities:** verify `2:20` and other repeated-two times; fix the remaining bright white bands in `0` and `2`; remove the wrinkled look on curved surfaces; compare the `7` silhouette against the iOS reference; preserve wallpaper preview/applied isolation and controller/gesture behaviour; investigate known Typeface/SDF memory failures.
+- **Last code commit:** `1d3aba3030cfa74a16cc5025376bac17392ce230`
+- **Last verified CI build:** #275 — success
+- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13983737589`
+- **Build run:** [GitHub Actions #275](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43306023366)
+- **On-device verification of repeated-digit fix and shader refinement:** pending
+- **Top next priorities:** verify `2:20` and other repeated-two times; evaluate white-band and curved-surface smoothing; compare the `7` silhouette against the iOS reference; preserve wallpaper preview/applied isolation and controller/gesture behaviour; investigate known Typeface/SDF memory failures.
 
 
 ## New issue reported and root cause (13 Nov 2026)
@@ -343,7 +343,9 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Broadened the narrow/bright reflection ribbons and reduced their peak intensities (0.50 to 0.40 and 0.80 to 0.60), leaving the broad reflection and contour specular in place. The goal is to remove flat white bands while keeping polished edge shine.
 
 ### Verification
-- Shader pass commit and CI build: pending.
+- Shader pass commit: `1d3aba3030cfa74a16cc5025376bac17392ce230`.
+- GitHub Actions build #275 completed successfully; APK compilation and artifact upload passed: [run #275](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43306023366).
+- Artifact: `iOS27-LiquidClock-Android17-debug`, ID `13983737589`; expires 26 Nov 2026.
 - On-device compare both wallpaper types: high-contrast diagonal light wallpaper and Spider-Man. Check that the 0/2 white bands are less harsh, the 2's curve has a smoother continuous reflection, and overall Glass remains reflective rather than cloudy.
 - Verify the repeated-2 fix with `2:20`, `12:22` and `22:22`.
 - Review the `7` silhouette as a separate glyph issue; do not change it blindly without matching the reference.
