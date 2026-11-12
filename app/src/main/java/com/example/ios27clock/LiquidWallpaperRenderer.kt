@@ -696,7 +696,7 @@ internal class LiquidWallpaperRenderer(
             color = Color.WHITE
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            typeface = font
+            typeface = typefaceFor(fontWeight, 28, 1f)
             isSubpixelText = true
         }
 
