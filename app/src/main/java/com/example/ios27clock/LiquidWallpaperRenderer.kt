@@ -68,7 +68,7 @@ internal class LiquidWallpaperRenderer(
         private const val BASE_WEIGHT_MAX = 820
         private const val COLON_ADVANCE_EM = 0.105f
         private const val COLON_DOT_RADIUS_EM = 0.040f
-        private const val GLYPH_STROKE_FRACTION = 0.135f
+        private const val GLYPH_STROKE_FRACTION = 0.0f
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 2.55f
@@ -801,11 +801,7 @@ internal class LiquidWallpaperRenderer(
                 finalPath,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
-                    style = Paint.Style.STROKE
-                    strokeWidth = commonStrokeWidth
-                    strokeCap = Paint.Cap.ROUND
-                    strokeJoin = Paint.Join.ROUND
-                    strokeMiter = 1f
+                    style = Paint.Style.FILL
                 }
             )
             maskCanvas.drawPath(
@@ -848,90 +844,35 @@ internal class LiquidWallpaperRenderer(
     }
 
     private fun buildLockScreenDigitPath(glyph: String, bounds: RectF): Path {
-        val left = bounds.left
-        val top = bounds.top
-        val right = bounds.right
-        val bottom = bounds.bottom
-        val w = bounds.width().coerceAtLeast(1f)
-        val h = bounds.height().coerceAtLeast(1f)
-        val cx = bounds.centerX()
-        val cy = bounds.centerY()
-        val centerline = Path()
-
-        when (glyph) {
-            "0" -> centerline.addRoundRect(
-                RectF(left + w * 0.16f, top + h * 0.025f, right - w * 0.16f, bottom - h * 0.025f),
-                w * 0.34f, h * 0.23f, Path.Direction.CW
-            )
-            "1" -> {
-                centerline.moveTo(left + w * 0.25f, top + h * 0.22f)
-                centerline.lineTo(left + w * 0.52f, top + h * 0.045f)
-                centerline.lineTo(left + w * 0.52f, bottom - h * 0.055f)
-                centerline.moveTo(left + w * 0.22f, bottom - h * 0.055f)
-                centerline.lineTo(right - w * 0.16f, bottom - h * 0.055f)
-            }
-            "2" -> {
-                centerline.moveTo(left + w * 0.14f, top + h * 0.24f)
-                centerline.cubicTo(left + w * 0.17f, top + h * 0.045f, left + w * 0.77f, top + h * 0.005f, right - w * 0.13f, top + h * 0.25f)
-                centerline.cubicTo(right - w * 0.055f, top + h * 0.43f, left + w * 0.55f, top + h * 0.66f, left + w * 0.13f, bottom - h * 0.055f)
-                centerline.lineTo(right - w * 0.10f, bottom - h * 0.055f)
-            }
-            "3" -> {
-                centerline.moveTo(left + w * 0.15f, top + h * 0.16f)
-                centerline.cubicTo(left + w * 0.42f, top + h * 0.005f, right - w * 0.09f, top + h * 0.075f, right - w * 0.12f, top + h * 0.29f)
-                centerline.cubicTo(right - w * 0.14f, top + h * 0.44f, left + w * 0.59f, cy, left + w * 0.43f, cy)
-                centerline.cubicTo(left + w * 0.70f, cy, right - w * 0.055f, top + h * 0.59f, right - w * 0.13f, bottom - h * 0.22f)
-                centerline.cubicTo(right - w * 0.19f, bottom + h * 0.015f, left + w * 0.39f, bottom + h * 0.005f, left + w * 0.13f, bottom - h * 0.15f)
-            }
-            "4" -> {
-                centerline.moveTo(left + w * 0.70f, bottom - h * 0.045f)
-                centerline.lineTo(left + w * 0.70f, top + h * 0.045f)
-                centerline.lineTo(left + w * 0.12f, top + h * 0.64f)
-                centerline.lineTo(right - w * 0.075f, top + h * 0.64f)
-            }
-            "5" -> {
-                centerline.moveTo(right - w * 0.12f, top + h * 0.055f)
-                centerline.lineTo(left + w * 0.20f, top + h * 0.055f)
-                centerline.lineTo(left + w * 0.16f, top + h * 0.44f)
-                centerline.cubicTo(left + w * 0.42f, top + h * 0.36f, right - w * 0.055f, top + h * 0.40f, right - w * 0.12f, top + h * 0.68f)
-                centerline.cubicTo(right - w * 0.18f, bottom + h * 0.02f, left + w * 0.37f, bottom + h * 0.015f, left + w * 0.12f, bottom - h * 0.16f)
-            }
-            "6" -> {
-                centerline.moveTo(right - w * 0.12f, top + h * 0.12f)
-                centerline.cubicTo(left + w * 0.46f, top - h * 0.015f, left + w * 0.12f, top + h * 0.32f, left + w * 0.13f, top + h * 0.66f)
-                centerline.cubicTo(left + w * 0.14f, bottom + h * 0.015f, right - w * 0.08f, bottom + h * 0.02f, right - w * 0.12f, top + h * 0.69f)
-                centerline.cubicTo(right - w * 0.15f, top + h * 0.46f, left + w * 0.40f, top + h * 0.43f, left + w * 0.14f, top + h * 0.61f)
-            }
-            "7" -> {
-                centerline.moveTo(left + w * 0.10f, top + h * 0.055f)
-                centerline.lineTo(right - w * 0.09f, top + h * 0.055f)
-                centerline.lineTo(left + w * 0.38f, bottom - h * 0.045f)
-            }
-            "8" -> {
-                // A single continuous figure-eight path avoids overlapping
-                // bowl contours and keeps the waist optically narrow.
-                centerline.moveTo(cx, cy)
-                centerline.cubicTo(left + w * 0.10f, cy - h * 0.10f, left + w * 0.10f, top + h * 0.035f, cx, top + h * 0.035f)
-                centerline.cubicTo(right - w * 0.10f, top + h * 0.035f, right - w * 0.10f, cy - h * 0.10f, cx, cy)
-                centerline.cubicTo(left + w * 0.10f, cy + h * 0.10f, left + w * 0.10f, bottom - h * 0.035f, cx, bottom - h * 0.035f)
-                centerline.cubicTo(right - w * 0.10f, bottom - h * 0.035f, right - w * 0.10f, cy + h * 0.10f, cx, cy)
-            }
-            "9" -> {
-                centerline.moveTo(right - w * 0.20f, top + h * 0.43f)
-                centerline.cubicTo(right - w * 0.035f, top + h * 0.24f, right - w * 0.22f, top + h * 0.035f, cx, top + h * 0.035f)
-                centerline.cubicTo(left + w * 0.22f, top + h * 0.035f, left + w * 0.09f, top + h * 0.26f, left + w * 0.20f, top + h * 0.43f)
-                centerline.cubicTo(left + w * 0.31f, top + h * 0.61f, right - w * 0.07f, top + h * 0.60f, right - w * 0.20f, top + h * 0.43f)
-                centerline.lineTo(right - w * 0.20f, bottom - h * 0.045f)
-            }
-            else -> return Path()
+        // Extract the actual SF Pro outline instead of approximating each
+        // numeral with a hand-drawn centerline. Fit every glyph to the same
+        // cap-height box while preserving its font contour and optical shape.
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = typefaceFor(650, 1000, 1f)
+            textSize = 1000f
+            style = Paint.Style.FILL
         }
-
-        // Return the centerline. The complete clock mask strokes all digits
-        // with one shared width, eliminating per-character weight variation
-        // and self-intersection holes from merged filled outlines.
-        return centerline
+        val source = Path()
+        paint.getTextPath(glyph, 0, glyph.length, 0f, 0f, source)
+        val sourceBounds = RectF()
+        source.computeBounds(sourceBounds, true)
+        if (sourceBounds.isEmpty || sourceBounds.width() <= 0f || sourceBounds.height() <= 0f) {
+            return Path()
+        }
+        val fitted = Path()
+        val transform = Matrix().apply {
+            setScale(
+                bounds.width() / sourceBounds.width(),
+                bounds.height() / sourceBounds.height()
+            )
+            postTranslate(
+                bounds.left - sourceBounds.left * bounds.width() / sourceBounds.width(),
+                bounds.top - sourceBounds.top * bounds.height() / sourceBounds.height()
+            )
+        }
+        source.transform(transform, fitted)
+        return fitted
     }
-
     /**
      * Builds a compact signed-distance field around the current glyph bounds.
      * A two-pass 3/4 chamfer transform gives stable normals for the shallow
