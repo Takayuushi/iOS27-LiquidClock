@@ -61,7 +61,7 @@ jobs:
           gradle --version
           sdkmanager --list_installed
 
-      - name: Ingest Official SF Pro Fonts from Repository
+      - name: Download pinned SF Pro font files from GitHub mirror
         shell: bash
         run: |
           set -euo pipefail
