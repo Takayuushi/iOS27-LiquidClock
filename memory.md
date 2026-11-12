@@ -112,12 +112,12 @@ Changes:
 ## Status snapshot
 
 - **Last known active branch:** `feature/live-wallpaper-big-clock`
-- **Last code commit:** `8006b624b4839dc102eea3941f90827ae2ac0bf4`
-- **Last verified CI build:** #267 — success
-- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13978905024`
-- **Build run:** [GitHub Actions #267](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43292170383)
-- **On-device verification of visual refinement build #267:** pending
-- **Top next priorities:** compare refined glass edges and Solid sheen on-device; assess the softened numeral 2 base; continue checking other digits; preserve wallpaper preview/applied isolation and horizontal/vertical pinch; investigate known Typeface/SDF memory failures.
+- **Last code commit:** `512180ae17d990f68f711f93caa2194b06948998`
+- **Last verified CI build:** #273 — success
+- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13984475435`
+- **Build run:** [GitHub Actions #273](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43305462651)
+- **On-device verification of repeated-digit fix:** pending
+- **Top next priorities:** verify `2:20` and other repeated-two times; fix the remaining bright white bands in `0` and `2`; remove the wrinkled look on curved surfaces; compare the `7` silhouette against the iOS reference; preserve wallpaper preview/applied isolation and controller/gesture behaviour; investigate known Typeface/SDF memory failures.
 
 
 ## New issue reported and root cause (13 Nov 2026)
@@ -320,7 +320,9 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - No clock layout, string formatting, tracking, or time source changes were made.
 
 ### Verification
-- Code commit and CI build for this correction: pending.
+- Commit `512180ae17d990f68f711f93caa2194b06948998`.
+- GitHub Actions build #273 completed successfully and uploaded `iOS27-LiquidClock-Android17-debug`, artifact ID `13984475435`: [run #273](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43305462651).
+- The build confirms compilation and artifact upload only; on-device verification of repeated digit times is still pending.
 - Test explicit times containing multiple twos, especially `2:20`, `12:22`, and `22:22`; confirm every digit is visible, correctly positioned, and not clipped.
 - Recheck the `7` silhouette independently against the reference.
 - Continue to inspect the white bands through `0` and `2` and the wrinkled curved surface. Those remain open visual defects and require a separate controlled shader investigation.
