@@ -61,106 +61,12 @@ jobs:
           gradle --version
           sdkmanager --list_installed
 
-      - name: Download pinned SF Pro font files from GitHub mirror
+      - name: Install official Apple SF Pro variable font and display faces
         shell: bash
         run: |
           set -euo pipefail
 
-          FONT_DIR="app/src/main/res/font"
-          ASSET_FONT_DIR="app/src/main/assets/fonts"
-          mkdir -p "$FONT_DIR" "$ASSET_FONT_DIR"
-
-          THIN_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Thin.otf"
-          LIGHT_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Light.otf"
-          BOLD_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro-Display-Bold.otf"
-          VARIABLE_URL="https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts/8bfea09aa6f1139479f80358b2e1e5c6dc991a58/SF-Pro.ttf"
-
-          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
-            "$THIN_URL" --output "$FONT_DIR/sf_pro_display_thin.otf"
-          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
-            "$LIGHT_URL" --output "$FONT_DIR/sf_pro_display_light.otf"
-          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
-            "$BOLD_URL" --output "$FONT_DIR/sf_pro_display_bold.otf"
-          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
-            "$VARIABLE_URL" --output "$ASSET_FONT_DIR/SF-Pro.ttf"
-
-          for FONT in "$FONT_DIR/sf_pro_display_thin.otf" "$FONT_DIR/sf_pro_display_light.otf" "$FONT_DIR/sf_pro_display_bold.otf"; do
-            test -s "$FONT"
-            MAGIC="$(od -An -tx1 -N4 "$FONT" | tr -d ' \n')"
-            if [[ "$MAGIC" != "4f54544f" && "$MAGIC" != "00010000" ]]; then
-              echo "Invalid OpenType/TrueType signature in $FONT: $MAGIC" >&2
-              exit 1
-            fi
-            file "$FONT"
-          done
-
-          # Keep res/font/sf_pro_display.xml as the single resource named
-          # sf_pro_display; do not generate a second sf_pro_display.otf resource.
-          cp "$FONT_DIR/sf_pro_display_thin.otf" "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
-          cp "$FONT_DIR/sf_pro_display_light.otf" "$ASSET_FONT_DIR/sf_pro_display_light.otf"
-          test -s "$FONT_DIR/sf_pro_display_thin.otf"
-          test -s "$FONT_DIR/sf_pro_display_light.otf"
-          test -s "$FONT_DIR/sf_pro_display_bold.otf"
-          test -s "$ASSET_FONT_DIR/SF-Pro.ttf"
-          test -s "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
-          test -s "$ASSET_FONT_DIR/sf_pro_display_light.otf"
-          MAGIC="$(od -An -tx1 -N4 "$ASSET_FONT_DIR/SF-Pro.ttf" | tr -d ' \\n')"
-          if [[ "$MAGIC" != "00010000" ]]; then
-            echo "Invalid variable SF Pro font signature: $MAGIC" >&2
-            exit 1
-          fi
-
-          echo "SF Pro Display assets and variable SF Pro downloaded and validated."
-
-      - name: Verify SF Pro variable-font axes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet fonttools
-          python3 - <<'PY'
-          from fontTools.ttLib import TTFont
-
-          path = "app/src/main/assets/fonts/SF-Pro.ttf"
-          font = TTFont(path)
-          if "fvar" not in font:
-              raise SystemExit("SF-Pro.ttf is not a variable font (missing fvar table).")
-
-          axes = {
-              axis.axisTag: (axis.minValue, axis.defaultValue, axis.maxValue)
-              for axis in font["fvar"].axes
-          }
-          print("SF Pro variation axes:")
-          for tag, values in sorted(axes.items()):
-              print(f"  {tag}: min={values[0]}, default={values[1]}, max={values[2]}")
-
-          if "wght" not in axes or axes["wght"][0] >= axes["wght"][2]:
-              raise SystemExit("SF-Pro.ttf must expose a genuine variable wght axis.")
-
-          for optional_axis in ("wdth", "opsz"):
-              axis = axes.get(optional_axis)
-              if axis is None:
-                  print(
-                      f"{optional_axis} axis is absent. The renderer must not request "
-                      "this axis from the font and must use explicit per-glyph optical "
-                      "profiles when width adaptation is needed."
-                  )
-              elif axis[0] >= axis[2]:
-                  raise SystemExit(
-                      f"{optional_axis} axis exists but has no usable range: {axis}"
-                  )
-              else:
-                  print(
-                      f"{optional_axis} variable axis verified: "
-                      f"min={axis[0]}, default={axis[1]}, max={axis[2]}"
-                  )
-          PY
-
-      - name: Inspect official Apple SF Pro package and variation axes
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          WORK_DIR="${RUNNER_TEMP}/apple-sf-pro-inspection"
+          WORK_DIR="${RUNNER_TEMP}/apple-sf-pro"
           mkdir -p "$WORK_DIR"
 
           if ! command -v 7z >/dev/null 2>&1; then
@@ -172,82 +78,97 @@ jobs:
             "https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg" \
             --output "$WORK_DIR/SF-Pro.dmg"
 
-          echo "Official Apple SF-Pro.dmg size: $(stat -c '%s' "$WORK_DIR/SF-Pro.dmg") bytes"
-          echo "Extracting official DMG..."
-          7z x -y "$WORK_DIR/SF-Pro.dmg" -o"$WORK_DIR" | tail -40
+          echo "Official Apple SF-Pro.dmg: $(stat -c '%s' "$WORK_DIR/SF-Pro.dmg") bytes"
+          7z x -y "$WORK_DIR/SF-Pro.dmg" -o"$WORK_DIR" >/dev/null
 
-          echo "Extracting package payloads..."
           while IFS= read -r -d '' PKG; do
-            echo "Package: $PKG"
-            7z x -y "$PKG" -o"$WORK_DIR" | tail -40
+            7z x -y "$PKG" -o"$WORK_DIR" >/dev/null
           done < <(find "$WORK_DIR" -type f -name '*.pkg' -print0)
 
+          # The installer wraps the CPIO Payload~ inside a gzip Payload.
           while IFS= read -r -d '' PAYLOAD; do
-            echo "Unpacking package Payload: $PAYLOAD"
-            file "$PAYLOAD"
-            7z x -y "$PAYLOAD" -o"$WORK_DIR" | tail -40
+            7z x -y "$PAYLOAD" -o"$WORK_DIR" >/dev/null
           done < <(find "$WORK_DIR" -type f -name 'Payload' -print0)
 
-          # Apple's package nests a Payload~ CPIO archive inside the gzip Payload.
           while IFS= read -r -d '' PAYLOAD; do
-            echo "Unpacking font Payload~: $PAYLOAD"
-            file "$PAYLOAD"
-            7z l "$PAYLOAD" | tail -30
-            7z x -y "$PAYLOAD" -o"$WORK_DIR" | tail -60
+            7z x -y "$PAYLOAD" -o"$WORK_DIR" >/dev/null
           done < <(find "$WORK_DIR" -type f -name 'Payload~' -print0)
 
-          echo "Files extracted from Apple's package:"
-          find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print | head -200
+          find_font() {
+            local name="$1"
+            local found
+            found="$(find "$WORK_DIR" -type f -name "$name" -print -quit)"
+            if [[ -z "$found" ]]; then
+              echo "Official Apple font not found: $name" >&2
+              exit 1
+            fi
+            printf '%s' "$found"
+          }
 
-          mapfile -d '' FONT_FILES < <(
-            find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print0
-          )
+          FONT_DIR="app/src/main/res/font"
+          ASSET_FONT_DIR="app/src/main/assets/fonts"
+          mkdir -p "$FONT_DIR" "$ASSET_FONT_DIR"
 
-          if (( ${#FONT_FILES[@]} == 0 )); then
-            echo "No SF Pro font files were found after extracting Apple's Payload archives." >&2
-            find "$WORK_DIR" -maxdepth 6 -type f | head -240
-            exit 1
-          fi
+          VARIABLE_FONT="$(find_font 'SF-Pro.ttf')"
+          DISPLAY_THIN="$(find_font 'SF-Pro-Display-Thin.otf')"
+          DISPLAY_LIGHT="$(find_font 'SF-Pro-Display-Light.otf')"
+          DISPLAY_BOLD="$(find_font 'SF-Pro-Display-Bold.otf')"
+
+          cp "$VARIABLE_FONT" "$ASSET_FONT_DIR/SF-Pro.ttf"
+          cp "$DISPLAY_THIN" "$FONT_DIR/sf_pro_display_thin.otf"
+          cp "$DISPLAY_LIGHT" "$FONT_DIR/sf_pro_display_light.otf"
+          cp "$DISPLAY_BOLD" "$FONT_DIR/sf_pro_display_bold.otf"
+          cp "$DISPLAY_THIN" "$ASSET_FONT_DIR/sf_pro_display_thin.otf"
+          cp "$DISPLAY_LIGHT" "$ASSET_FONT_DIR/sf_pro_display_light.otf"
+
+          test -s "$ASSET_FONT_DIR/SF-Pro.ttf"
+          test -s "$FONT_DIR/sf_pro_display_thin.otf"
+          test -s "$FONT_DIR/sf_pro_display_light.otf"
+          test -s "$FONT_DIR/sf_pro_display_bold.otf"
 
           python3 -m pip install --disable-pip-version-check --quiet fonttools
-          python3 - "${FONT_FILES[@]}" <<'PY'
+          python3 - "$ASSET_FONT_DIR/SF-Pro.ttf" <<'PY'
           import sys
-          from pathlib import Path
-          from fontTools.ttLib import TTFont, TTCollection
+          from fontTools.ttLib import TTFont
 
-          for raw_path in sys.argv[1:]:
-              path = Path(raw_path)
-              try:
-                  fonts = TTCollection(str(path)).fonts if path.suffix.lower() == ".ttc" else [TTFont(str(path))]
-              except Exception as exc:
-                  print(f"UNREADABLE {path.name}: {exc}")
-                  continue
+          path = sys.argv[1]
+          font = TTFont(path)
+          if "fvar" not in font:
+              raise SystemExit("Apple SF-Pro.ttf has no fvar variable-font table.")
 
-              for index, font in enumerate(fonts):
-                  names = font["name"].names if "name" in font else []
-                  family = []
-                  for name in names:
-                      if name.nameID in (1, 2, 4, 6, 16, 17):
-                          try:
-                              value = name.toUnicode()
-                          except Exception:
-                              continue
-                          if value and value not in family:
-                              family.append(value)
-                  axes = []
-                  if "fvar" in font:
-                      for axis in font["fvar"].axes:
-                          axes.append(
-                              f"{axis.axisTag}=[{axis.minValue:g},"
-                              f"{axis.defaultValue:g},{axis.maxValue:g}]"
-                          )
-                  suffix = f" collection-index={index}" if path.suffix.lower() == ".ttc" else ""
-                  print(
-                      f"FONT {path.name}{suffix} | "
-                      f"names={' / '.join(family[:6])} | "
-                      f"axes={', '.join(axes) if axes else 'none'}"
-                  )
+          axes = {
+              axis.axisTag: (axis.minValue, axis.defaultValue, axis.maxValue)
+              for axis in font["fvar"].axes
+          }
+          print("Official Apple SF Pro variable axes:")
+          for tag, values in sorted(axes.items()):
+              print(f"  {tag}: min={values[0]:g}, default={values[1]:g}, max={values[2]:g}")
+
+          for required in ("wght", "wdth"):
+              axis = axes.get(required)
+              if axis is None or axis[0] >= axis[2]:
+                  raise SystemExit(f"Official Apple SF Pro is missing a working {required} axis.")
+
+          print("Official Apple SF Pro named width/weight instances:")
+          name_table = font["name"]
+          for instance in font["fvar"].instances:
+              label = name_table.getDebugName(instance.subfamilyNameID) or "Unnamed"
+              coords = ", ".join(f"{tag}={value:g}" for tag, value in instance.coordinates.items())
+              print(f"  {label}: {coords}")
+
+          if "STAT" in font:
+              stat = font["STAT"].table
+              axes_record = getattr(getattr(stat, "DesignAxisRecord", None), "Axis", []) or []
+              print("Official Apple SF Pro STAT axes:")
+              for axis in axes_record:
+                  print(f"  {axis.AxisTag}: {name_table.getDebugName(axis.AxisNameID)}")
+              values = getattr(getattr(stat, "AxisValueArray", None), "AxisValue", []) or []
+              for value in values:
+                  label = name_table.getDebugName(value.ValueNameID)
+                  print(f"  named value: {label}")
           PY
+
+          echo "Official Apple SF Pro variable and display fonts installed into build assets."
 
       - name: Build debug APK
         shell: bash
