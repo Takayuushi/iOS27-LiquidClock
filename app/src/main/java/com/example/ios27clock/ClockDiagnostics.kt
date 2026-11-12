@@ -20,7 +20,7 @@ import kotlin.system.exitProcess
 
 /**
  * Maintains one rolling diagnostics file:
- * Internal storage/Documents/IOS27Clock/crash-report.txt
+ * Internal storage/IOS27Clock/crash-report.txt
  *
  * Recoverable incidents are appended to the same file. Older timestamped
  * crash-*.txt files from earlier app builds are folded into it on first use.
@@ -32,6 +32,7 @@ object ClockDiagnostics {
     private const val MAX_BREADCRUMBS = 100
     private const val MAX_DUPLICATE_INTERVAL_MS = 15_000L
     private const val MAX_REPORT_BYTES = 2_000_000L
+    private const val LEGACY_DOCUMENTS_FOLDER = "Documents/IOS27Clock/"
     private val lock = Any()
     private val breadcrumbs = ArrayDeque<String>()
     private val lastReportAt = mutableMapOf<String, Long>()
@@ -168,7 +169,7 @@ object ClockDiagnostics {
                 if (legacyReportsImported.compareAndSet(false, true)) {
                     importLegacyReports(context)
                 }
-                Log.e(TAG, "Diagnostic appended to Documents/IOS27Clock/$REPORT_FILE_NAME", throwable)
+                Log.e(TAG, "Diagnostic appended to IOS27Clock/$REPORT_FILE_NAME", throwable)
                 return
             } catch (storageException: Exception) {
                 Log.e(TAG, "Public diagnostics write failed; using app-specific fallback.", storageException)
@@ -177,7 +178,7 @@ object ClockDiagnostics {
             }
 
             try {
-                val folder = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                val folder = context.getExternalFilesDir(null)
                     ?.let { File(it, "IOS27Clock") }
                     ?: File(context.filesDir, "IOS27Clock")
                 if (!folder.exists() && !folder.mkdirs()) {
@@ -198,7 +199,7 @@ object ClockDiagnostics {
     private fun appendToPublicReport(context: Context, report: String) {
         val resolver = context.contentResolver
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/$REPORT_FOLDER"
+        val relativePath = REPORT_FOLDER
         var reportUri = findReportUri(context, collection, relativePath)
 
         if (reportUri == null) {
@@ -273,37 +274,94 @@ object ClockDiagnostics {
     private fun importLegacyReports(context: Context) {
         val resolver = context.contentResolver
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/$REPORT_FOLDER"
-        val cursor = resolver.query(
-            collection,
-            arrayOf(BaseColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
-            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
-            arrayOf("crash-%.txt", relativePath),
-            "${MediaStore.MediaColumns.DATE_ADDED} ASC"
-        ) ?: return
+        val targetPath = REPORT_FOLDER
+        val legacyUris = linkedMapOf<String, Pair<android.net.Uri, String>>()
 
-        val legacy = mutableListOf<Pair<android.net.Uri, String>>()
-        cursor.use {
-            while (it.moveToNext()) {
-                val id = it.getLong(0)
-                val name = it.getString(1) ?: "legacy-crash-report.txt"
-                legacy += ContentUris.withAppendedId(collection, id) to name
+        fun collectMediaStore(relativePath: String, includeMaster: Boolean) {
+            val selection = if (includeMaster) {
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?"
+            } else {
+                "(${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} != ?) AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?"
+            }
+            val args = if (includeMaster) {
+                arrayOf("crash-%.txt", relativePath)
+            } else {
+                arrayOf("crash-%.txt", REPORT_FILE_NAME, relativePath)
+            }
+            val cursor = resolver.query(
+                collection,
+                arrayOf(BaseColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                selection,
+                args,
+                "${MediaStore.MediaColumns.DATE_ADDED} ASC"
+            ) ?: return
+
+            cursor.use {
+                while (it.moveToNext()) {
+                    val id = it.getLong(0)
+                    val name = it.getString(1) ?: "legacy-crash-report.txt"
+                    val uri = ContentUris.withAppendedId(collection, id)
+                    // Key on the URI so a file found by overlapping queries is imported once.
+                    legacyUris[uri.toString()] = uri to name
+                }
             }
         }
 
-        val target = findReportUri(context, collection, relativePath) ?: return
-        legacy.forEach { (uri, name) ->
-            try {
-                val content = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: return@forEach
-                resolver.openOutputStream(target, "wa")?.bufferedWriter()?.use {
-                    it.write("\n\n---------------- Imported legacy report: $name ----------------\n")
-                    it.write(content)
-                    it.flush()
-                } ?: return@forEach
-                resolver.delete(uri, null, null)
-            } catch (exception: Exception) {
-                Log.w(TAG, "Could not fold legacy diagnostics '$name' into the rolling report.", exception)
+        // Earlier builds wrote individual crash-*.txt files at the storage root.
+        // A previous revision also wrote a master file under Documents; migrate it.
+        collectMediaStore(targetPath, includeMaster = false)
+        collectMediaStore(LEGACY_DOCUMENTS_FOLDER, includeMaster = true)
+
+        val target = findReportUri(context, collection, targetPath)
+        if (target != null) {
+            legacyUris.values.forEach { (uri, name) ->
+                try {
+                    val content = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: return@forEach
+                    if (uri == target) return@forEach
+                    resolver.openOutputStream(target, "wa")?.bufferedWriter()?.use {
+                        it.write("\n\n---------------- Imported legacy report: $name ----------------\n")
+                        it.write(content)
+                        it.flush()
+                    } ?: return@forEach
+                    resolver.delete(uri, null, null)
+                } catch (exception: Exception) {
+                    Log.w(TAG, "Could not fold legacy diagnostics '$name' into the rolling report.", exception)
+                }
+            }
+        }
+
+        // Older fallbacks used app-specific external/internal IOS27Clock folders.
+        // Import them as well, then remove the timestamped copies only after a
+        // successful append to the public rolling report.
+        val legacyFolders = listOfNotNull(
+            context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)?.let { File(it, "IOS27Clock") },
+            context.getExternalFilesDir(null)?.let { File(it, "IOS27Clock") },
+            File(context.filesDir, "IOS27Clock")
+        ).distinctBy { it.absolutePath }
+
+        legacyFolders.forEach { folder ->
+            val files = folder.listFiles()?.filter { file ->
+                file.isFile && file.name.endsWith(".txt", ignoreCase = true) &&
+                    file.name.startsWith("crash-", ignoreCase = true)
+            }.orEmpty()
+            files.forEach { file ->
+                try {
+                    val content = file.readText()
+                    if (target != null) {
+                        resolver.openOutputStream(target, "wa")?.bufferedWriter()?.use {
+                            it.write("\n\n---------------- Imported legacy report: ${file.name} ----------------\n")
+                            it.write(content)
+                            it.flush()
+                        } ?: return@forEach
+                    } else {
+                        val fallback = File(folder, REPORT_FILE_NAME)
+                        fallback.appendText("\n\n---------------- Imported legacy report: ${file.name} ----------------\n$content")
+                    }
+                    file.delete()
+                } catch (exception: Exception) {
+                    Log.w(TAG, "Could not fold legacy diagnostics '${file.name}' into the rolling report.", exception)
+                }
             }
         }
     }
