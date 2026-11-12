@@ -1076,7 +1076,7 @@ internal class LiquidWallpaperRenderer(
         var cursorX = centerX - totalWidth * 0.5f
 
         val composedPath = Path().apply { fillType = Path.FillType.WINDING }
-        var digitTwoPath: Path? = null
+        val digitTwoPaths = mutableListOf<Path>()
         val composedBounds = RectF()
         val colonCenters = mutableListOf<Pair<Float, Float>>()
         var hasBounds = false
@@ -1145,7 +1145,7 @@ internal class LiquidWallpaperRenderer(
                     }
                     sourceGlyphPath.transform(shapeTransform, opticalPath)
                     if (glyph == "2") {
-                        digitTwoPath = Path(opticalPath)
+                        digitTwoPaths += Path(opticalPath)
                     } else {
                         composedPath.addPath(opticalPath)
                     }
@@ -1188,10 +1188,10 @@ internal class LiquidWallpaperRenderer(
             composedPath.transform(naturalShapeTransform, naturalShapePath)
             naturalShapePath.computeBounds(composedBounds, true)
 
-            val naturalDigitTwoPath = digitTwoPath?.let { sourcePath ->
+            val naturalDigitTwoPaths = digitTwoPaths.map { sourcePath ->
                 Path().also { sourcePath.transform(naturalShapeTransform, it) }
             }
-            naturalDigitTwoPath?.let { twoPath ->
+            naturalDigitTwoPaths.forEach { twoPath ->
                 val twoBounds = RectF()
                 twoPath.computeBounds(twoBounds, true)
                 composedBounds.union(twoBounds)
@@ -1229,7 +1229,7 @@ internal class LiquidWallpaperRenderer(
             }
             val finalPath = Path()
             naturalShapePath.transform(verticalTransform, finalPath)
-            val finalDigitTwoPath = naturalDigitTwoPath?.let { sourcePath ->
+            val finalDigitTwoPaths = naturalDigitTwoPaths.map { sourcePath ->
                 Path().also { sourcePath.transform(verticalTransform, it) }
             }
 
@@ -1245,7 +1245,7 @@ internal class LiquidWallpaperRenderer(
 
             val finalBounds = RectF()
             finalPath.computeBounds(finalBounds, true)
-            finalDigitTwoPath?.let { twoPath ->
+            finalDigitTwoPaths.forEach { twoPath ->
                 val twoBounds = RectF()
                 twoPath.computeBounds(twoBounds, true)
                 finalBounds.union(twoBounds)
@@ -1270,11 +1270,11 @@ internal class LiquidWallpaperRenderer(
             // Only the "2" has a subtly softened corner treatment. The small
             // radius rounds its lower foot and terminal transitions without
             // changing the flatter SF Pro ends of 1, 4, 5 or 7.
-            finalDigitTwoPath?.let { twoPath ->
-                val terminalFillet = (fontSize * 0.012f).coerceAtLeast(1f)
-                val digitTwoPaint = Paint(maskPaint).apply {
-                    pathEffect = CornerPathEffect(terminalFillet)
-                }
+            val terminalFillet = (fontSize * 0.012f).coerceAtLeast(1f)
+            val digitTwoPaint = Paint(maskPaint).apply {
+                pathEffect = CornerPathEffect(terminalFillet)
+            }
+            finalDigitTwoPaths.forEach { twoPath ->
                 maskCanvas.drawPath(twoPath, digitTwoPaint)
             }
         } else {

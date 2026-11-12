@@ -295,6 +295,32 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Kept the broad face reflection bands, layout, digit positions, wallpaper isolation, controller gesture handling, and horizontal/vertical pinch unchanged.
 
 ### Verification
-- Code commit and CI build for this pass: pending.
-- On-device test must confirm the `1` is wider and closer to the reference, and that the diagonal streaks inside `0`, `9`, and `2` look continuous/softened rather than fractured.
+- Commit `4cec7c4f3b8e4e49d00b3808eda0ff04c288bfb9`; GitHub Actions build #272 completed successfully and uploaded artifact `iOS27-LiquidClock-Android17-debug` (ID `13983279106`): [run #272](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43303351545).
+- The user tested build #272 and reported the missing hour digit in a `2:20` clock, plus continuing white bands inside `0` and `2`, wrinkled curved surfaces, and an imperfect `7`.
+- The next correction stores every special `2` glyph instead of allowing repeated occurrences to overwrite one another.
 - Watch for excessive blur, opaque/frosted appearance, muddy glass colour, glyph collisions, or loss of reflective shine. If any occur, adjust diffusion mix/radius first rather than increasing edge dispersion.
+
+
+## Fix repeated numeral 2 being dropped from the clock mask (13 Nov 2026)
+
+### User-reported regression in build #272
+- In the 2:20 screenshot the hour `2` disappeared, leaving the display looking like `:20`.
+- The upper `7` shape also needs a separate reference comparison.
+- The thick white band through the `0` and the wrinkled surface along the `2` curve remain. These are not considered fixed by build #272.
+
+### Exact cause
+- The glyph composition previously held a single nullable `digitTwoPath`.
+- While iterating through the time string, each encountered `2` replaced the same variable. In a time such as `2:20`, the second `2` overwrote the first.
+- The final mask drew only the last stored `2`, so the hour digit vanished. This is deterministic and independent of time formatting or the Android wallpaper service.
+
+### Implemented correction
+- Replaced the single `digitTwoPath` with a list of special `2` paths.
+- Every occurrence is now transformed with the shared natural and vertical clock matrices, included in final bounds, and drawn into the mask with the same subtle `CornerPathEffect`.
+- Repeated `2` glyphs can no longer replace one another in the final mask.
+- No clock layout, string formatting, tracking, or time source changes were made.
+
+### Verification
+- Code commit and CI build for this correction: pending.
+- Test explicit times containing multiple twos, especially `2:20`, `12:22`, and `22:22`; confirm every digit is visible, correctly positioned, and not clipped.
+- Recheck the `7` silhouette independently against the reference.
+- Continue to inspect the white bands through `0` and `2` and the wrinkled curved surface. Those remain open visual defects and require a separate controlled shader investigation.
