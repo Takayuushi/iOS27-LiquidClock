@@ -370,3 +370,9 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Standalone project commit/build: pending.
 - After install, use the same wallpaper and inspect `0123456789`, `00:00`, `11:11`, `22:22`, `55:55`, `88:88`, `99:99` in both materials.
 - If the production renderer changes later, sync it into the Digit Lab snapshot, keeping only the test-time override as a harness addition.
+
+
+### Initial Digit Lab build correction (13 Nov 2026)
+- First standalone build run #1 reached Kotlin compilation but failed with `Enum class is prohibited here`: the pinch-axis enum had been declared inside the inner preview View class.
+- Moved the enum to the enclosing Activity scope. No renderer, production app or preview behaviour changed.
+- The follow-up standalone Digit Lab build is pending.

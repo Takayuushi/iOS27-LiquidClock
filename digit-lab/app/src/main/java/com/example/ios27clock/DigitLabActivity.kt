@@ -412,8 +412,9 @@ class DigitLabActivity : Activity() {
         super.onDestroy()
     }
 
+    private enum class PinchAxis { HORIZONTAL, VERTICAL }
+
     private inner class RendererPreview(context: Activity) : View(context) {
-        private enum class PinchAxis { HORIZONTAL, VERTICAL }
         private var pinchAxis = PinchAxis.VERTICAL
         private var activePointerId = MotionEvent.INVALID_POINTER_ID
         private var lastTouchX = 0f
