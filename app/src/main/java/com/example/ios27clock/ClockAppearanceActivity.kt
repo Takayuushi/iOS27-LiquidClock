@@ -3,6 +3,8 @@ package com.example.ios27clock
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
@@ -17,9 +19,12 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * Full-screen Font & Color editor. The current selected wallpaper and the real
@@ -36,17 +41,18 @@ class ClockAppearanceActivity : Activity() {
         private const val KEY_COLOR = "clock_color"
         private const val KEY_GLASS_MODE = "clock_glass_mode"
 
-        private val SWATCHES = intArrayOf(
-            Color.rgb(204, 246, 235),
+        private val FALLBACK_SWATCHES = intArrayOf(
             Color.WHITE,
-            Color.rgb(255, 255, 255),
+            Color.rgb(204, 246, 235),
             Color.rgb(122, 226, 241),
             Color.rgb(128, 176, 248),
             Color.rgb(193, 169, 247),
             Color.rgb(225, 157, 244),
-            Color.rgb(255, 183, 133)
+            Color.rgb(255, 183, 133),
+            Color.rgb(255, 130, 150)
         )
 
+        private const val WALLPAPER_SOURCE_FILE = "liquid_clock_wallpaper_source.img"
         private val FONT_NAMES = arrayOf("Regular", "Condensed", "Compressed", "Expanded")
         private val WIDTH_COORDINATES = intArrayOf(100, 75, 30, 150)
         private const val PANEL_COLOR = 0xFFE5F0FD.toInt()
@@ -60,6 +66,8 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var fontTiles: List<TextView>
     private lateinit var fontCards: List<LinearLayout>
     private lateinit var colorTiles: List<FrameLayout>
+    private var swatches: IntArray = FALLBACK_SWATCHES.copyOf()
+    private val previewTypefaceCache = LinkedHashMap<Int, Typeface>()
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
     private lateinit var solidOption: TextView
@@ -80,6 +88,7 @@ class ClockAppearanceActivity : Activity() {
         selectedStyle = preferences.getInt(KEY_FONT_STYLE, 0).coerceIn(0, 3)
         selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(1, 1000)
         selectedColor = preferences.getInt(KEY_COLOR, Color.WHITE)
+        swatches = buildWallpaperSwatches(selectedColor)
         glassMode = preferences.getBoolean(KEY_GLASS_MODE, true)
 
         window.statusBarColor = Color.TRANSPARENT
@@ -341,7 +350,7 @@ class ClockAppearanceActivity : Activity() {
             ).apply { topMargin = dp(8) }
         }
 
-        colorTiles = SWATCHES.mapIndexed { index, color ->
+        colorTiles = swatches.mapIndexed { index, color ->
             FrameLayout(this).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply {
                     marginStart = dp(2)
@@ -465,18 +474,113 @@ class ClockAppearanceActivity : Activity() {
     }
 
     private fun officialSfProTypeface(weight: Int, width: Int): Typeface {
-        return try {
+        val cacheKey = weight.coerceIn(1, 1000) * 1000 + width
+        previewTypefaceCache[cacheKey]?.let { return it }
+        val face = try {
             Typeface.Builder(assets, "fonts/SF-Pro.ttf")
-                .setFontVariationSettings("'wght' $weight, 'wdth' $width")
+                .setFontVariationSettings(
+                    "'wght' ${weight.coerceIn(1, 1000)}, 'wdth' $width"
+                )
                 .build()
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
             Typeface.create("sans-serif", Typeface.NORMAL)
         }
+        if (previewTypefaceCache.size >= 32) previewTypefaceCache.clear()
+        previewTypefaceCache[cacheKey] = face
+        return face
+    }
+
+    /**
+     * Build the colour row from the currently selected wallpaper. A white
+     * neutral is kept first; the remaining samples are the strongest distinct
+     * saturated hues in the image, with the currently selected tint preserved.
+     */
+    private fun buildWallpaperSwatches(selected: Int): IntArray {
+        val source = File(filesDir, WALLPAPER_SOURCE_FILE)
+        val bitmap = if (source.exists() && source.length() > 0L) {
+            BitmapFactory.decodeFile(
+                source.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = 8
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }
+            )
+        } else {
+            null
+        }
+
+        val palette = mutableListOf(Color.WHITE)
+        if (bitmap != null) {
+            try {
+                val bins = 24
+                val weights = DoubleArray(bins)
+                val red = DoubleArray(bins)
+                val green = DoubleArray(bins)
+                val blue = DoubleArray(bins)
+                val hsv = FloatArray(3)
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(
+                    pixels,
+                    0,
+                    bitmap.width,
+                    0,
+                    0,
+                    bitmap.width,
+                    bitmap.height
+                )
+
+                for (pixel in pixels) {
+                    Color.colorToHSV(pixel, hsv)
+                    val saturation = hsv[1]
+                    val value = hsv[2]
+                    if (saturation < 0.22f || value < 0.18f || value > 0.985f) continue
+                    val bin = ((hsv[0] / 360f) * bins).toInt().coerceIn(0, bins - 1)
+                    val weight = saturation.toDouble() * (0.45 + value.toDouble() * 0.55)
+                    weights[bin] += weight
+                    red[bin] += Color.red(pixel) * weight
+                    green[bin] += Color.green(pixel) * weight
+                    blue[bin] += Color.blue(pixel) * weight
+                }
+
+                val orderedBins = (0 until bins).sortedByDescending { weights[it] }
+                val pickedHues = mutableListOf<Float>()
+                for (bin in orderedBins) {
+                    if (weights[bin] <= 0.0) continue
+                    val hue = (bin + 0.5f) * (360f / bins)
+                    val separated = pickedHues.all { existing ->
+                        val difference = abs(hue - existing)
+                        minOf(difference, 360f - difference) >= 24f
+                    }
+                    if (!separated) continue
+
+                    palette += Color.rgb(
+                        (red[bin] / weights[bin]).toInt().coerceIn(0, 255),
+                        (green[bin] / weights[bin]).toInt().coerceIn(0, 255),
+                        (blue[bin] / weights[bin]).toInt().coerceIn(0, 255)
+                    )
+                    pickedHues += hue
+                    if (palette.size >= 7) break
+                }
+            } catch (exception: Exception) {
+                // Keep the remaining controls usable if an unusual image cannot
+                // be sampled for its accent colours.
+            } finally {
+                if (!bitmap.isRecycled) bitmap.recycle()
+            }
+        }
+
+        if (selected !in palette) palette += selected
+        var fallbackIndex = 1
+        while (palette.size < 8) {
+            val fallback = FALLBACK_SWATCHES[fallbackIndex++ % FALLBACK_SWATCHES.size]
+            if (fallback !in palette) palette += fallback
+        }
+        return palette.take(8).toIntArray()
     }
 
     private fun refreshColorTiles() {
         colorTiles.forEachIndexed { index, frame ->
-            val selected = SWATCHES[index] == selectedColor
+            val selected = swatches[index] == selectedColor
             val outer = frame.getChildAt(0)
             outer.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -542,6 +646,8 @@ class ClockAppearanceActivity : Activity() {
 
     private class WallpaperClockPreview(context: Context) : View(context) {
         private val renderer = LiquidWallpaperRenderer(context)
+        private var renderWidth = 0
+        private var renderHeight = 0
 
         init {
             setBackgroundColor(Color.BLACK)
@@ -550,14 +656,28 @@ class ClockAppearanceActivity : Activity() {
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             super.onSizeChanged(w, h, oldw, oldh)
-            if (w > 0 && h > 0) renderer.setViewport(w, h)
+            if (w > 0 && h > 0) {
+                // The live wallpaper uses native screen resolution. This
+                // secondary editor preview uses 42% resolution to avoid two
+                // simultaneous full-screen masks and SDF buffers in memory.
+                renderWidth = max(1, (w * 0.42f).toInt())
+                renderHeight = max(1, (h * 0.42f).toInt())
+                renderer.setViewport(renderWidth, renderHeight)
+            }
         }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
+            if (renderWidth <= 0 || renderHeight <= 0) return
             val seconds = SystemClock.uptimeMillis() / 1000f
+            val save = canvas.save()
+            canvas.scale(
+                width.toFloat() / renderWidth,
+                height.toFloat() / renderHeight
+            )
             renderer.draw(canvas, seconds)
-            if (visibility == View.VISIBLE) postInvalidateDelayed(33L)
+            canvas.restoreToCount(save)
+            if (visibility == View.VISIBLE) postInvalidateDelayed(66L)
         }
 
         fun reloadAppearance() {
