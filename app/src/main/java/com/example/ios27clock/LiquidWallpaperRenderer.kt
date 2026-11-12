@@ -905,8 +905,9 @@ internal class LiquidWallpaperRenderer(
                 // swollen, pinched joint in the previous version.
                 path.moveTo(x(0.13f), y(0.16f))
                 path.cubicTo(x(0.32f), y(0.035f), x(0.73f), y(0.035f), x(0.86f), y(0.19f))
-                path.cubicTo(x(0.95f), y(0.29f), x(0.93f), y(0.42f), x(0.86f), y(0.50f))
-                path.cubicTo(x(0.93f), y(0.58f), x(0.95f), y(0.71f), x(0.85f), y(0.82f))
+                path.cubicTo(x(0.93f), y(0.27f), x(0.89f), y(0.41f), x(0.89f), y(0.50f))
+                // Matching vertical handles make the waist tangent continuous.
+                path.cubicTo(x(0.89f), y(0.59f), x(0.95f), y(0.71f), x(0.85f), y(0.82f))
                 path.cubicTo(x(0.71f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
             }
             "4" -> {
