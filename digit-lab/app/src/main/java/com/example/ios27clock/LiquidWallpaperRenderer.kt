@@ -239,7 +239,7 @@ internal class LiquidWallpaperRenderer(
             // The selected accent is sampled from this wallpaper, not a fixed
             // lavender material. A little more of it gives the transparent
             // surface a legible body without turning it opaque or frosted.
-            glassFace = mix(glassFace, uAccentColor, 0.12);
+            glassFace = mix(glassFace, uAccentColor, 0.045);
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
                 milkyFrost,
@@ -298,49 +298,9 @@ internal class LiquidWallpaperRenderer(
             float2 clockRelative = p - uClockCenter * uResolution;
             float reflectionAxis = clockRelative.x * -0.42 +
                 clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
-            // A broad environmental reflection travels across the complete
-            // glass face. It gives the material readable volume even over a
-            // dark or visually quiet wallpaper, without outlining every edge.
-            float broadReflection = exp(
-                -pow(reflectionAxis / 142.0, 2.0)
-            ) * glassLens;
-            float narrowReflection = exp(
-                -pow((reflectionAxis - 48.0) / 42.0, 2.0)
-            ) * glassLens;
-            float brightRibbon = exp(
-                -pow((reflectionAxis + 22.0) / 22.0, 2.0)
-            ) * glassLens;
-            float secondaryRibbon = exp(
-                -pow((reflectionAxis - 78.0) / 18.0, 2.0)
-            ) * glassLens;
-            float warmBounce = exp(
-                -pow((reflectionAxis - 116.0) / 52.0, 2.0)
-            ) * glassLens;
-            float3 reflectionColour = mix(
-                uAccentColor,
-                float3(0.97, 0.985, 1.0),
-                0.72
-            );
-            float3 coolReflection = mix(
-                uAccentColor,
-                float3(0.50, 0.78, 1.0),
-                0.58
-            );
-            float3 warmReflection = mix(
-                uAccentColor,
-                float3(1.0, 0.55, 0.32),
-                0.46
-            );
-            colour += reflectionColour * broadReflection *
-                (1.0 - solidMode) * 0.58;
-            colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.40;
-            colour += float3(1.0, 1.0, 1.0) * brightRibbon *
-                (1.0 - solidMode) * 0.60;
-            colour += coolReflection * secondaryRibbon *
-                (1.0 - solidMode) * 0.27;
-            colour += warmReflection * warmBounce *
-                (1.0 - solidMode) * 0.19;
+            // Do not paint studio reflection ribbons across the glyph.
+            // Liquid Glass should reveal the sampled wallpaper; its lighting
+            // comes from the actual refracted image and contour Fresnel only.
 
             // The frosted material gets a broad satin highlight rather than
             // the sharp glass caustic, so it reads as polished rather than flat.
@@ -350,17 +310,17 @@ internal class LiquidWallpaperRenderer(
             colour += float3(1.0, 1.0, 1.0) *
                 solidSheen * solidMode * 0.16;
 
-            // Increase the transparent face contribution modestly. The
-            // wallpaper is still visible through it, but it no longer vanishes
-            // on dark sections of a high-contrast wallpaper.
-            float glassOpacity = mix(0.47, 0.58, glassLens);
+            // Keep Liquid Glass genuinely transparent: the wallpaper is
+            // the dominant face colour, with a restrained body and contour rim.
+            // Frosted Glass retains its separate, intentionally denser opacity.
+            float glassOpacity = mix(0.31, 0.42, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.39, 0.10, solidMode) +
-                    outerLip * mix(0.045, 0.07, solidMode)
+                    edgeBand * mix(0.25, 0.10, solidMode) +
+                    outerLip * mix(0.035, 0.07, solidMode)
                 ),
                 0.0,
                 1.0
