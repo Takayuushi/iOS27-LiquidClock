@@ -18,6 +18,7 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -298,7 +299,7 @@ class MaskDrawingView @JvmOverloads constructor(
                 val rawStart = viewToImage(event.x, event.y, source) ?: return false
                 currentOperationErase = isEraseMode
                 val start = if (isMagneticLassoEnabled) {
-                    snapToNearbyEdge(rawStart, source)
+                    snapToNearbyEdge(rawStart, source, null)
                 } else {
                     rawStart
                 }
