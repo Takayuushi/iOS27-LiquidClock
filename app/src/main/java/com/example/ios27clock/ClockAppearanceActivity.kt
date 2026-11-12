@@ -184,6 +184,14 @@ class ClockAppearanceActivity : Activity() {
         setContentView(root)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::preview.isInitialized && !previewRendererReleased) {
+            ClockDiagnostics.record("Clock Studio resumed; refreshing selected wallpaper and depth mask")
+            preview.reloadWallpaper()
+        }
+    }
+
     private fun collapseAppearanceControls() {
         if (controlsHidden || !::appearancePanel.isInitialized) return
         controlsHidden = true
@@ -1002,6 +1010,11 @@ class ClockAppearanceActivity : Activity() {
 
         fun reloadAppearance(rebuildDistanceField: Boolean = true) {
             renderer.reloadAppearance(rebuildDistanceField)
+            invalidate()
+        }
+
+        fun reloadWallpaper() {
+            renderer.reloadWallpaper()
             invalidate()
         }
 
