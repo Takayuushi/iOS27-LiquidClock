@@ -190,7 +190,7 @@ internal class LiquidWallpaperRenderer(
             // Glass receives a visible but translucent wash of the selected
             // swatch. Solid uses that same swatch as its actual face colour,
             // preserving just a trace of wallpaper light beneath the paint.
-            float glassTintStrength = 0.38;
+            float glassTintStrength = 0.62;
             float solidWallpaperBleed = 0.055;
             float3 glassTintedFace = mix(transmitted, uClockTint, glassTintStrength);
             float3 solidTintedFace = mix(uClockTint, transmitted, solidWallpaperBleed);
@@ -200,7 +200,7 @@ internal class LiquidWallpaperRenderer(
                 interiorVolume
             );
             solidTintedFace *= solidLight;
-            body = mix(body, glassTintedFace, 0.42);
+            body = mix(body, glassTintedFace, 0.58);
             body = mix(body, solidTintedFace, solidMode);
             body *= mix(0.86, 1.025, interiorVolume) * mix(0.97, 1.02, face);
 
@@ -397,11 +397,6 @@ internal class LiquidWallpaperRenderer(
 
     private fun updateGlassShaderAppearance() {
         val shader = glassShader ?: return
-        val materialTint = if (clockColor == Color.WHITE) {
-            adaptiveAccentColor
-        } else {
-            clockColor
-        }
         try {
             shader.setFloatUniform(
                 "uAccentColor",
