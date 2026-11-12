@@ -155,6 +155,92 @@ jobs:
                   )
           PY
 
+      - name: Inspect official Apple SF Pro package and variation axes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/apple-sf-pro-inspection"
+          DMG_DIR="$WORK_DIR/dmg"
+          PKG_DIR="$WORK_DIR/pkg"
+          mkdir -p "$DMG_DIR" "$PKG_DIR"
+
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
+
+          curl --fail --show-error --silent --location --retry 3 --retry-all-errors \
+            "https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg" \
+            --output "$WORK_DIR/SF-Pro.dmg"
+
+          echo "Official Apple SF-Pro.dmg size: $(stat -c '%s' "$WORK_DIR/SF-Pro.dmg") bytes"
+          7z x -y -o"$DMG_DIR" "$WORK_DIR/SF-Pro.dmg" >/dev/null
+
+          while IFS= read -r -d '' PKG; do
+            PKG_NAME="$(basename "$PKG" .pkg)"
+            DEST="$PKG_DIR/$PKG_NAME"
+            mkdir -p "$DEST"
+            echo "Extracting Apple package: $PKG_NAME"
+            7z x -y -o"$DEST" "$PKG" >/dev/null
+
+            while IFS= read -r -d '' PAYLOAD; do
+              PAYLOAD_DEST="$DEST/payload-$(basename "$(dirname "$PAYLOAD")")"
+              mkdir -p "$PAYLOAD_DEST"
+              7z x -y -o"$PAYLOAD_DEST" "$PAYLOAD" >/dev/null
+            done < <(find "$DEST" -type f \( -name 'Payload~' -o -name 'Payload' \) -print0)
+          done < <(find "$DMG_DIR" -type f -name '*.pkg' -print0)
+
+          mapfile -d '' FONT_FILES < <(
+            find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print0
+          )
+
+          if (( ${#FONT_FILES[@]} == 0 )); then
+            echo "No SF Pro font files were found in Apple's official DMG." >&2
+            find "$WORK_DIR" -maxdepth 5 -type f | head -200
+            exit 1
+          fi
+
+          python3 -m pip install --disable-pip-version-check --quiet fonttools
+          python3 - "${FONT_FILES[@]}" <<'PY'
+          import sys
+          from pathlib import Path
+          from fontTools.ttLib import TTFont, TTCollection
+
+          for raw_path in sys.argv[1:]:
+              path = Path(raw_path)
+              try:
+                  fonts = TTCollection(str(path)).fonts if path.suffix.lower() == ".ttc" else [TTFont(str(path))]
+              except Exception as exc:
+                  print(f"UNREADABLE {path.name}: {exc}")
+                  continue
+
+              for index, font in enumerate(fonts):
+                  names = font["name"].names if "name" in font else []
+                  family = []
+                  for name in names:
+                      if name.nameID in (1, 2, 4, 6, 16, 17):
+                          try:
+                              value = name.toUnicode()
+                          except Exception:
+                              continue
+                          if value and value not in family:
+                              family.append(value)
+                  axes = []
+                  if "fvar" in font:
+                      for axis in font["fvar"].axes:
+                          axes.append(
+                              f"{axis.axisTag}=[{axis.minValue:g},"
+                              f"{axis.defaultValue:g},{axis.maxValue:g}]"
+                          )
+                  suffix = f" collection-index={index}" if path.suffix.lower() == ".ttc" else ""
+                  print(
+                      f"FONT {path.name}{suffix} | "
+                      f"names={' / '.join(family[:6])} | "
+                      f"axes={', '.join(axes) if axes else 'none'}"
+                  )
+          PY
+
       - name: Build debug APK
         shell: bash
         run: |
