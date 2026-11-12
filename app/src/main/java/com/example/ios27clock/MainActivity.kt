@@ -33,6 +33,10 @@ class MainActivity : Activity() {
             openWallpaperPicker()
         }
 
+        findViewById<Button>(R.id.clock_appearance_button).setOnClickListener {
+            ClockAppearanceDialog(this).show()
+        }
+
         findViewById<Button>(R.id.edit_foreground_button).setOnClickListener {
             openForegroundMaskEditor()
         }
