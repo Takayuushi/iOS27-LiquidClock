@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">iOS 27 Liquid Clock</string>
+    <string name="font_and_color">Font &amp; Color</string>
     <string name="widget_name">Liquid Clock (Widget)</string>
     <string name="widget_description">A simple companion clock widget.</string>
     <string name="live_wallpaper_name">Liquid Big Clock</string>
