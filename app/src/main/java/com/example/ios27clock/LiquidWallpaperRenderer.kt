@@ -728,9 +728,6 @@ internal class LiquidWallpaperRenderer(
                 shapes += GlyphShape(digitPath, isFilled)
                 val pathBounds = RectF()
                 digitPath.computeBounds(pathBounds, true)
-                if (!isFilled && !pathBounds.isEmpty) {
-                    pathBounds.inset(-glyphStrokeWidth * 0.5f, -glyphStrokeWidth * 0.5f)
-                }
                 if (!pathBounds.isEmpty) {
                     if (!hasBounds) {
                         baseBounds.set(pathBounds)
@@ -747,9 +744,14 @@ internal class LiquidWallpaperRenderer(
             // before committing the vertical expansion. This retains the
             // established hard viewport ceiling and never scales X.
             val totalShapeHeightScale = CLOCK_GLYPH_HEIGHT_SCALE
-            val naturalBounds = RectF(baseBounds)
-            naturalBounds.top = centerY + (baseBounds.top - centerY) * totalShapeHeightScale
-            naturalBounds.bottom = centerY + (baseBounds.bottom - centerY) * totalShapeHeightScale
+            val naturalBounds = RectF(
+                centerX + (baseBounds.left - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
+                centerY + (baseBounds.top - centerY) * totalShapeHeightScale -
+                    glyphStrokeWidth * 0.5f,
+                centerX + (baseBounds.right - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
+                centerY + (baseBounds.bottom - centerY) * totalShapeHeightScale +
+                    glyphStrokeWidth * 0.5f
+            )
             val allowedScaleY = (
                 height * MAX_COMMITTED_HEIGHT_FRACTION /
                     naturalBounds.height().coerceAtLeast(1f)
@@ -773,12 +775,33 @@ internal class LiquidWallpaperRenderer(
                 style = Paint.Style.FILL
             }
 
-            maskCanvas.save()
-            maskCanvas.scale(CLOCK_GLYPH_WIDTH_SCALE, finalScaleY, centerX, centerY)
-            shapes.forEach { shape ->
-                maskCanvas.drawPath(shape.path, if (shape.filled) fillPaint else strokePaint)
+            // Transform glyph geometry first, then render it with an identity
+            // canvas. Applying anisotropic canvas scaling to a STROKE paint
+            // stretched horizontal strokes vertically and made weights uneven.
+            val finalShapeTransform = Matrix().apply {
+                setScale(CLOCK_GLYPH_WIDTH_SCALE, finalScaleY, centerX, centerY)
             }
-            maskCanvas.restore()
+            val finalShapeBounds = RectF()
+            shapes.forEach { shape ->
+                val transformedPath = Path()
+                shape.path.transform(finalShapeTransform, transformedPath)
+                maskCanvas.drawPath(
+                    transformedPath,
+                    if (shape.filled) fillPaint else strokePaint
+                )
+                val pathBounds = RectF()
+                transformedPath.computeBounds(pathBounds, true)
+                if (!shape.filled && !pathBounds.isEmpty) {
+                    pathBounds.inset(
+                        -glyphStrokeWidth * 0.5f,
+                        -glyphStrokeWidth * 0.5f
+                    )
+                }
+                if (!pathBounds.isEmpty) {
+                    if (finalShapeBounds.isEmpty) finalShapeBounds.set(pathBounds)
+                    else finalShapeBounds.union(pathBounds)
+                }
+            }
 
             // Keep the colon dots circular while moving them with the
             // vertical expansion. The dots must not turn into tall ovals.
@@ -793,12 +816,7 @@ internal class LiquidWallpaperRenderer(
                 )
             }
 
-            val finalBounds = RectF(
-                centerX + (baseBounds.left - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
-                centerY + (baseBounds.top - centerY) * finalScaleY,
-                centerX + (baseBounds.right - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
-                centerY + (baseBounds.bottom - centerY) * finalScaleY
-            )
+            val finalBounds = RectF(finalShapeBounds)
             colonCenters.forEach { (dotX, originalY) ->
                 val finalX = centerX + (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE
                 val finalY = centerY + (originalY - centerY) * finalScaleY
@@ -807,6 +825,7 @@ internal class LiquidWallpaperRenderer(
                         finalX + dotRadius, finalY + dotRadius)
                 )
             }
+            // The colon circles are filled shapes and add to the actual mask bounds.
             val inset = max(2f, capHeight * 0.018f)
             glyphBounds.set(
                 (finalBounds.left - inset).coerceAtLeast(0f),
