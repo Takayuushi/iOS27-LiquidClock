@@ -13,6 +13,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -746,8 +747,17 @@ class ClockAppearanceActivity : Activity() {
                 width.toFloat() / renderWidth,
                 height.toFloat() / renderHeight
             )
-            renderer.draw(canvas, seconds)
-            canvas.restoreToCount(save)
+            try {
+                renderer.draw(canvas, seconds)
+            } catch (memoryError: OutOfMemoryError) {
+                // Keep the editor alive if a device cannot allocate a transient
+                // glyph/SDF buffer; the next interaction can retry the render.
+                Log.e("ClockAppearancePreview", "Preview ran out of memory while rendering.", memoryError)
+            } catch (exception: RuntimeException) {
+                Log.e("ClockAppearancePreview", "Preview frame failed; keeping the editor interactive.", exception)
+            } finally {
+                canvas.restoreToCount(save)
+            }
             if (visibility == View.VISIBLE) postInvalidateDelayed(40L)
         }
 
