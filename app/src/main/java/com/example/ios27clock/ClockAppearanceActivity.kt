@@ -327,8 +327,11 @@ class ClockAppearanceActivity : Activity() {
                         // Build the final glyph mask and bevel exactly once per drag.
                         // Rebuilding a full-screen path every 180ms caused excessive
                         // bitmap churn and could destabilize the hardware preview.
-                        persistAppearance(rebuildDistanceField = true)
-                        ClockDiagnostics.record("Weight slider update completed at $selectedWeight")
+                        val refreshed = persistAppearance(rebuildDistanceField = true)
+                        ClockDiagnostics.record(
+                            if (refreshed) "Weight slider update completed at $selectedWeight"
+                            else "Weight slider update failed at $selectedWeight"
+                        )
                     } catch (memoryError: OutOfMemoryError) {
                         ClockDiagnostics.report("weight-slider-out-of-memory", memoryError)
                         Toast.makeText(
@@ -577,7 +580,7 @@ class ClockAppearanceActivity : Activity() {
             .apply()
     }
 
-    private fun persistAppearance(rebuildDistanceField: Boolean = true) {
+    private fun persistAppearance(rebuildDistanceField: Boolean = true): Boolean {
         saveAppearancePreferences()
         ClockDiagnostics.record(
             "Appearance refresh started: style=$selectedStyle weight=$selectedWeight glass=$glassMode sdf=$rebuildDistanceField"
@@ -586,6 +589,7 @@ class ClockAppearanceActivity : Activity() {
             preview.reloadAppearance(rebuildDistanceField = rebuildDistanceField)
             pendingWallpaperCommit = true
             ClockDiagnostics.record("Appearance refresh completed")
+            return true
         } catch (memoryError: OutOfMemoryError) {
             ClockDiagnostics.report("appearance-refresh-out-of-memory", memoryError)
             Toast.makeText(
@@ -593,6 +597,7 @@ class ClockAppearanceActivity : Activity() {
                 "Preview ran out of memory. A diagnostic was saved.",
                 Toast.LENGTH_LONG
             ).show()
+            return false
         } catch (exception: RuntimeException) {
             ClockDiagnostics.report("appearance-refresh", exception)
             Toast.makeText(
@@ -600,6 +605,7 @@ class ClockAppearanceActivity : Activity() {
                 "Preview update failed. A diagnostic was saved.",
                 Toast.LENGTH_LONG
             ).show()
+            return false
         }
     }
 
