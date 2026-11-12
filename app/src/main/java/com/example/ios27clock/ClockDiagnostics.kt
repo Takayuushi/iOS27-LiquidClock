@@ -1,9 +1,11 @@
 package com.example.ios27clock
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.os.Process
+import android.provider.BaseColumns
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
@@ -17,18 +19,24 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.exitProcess
 
 /**
- * Writes fatal and recoverable rendering diagnostics to:
- * Internal storage/Documents/IOS27Clock/
+ * Maintains one rolling diagnostics file:
+ * Internal storage/Documents/IOS27Clock/crash-report.txt
  *
- * MediaStore is used so Android's scoped-storage rules do not require broad
- * storage permissions or a first-run folder picker.
+ * Recoverable incidents are appended to the same file. Older timestamped
+ * crash-*.txt files from earlier app builds are folded into it on first use.
  */
 object ClockDiagnostics {
     private const val TAG = "IOS27ClockDiagnostics"
+    private const val REPORT_FILE_NAME = "crash-report.txt"
+    private const val REPORT_FOLDER = "IOS27Clock/"
     private const val MAX_BREADCRUMBS = 100
+    private const val MAX_DUPLICATE_INTERVAL_MS = 15_000L
+    private const val MAX_REPORT_BYTES = 2_000_000L
     private val lock = Any()
     private val breadcrumbs = ArrayDeque<String>()
+    private val lastReportAt = mutableMapOf<String, Long>()
     private val installed = AtomicBoolean(false)
+    private val legacyReportsImported = AtomicBoolean(false)
     @Volatile private var appContext: Context? = null
     @Volatile private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
@@ -43,7 +51,8 @@ object ClockDiagnostics {
                 context = appContext,
                 title = "Fatal application crash",
                 thread = thread,
-                throwable = throwable
+                throwable = throwable,
+                forceWrite = true
             )
 
             val delegate = previousHandler
@@ -72,7 +81,8 @@ object ClockDiagnostics {
             context = appContext,
             title = "Recoverable diagnostic: $tag",
             thread = Thread.currentThread(),
-            throwable = throwable
+            throwable = throwable,
+            incidentKey = tag
         )
     }
 
@@ -82,7 +92,8 @@ object ClockDiagnostics {
             context = appContext,
             title = title,
             thread = Thread.currentThread(),
-            details = details
+            details = details,
+            incidentKey = title
         )
     }
 
@@ -91,93 +102,208 @@ object ClockDiagnostics {
         title: String,
         thread: Thread,
         throwable: Throwable? = null,
-        details: String? = null
+        details: String? = null,
+        incidentKey: String? = null,
+        forceWrite: Boolean = false
     ) {
         if (context == null) {
             Log.e(TAG, "Cannot write diagnostics: application context is unavailable.", throwable)
             return
         }
 
-        val report = buildString {
-            appendLine("iOS 27 Liquid Clock diagnostics")
-            appendLine("Type: $title")
-            appendLine("Time: ${timestamp()}")
-            appendLine("Thread: ${thread.name} (id=${thread.id})")
-            appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-            appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-            try {
-                val info = context.packageManager.getPackageInfo(context.packageName, 0)
-                appendLine("App version: ${info.versionName} (${info.longVersionCode})")
-            } catch (_: Exception) {
-                appendLine("App version: unavailable")
+        val now = System.currentTimeMillis()
+        synchronized(lock) {
+            if (!forceWrite && incidentKey != null) {
+                val previous = lastReportAt[incidentKey] ?: 0L
+                if (now - previous < MAX_DUPLICATE_INTERVAL_MS) {
+                    Log.w(TAG, "Repeated diagnostic '$incidentKey' recorded in breadcrumbs only.")
+                    return
+                }
+                lastReportAt[incidentKey] = now
             }
-            appendLine()
-            if (!details.isNullOrBlank()) {
-                appendLine("Details:")
-                appendLine(details)
+
+            val report = buildString {
+                appendLine("============================================================")
+                appendLine("iOS 27 Liquid Clock incident")
+                appendLine("Type: $title")
+                appendLine("Time: ${timestamp()}")
+                appendLine("Thread: ${thread.name} (id=${thread.id})")
+                appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                try {
+                    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                    appendLine("App version: ${info.versionName} (${info.longVersionCode})")
+                } catch (_: Exception) {
+                    appendLine("App version: unavailable")
+                }
+                if (!details.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("Details:")
+                    appendLine(details)
+                }
+                if (throwable != null) {
+                    appendLine()
+                    appendLine("Exception:")
+                    val writer = StringWriter()
+                    throwable.printStackTrace(PrintWriter(writer))
+                    appendLine(writer.toString())
+                }
+                appendLine()
+                appendLine("Recent activity (newest last):")
+                breadcrumbs.forEach { appendLine(it) }
                 appendLine()
             }
-            if (throwable != null) {
-                appendLine("Exception:")
-                val writer = StringWriter()
-                throwable.printStackTrace(PrintWriter(writer))
-                appendLine(writer.toString())
+
+            try {
+                appendToPublicReport(context, report)
+                if (legacyReportsImported.compareAndSet(false, true)) {
+                    importLegacyReports(context)
+                }
+                Log.e(TAG, "Diagnostic appended to Documents/IOS27Clock/$REPORT_FILE_NAME", throwable)
+                return
+            } catch (storageException: Exception) {
+                Log.e(TAG, "Public diagnostics write failed; using app-specific fallback.", storageException)
+            } catch (storageError: LinkageError) {
+                Log.e(TAG, "MediaStore diagnostics API failed; using app-specific fallback.", storageError)
             }
-            appendLine()
-            appendLine("Recent activity (newest last):")
-            synchronized(lock) {
-                breadcrumbs.forEach { appendLine(it) }
+
+            try {
+                val folder = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                    ?.let { File(it, "IOS27Clock") }
+                    ?: File(context.filesDir, "IOS27Clock")
+                if (!folder.exists() && !folder.mkdirs()) {
+                    throw IllegalStateException("Could not create fallback diagnostics directory.")
+                }
+                val file = File(folder, REPORT_FILE_NAME)
+                if (file.length() > MAX_REPORT_BYTES) {
+                    file.writeText("Older diagnostics were trimmed at ${timestamp()}.
+")
+                }
+                file.appendText(report)
+                Log.e(TAG, "Diagnostic appended to fallback report: ${file.absolutePath}", throwable)
+            } catch (fallbackException: Exception) {
+                Log.e(TAG, "Unable to save diagnostic report to either location.", fallbackException)
             }
         }
+    }
 
-        val fileName = "crash-${fileTimestamp()}.txt"
-        try {
+    private fun appendToPublicReport(context: Context, report: String) {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/$REPORT_FOLDER"
+        var reportUri = findReportUri(context, collection, relativePath)
+
+        if (reportUri == null) {
             val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, REPORT_FILE_NAME)
                 put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_DOCUMENTS}/IOS27Clock/"
-                )
+                put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
-            val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            val uri = context.contentResolver.insert(collection, values)
-            if (uri != null) {
-                context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter()?.use {
-                    it.write(report)
-                    it.flush()
-                } ?: throw IllegalStateException("MediaStore returned no output stream.")
-                val completed = ContentValues().apply {
-                    put(MediaStore.MediaColumns.IS_PENDING, 0)
-                }
-                context.contentResolver.update(uri, completed, null, null)
-                Log.e(TAG, "Diagnostic report saved to Documents/IOS27Clock/$fileName", throwable)
-                return
+            reportUri = resolver.insert(collection, values)
+                ?: throw IllegalStateException("MediaStore could not create the diagnostics file.")
+            resolver.openOutputStream(reportUri, "w")?.bufferedWriter()?.use {
+                it.write(report)
+                it.flush()
+            } ?: throw IllegalStateException("MediaStore returned no output stream.")
+            val completed = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
-            throw IllegalStateException("MediaStore could not create the diagnostics file.")
-        } catch (storageException: Exception) {
-            Log.e(TAG, "Public diagnostics write failed; using app-specific fallback.", storageException)
-        } catch (storageError: LinkageError) {
-            Log.e(TAG, "MediaStore diagnostics API failed; using app-specific fallback.", storageError)
+            resolver.update(reportUri, completed, null, null)
+            return
         }
 
-        try {
-            val folder = context.getExternalFilesDir(null)?.let { File(it, "IOS27Clock") }
-                ?: File(context.filesDir, "IOS27Clock")
-            if (!folder.exists() && !folder.mkdirs()) {
-                throw IllegalStateException("Could not create fallback diagnostics directory.")
+        val existingSize = findReportSize(context, collection, relativePath)
+        if (existingSize > MAX_REPORT_BYTES) {
+            resolver.delete(reportUri, null, null)
+            legacyReportsImported.set(false)
+            appendToPublicReport(context, "Older diagnostics were trimmed at ${timestamp()}.
+$report")
+            return
+        }
+
+        resolver.openOutputStream(reportUri, "wa")?.bufferedWriter()?.use {
+            it.write(report)
+            it.flush()
+        } ?: throw IllegalStateException("MediaStore could not append to the diagnostics file.")
+    }
+
+    private fun findReportUri(
+        context: Context,
+        collection: android.net.Uri,
+        relativePath: String
+    ): android.net.Uri? {
+        val cursor = context.contentResolver.query(
+            collection,
+            arrayOf(BaseColumns._ID),
+            "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+            arrayOf(REPORT_FILE_NAME, relativePath),
+            "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+        ) ?: return null
+        cursor.use {
+            if (!it.moveToFirst()) return null
+            return ContentUris.withAppendedId(collection, it.getLong(0))
+        }
+    }
+
+    private fun findReportSize(
+        context: Context,
+        collection: android.net.Uri,
+        relativePath: String
+    ): Long {
+        val cursor = context.contentResolver.query(
+            collection,
+            arrayOf(MediaStore.MediaColumns.SIZE),
+            "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+            arrayOf(REPORT_FILE_NAME, relativePath),
+            null
+        ) ?: return 0L
+        cursor.use {
+            return if (it.moveToFirst()) it.getLong(0) else 0L
+        }
+    }
+
+    private fun importLegacyReports(context: Context) {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/$REPORT_FOLDER"
+        val cursor = resolver.query(
+            collection,
+            arrayOf(BaseColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+            arrayOf("crash-%.txt", relativePath),
+            "${MediaStore.MediaColumns.DATE_ADDED} ASC"
+        ) ?: return
+
+        val legacy = mutableListOf<Pair<android.net.Uri, String>>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getLong(0)
+                val name = it.getString(1) ?: "legacy-crash-report.txt"
+                legacy += ContentUris.withAppendedId(collection, id) to name
             }
-            File(folder, fileName).writeText(report)
-            Log.e(TAG, "Diagnostic report saved to fallback folder: ${folder.absolutePath}/$fileName", throwable)
-        } catch (fallbackException: Exception) {
-            Log.e(TAG, "Unable to save diagnostic report to either location.", fallbackException)
+        }
+
+        val target = findReportUri(context, collection, relativePath) ?: return
+        legacy.forEach { (uri, name) ->
+            try {
+                val content = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: return@forEach
+                resolver.openOutputStream(target, "wa")?.bufferedWriter()?.use {
+                    it.write("
+
+---------------- Imported legacy report: $name ----------------
+")
+                    it.write(content)
+                    it.flush()
+                } ?: return@forEach
+                resolver.delete(uri, null, null)
+            } catch (exception: Exception) {
+                Log.w(TAG, "Could not fold legacy diagnostics '$name' into the rolling report.", exception)
+            }
         }
     }
 
     private fun timestamp(): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
-
-    private fun fileTimestamp(): String =
-        SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
 }
