@@ -1,0 +1,2105 @@
+package com.example.ios27clock
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.CornerPathEffect
+import android.graphics.ColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.RuntimeShader
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.text.format.DateFormat
+import android.util.Log
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
+
+/**
+ * Full-screen wallpaper clock compositor.
+ *
+ * Composition order:
+ * 1. Original selected wallpaper
+ * 2. Liquid-glass clock, clipped by the real glyph alpha mask
+ * 3. The selected-object mask erases only clock pixels beneath the object
+ */
+internal class LiquidWallpaperRenderer(
+    private val context: Context,
+    private val wallpaperContent: ClockWallpaperContent = ClockWallpaperContent.PREVIEW
+) {
+
+    companion object {
+        private const val TAG = "LiquidClockRenderer"
+        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_thin.otf"
+        private const val VARIABLE_FONT_ASSET_PATH = "fonts/SF-Pro.ttf"
+
+        private const val DEFAULT_CLOCK_X = 0.50f
+        private const val DEFAULT_CLOCK_Y = 0.27f
+        private const val LEGACY_DEFAULT_CLOCK_Y = 0.36f
+        private const val PREVIOUS_DEFAULT_CLOCK_Y = 0.31f
+        private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
+        private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
+        private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
+        private const val SF_PRO_WIDTH_COMPRESSED = 50
+        private const val SF_PRO_WIDTH_CONDENSED = 60
+        private const val SF_PRO_WIDTH_REGULAR = 100
+        private const val SF_PRO_WIDTH_EXPANDED = 132
+        private const val CLOCK_GLYPH_WIDTH_SCALE = 1.00f
+        private const val CLOCK_GLYPH_HEIGHT_SCALE = 1.04f
+
+        // Keep the natural horizontal layout while the adaptive clock grows
+        // vertically. Individual glyph profiles handle optical corrections.
+        private const val MIN_GLYPH_WIDTH_SCALE = 1.00f
+        private const val MAX_GLYPH_WIDTH_SCALE = 1.00f
+        private const val MIN_GLYPH_HEIGHT_SCALE = 1.00f
+        private const val MAX_GLYPH_HEIGHT_SCALE = 1.04f
+        private const val TRACKING_EM = 0.035f
+        private const val BASE_WEIGHT_MIN = 520
+        private const val BASE_WEIGHT_MAX = 820
+        private const val COLON_ADVANCE_EM = 0.105f
+        private const val COLON_DOT_RADIUS_EM = 0.040f
+        private const val GLYPH_STROKE_FRACTION = 0.0f
+        private const val COLON_DOT_OFFSET_EM = 0.16f
+        private const val MIN_CLOCK_SCALE = 0.72f
+        private const val MAX_CLOCK_SCALE = 2.55f
+        private const val MIN_CLOCK_WIDTH_SCALE = 0.70f
+        private const val MAX_CLOCK_WIDTH_SCALE = 1.65f
+        private const val MAX_COMMITTED_WIDTH_FRACTION = 0.94f
+        private const val SDF_RANGE_PX = 24f
+        private const val SDF_PADDING_PX = 28
+        private const val SDF_CARDINAL_COST = 5
+        private const val SDF_DIAGONAL_COST = 7
+
+        private val AGSL = """
+        uniform shader uWallpaper;
+        uniform shader uGlyphMask;
+        uniform shader uGlyphSdf;
+        uniform float2 uResolution;
+        uniform float2 uClockCenter;
+        uniform float2 uSdfOrigin;
+        uniform float uSdfScale;
+        uniform float2 uTilt;
+        uniform float uSdfRange;
+        uniform float uFrosted;
+        uniform float uTintStrength;
+        uniform float uTime;
+        uniform float3 uAccentColor;
+        uniform float3 uClockTint;
+
+        half4 main(float2 p) {
+            float coverage = uGlyphMask.eval(p).a;
+            if (coverage < 0.002) {
+                return half4(0.0);
+            }
+
+            // The liquid-glass surface is a lens, not a raised text bevel.
+            // A wider distance profile lets refraction travel through the
+            // translucent face while its narrow Fresnel rim catches light.
+            float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
+            float sdf = uGlyphSdf.eval(sdfPoint).a;
+            float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
+            // A slightly wider finite-difference baseline filters single-pixel
+            // SDF stair-steps before they become visible as fractured refraction.
+            float2 sampleStep = float2(5.25, 5.25) * uSdfScale;
+            float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
+            float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
+            float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
+            float sdfBottom = uGlyphSdf.eval(sdfPoint + float2(0.0, sampleStep.y)).a;
+            float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
+            float gradientLength = length(gradient);
+            float normalConfidence = smoothstep(0.006, 0.055, gradientLength);
+            float2 normal = -gradient / max(gradientLength, 0.0005);
+            float2 refractionNormal = normal * normalConfidence;
+
+            float solidMode = clamp(uFrosted, 0.0, 1.0);
+            float insideDistance = max(signedDistance, 0.0);
+
+            // Glass has a gently curved optical face and a broader, softer
+            // Fresnel transition. Solid keeps its already-approved tighter edge.
+            float glassEdge = exp(-abs(signedDistance) / 10.5);
+            float solidEdge = exp(-abs(signedDistance) / 3.4);
+            float edgeBand = mix(glassEdge, solidEdge, solidMode);
+            float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
+                (1.0 - smoothstep(54.0, 118.0, signedDistance));
+            float glassRim = exp(-abs(signedDistance - 2.0) / 10.0);
+            float solidBevel = 1.0 -
+                smoothstep(0.8, 13.0, insideDistance);
+            float glassBevel = 1.0 -
+                smoothstep(2.0, 34.0, insideDistance);
+            float innerBevel = mix(glassBevel, solidBevel, solidMode);
+            float outerLip = 1.0 -
+                smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
+            float interiorVolume = smoothstep(
+                1.0,
+                mix(42.0, 13.0, solidMode),
+                signedDistance
+            );
+
+            float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
+            float waveA = sin(p.y * 0.0038 + uTime * 0.10);
+            float waveB = cos(p.x * 0.0028 - uTime * 0.09);
+
+            // Stronger displacement follows the local contour and then eases
+            // into the face. This bends the actual wallpaper underneath each
+            // numeral instead of painting a uniform highlight around text.
+            float glassDisplacement =
+                1.6 + glassRim * 4.2 + glassLens * 2.8;
+            float solidDisplacement =
+                1.5 + solidEdge * 6.0 + solidBevel * 1.1;
+            float displacement = mix(
+                glassDisplacement,
+                solidDisplacement,
+                solidMode
+            );
+            float2 warp = refractionNormal * displacement +
+                tilt * mix(1.8, 0.68, solidMode) +
+                float2(waveA * 0.38, waveB * 0.30) * (1.0 - solidMode);
+            float2 samplePoint = clamp(
+                p + warp,
+                float2(0.0),
+                uResolution
+            );
+
+            float3 center = uWallpaper.eval(samplePoint).rgb;
+
+            // Reuse the eight-direction blur below for both materials:
+            // Glass gets a tighter optical diffusion, while Solid retains its
+            // wider frosted response. This avoids a separate anisotropic blur.
+            float blurRadius = mix(18.0, 38.0, solidMode);
+            float2 blurX = float2(blurRadius, 0.0);
+            float2 blurY = float2(0.0, blurRadius);
+            float2 blurDiagonal = float2(
+                blurRadius * 0.7071,
+                blurRadius * 0.7071
+            );
+            float3 blurA = uWallpaper.eval(
+                clamp(samplePoint + blurX, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurB = uWallpaper.eval(
+                clamp(samplePoint - blurX, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurC = uWallpaper.eval(
+                clamp(samplePoint + blurY, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurD = uWallpaper.eval(
+                clamp(samplePoint - blurY, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurE = uWallpaper.eval(
+                clamp(samplePoint + blurDiagonal, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurF = uWallpaper.eval(
+                clamp(samplePoint - blurDiagonal, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurG = uWallpaper.eval(
+                clamp(
+                    samplePoint + float2(blurDiagonal.x, -blurDiagonal.y),
+                    float2(0.0),
+                    uResolution
+                )
+            ).rgb;
+            float3 blurH = uWallpaper.eval(
+                clamp(
+                    samplePoint + float2(-blurDiagonal.x, blurDiagonal.y),
+                    float2(0.0),
+                    uResolution
+                )
+            ).rgb;
+            float3 frostedWallpaper = (
+                blurA + blurB + blurC + blurD +
+                blurE + blurF + blurG + blurH
+            ) * 0.125;
+            // A modest portion of the same isotropic sample set softens
+            // harsh wallpaper streaks through Glass without making it opaque.
+            float3 refracted = mix(center, frostedWallpaper, 0.34);
+            float3 milkyFrost = mix(
+                frostedWallpaper,
+                float3(0.94, 0.95, 0.98),
+                0.20
+            );
+            milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
+
+            // Glass borrows its colour from the refracted wallpaper. The
+            // accent is also wallpaper-derived and only colours the glancing
+            // reflection; no permanent lavender or white overlay is applied.
+            float3 glassFace = mix(refracted, center, 0.08);
+            // The selected accent is sampled from this wallpaper, not a fixed
+            // lavender material. A little more of it gives the transparent
+            // surface a legible body without turning it opaque or frosted.
+            glassFace = mix(glassFace, uAccentColor, 0.12);
+            glassFace = mix(glassFace, uClockTint, uTintStrength);
+            float3 frostedFace = mix(
+                milkyFrost,
+                uClockTint,
+                uTintStrength * 0.78
+            );
+            float3 body = mix(glassFace, frostedFace, solidMode);
+
+            float2 keyLight = normalize(float2(-0.58, -0.78) + tilt * 0.62);
+            float2 fillLight = normalize(float2(0.70, 0.64) - tilt * 0.24);
+            float facing = max(dot(normal, keyLight), 0.0);
+            float oppositeFacing = max(dot(normal, fillLight), 0.0);
+
+            float fresnel = pow(
+                1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
+                2.6
+            ) * edgeBand;
+            float glassSpecular = pow(facing, 8.5) * glassRim;
+            float glassHighlight = pow(facing, 12.5) *
+                exp(-abs(signedDistance - 1.2) / 6.0);
+            float solidSpecular = pow(facing, 3.5) * solidEdge;
+            float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
+            float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
+            float bevelShade = innerBevel * (1.0 - facing) *
+                mix(0.018, 0.11, solidMode);
+
+            float3 colour = body;
+            colour *= mix(0.985, 1.025, glassLens);
+            colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
+            colour += float3(0.98, 0.99, 1.0) *
+                innerBevel * mix(0.055, 0.14, solidMode);
+            colour += float3(1.0, 1.0, 1.0) *
+                keySpecular * mix(1.48, 0.62, solidMode);
+            colour += float3(1.0, 1.0, 1.0) *
+                glassHighlight * (1.0 - solidMode) * 1.02;
+            colour += uAccentColor *
+                fillSpecular * mix(0.50, 0.15, solidMode);
+            colour -= float3(0.13, 0.15, 0.21) * bevelShade;
+            colour -= float3(0.08, 0.09, 0.14) *
+                edgeBand * (1.0 - facing) * mix(0.018, 0.055, solidMode);
+            colour += float3(1.0, 1.0, 1.0) *
+                outerLip * mix(0.025, 0.07, solidMode);
+
+            // A thin high-energy caustic sits just inside the contour.
+            // Avoid a broad white bevel that would make the glyph look embossed.
+            float glassCaustic = exp(-abs(signedDistance - 1.6) / 6.2) *
+                pow(max(dot(normal, keyLight), 0.0), 1.25);
+            float solidRim = exp(-abs(signedDistance - 2.5) / 4.6) *
+                pow(max(dot(normal, keyLight), 0.0), 1.45);
+            colour += float3(1.0, 1.0, 1.0) *
+                mix(glassCaustic, solidRim, solidMode) *
+                mix(0.76, 0.25, solidMode);
+
+            // A moving, soft studio reflection makes the lens readable on
+            // low-detail wallpapers without creating a raised all-around bevel.
+            float2 clockRelative = p - uClockCenter * uResolution;
+            float reflectionAxis = clockRelative.x * -0.42 +
+                clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
+            // A broad environmental reflection travels across the complete
+            // glass face. It gives the material readable volume even over a
+            // dark or visually quiet wallpaper, without outlining every edge.
+            float broadReflection = exp(
+                -pow(reflectionAxis / 142.0, 2.0)
+            ) * glassLens;
+            float narrowReflection = exp(
+                -pow((reflectionAxis - 48.0) / 42.0, 2.0)
+            ) * glassLens;
+            float brightRibbon = exp(
+                -pow((reflectionAxis + 22.0) / 22.0, 2.0)
+            ) * glassLens;
+            float secondaryRibbon = exp(
+                -pow((reflectionAxis - 78.0) / 18.0, 2.0)
+            ) * glassLens;
+            float warmBounce = exp(
+                -pow((reflectionAxis - 116.0) / 52.0, 2.0)
+            ) * glassLens;
+            float3 reflectionColour = mix(
+                uAccentColor,
+                float3(0.97, 0.985, 1.0),
+                0.72
+            );
+            float3 coolReflection = mix(
+                uAccentColor,
+                float3(0.50, 0.78, 1.0),
+                0.58
+            );
+            float3 warmReflection = mix(
+                uAccentColor,
+                float3(1.0, 0.55, 0.32),
+                0.46
+            );
+            colour += reflectionColour * broadReflection *
+                (1.0 - solidMode) * 0.58;
+            colour += float3(1.0, 1.0, 1.0) * narrowReflection *
+                (1.0 - solidMode) * 0.40;
+            colour += float3(1.0, 1.0, 1.0) * brightRibbon *
+                (1.0 - solidMode) * 0.60;
+            colour += coolReflection * secondaryRibbon *
+                (1.0 - solidMode) * 0.27;
+            colour += warmReflection * warmBounce *
+                (1.0 - solidMode) * 0.19;
+
+            // The frosted material gets a broad satin highlight rather than
+            // the sharp glass caustic, so it reads as polished rather than flat.
+            float solidSheen = exp(
+                -pow((reflectionAxis - 18.0) / 66.0, 2.0)
+            ) * glassLens;
+            colour += float3(1.0, 1.0, 1.0) *
+                solidSheen * solidMode * 0.16;
+
+            // Increase the transparent face contribution modestly. The
+            // wallpaper is still visible through it, but it no longer vanishes
+            // on dark sections of a high-contrast wallpaper.
+            float glassOpacity = mix(0.47, 0.58, glassLens);
+            float solidOpacity = 0.78;
+            float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
+            float alpha = clamp(
+                coverage * (
+                    bodyOpacity +
+                    edgeBand * mix(0.39, 0.10, solidMode) +
+                    outerLip * mix(0.045, 0.07, solidMode)
+                ),
+                0.0,
+                1.0
+            );
+
+            // RuntimeShader outputs use premultiplied alpha.
+            float3 premultipliedColour = clamp(colour, 0.0, 1.0) * alpha;
+            return half4(premultipliedColour, alpha);
+        }
+    """.trimIndent()
+    }
+
+    private var surfaceWidth = 0
+    private var surfaceHeight = 0
+    private var backdrop: Bitmap? = null
+    private var wallpaperSample: Bitmap? = null
+    private var foregroundOcclusionMask: Bitmap? = null
+    private var glyphMask: Bitmap? = null
+    private var glyphSdf: Bitmap? = null
+    private val retiredGlyphMasks = mutableListOf<Bitmap>()
+    private val retiredGlyphSdfs = mutableListOf<Bitmap>()
+    private var glyphSdfOriginX = 0f
+    private var glyphSdfOriginY = 0f
+    private var glyphSdfScale = 1f
+    private var glyphSdfStale = false
+    private var deviceTiltX = 0f
+    private var deviceTiltY = 0f
+    private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
+    private var clockFontStyle = 0
+    private var clockFontWeight = 640
+    private var clockColor = Color.WHITE
+    private var glassMode = true
+    private var glassShader: RuntimeShader? = null
+    private var shaderFailureReported = false
+    private var cachedTimeText: String? = null
+    @Volatile private var testTimeOverride: String? = null
+    private var clockCenterX = DEFAULT_CLOCK_X
+    private var clockCenterY = DEFAULT_CLOCK_Y
+    private var clockScale = 1f
+    private var maskClockScale = 1f
+    private var pinchStartClockScale = 1f
+    private var clockWidthScale = 1f
+    private var maskClockWidthScale = 1f
+    private var pinchStartClockWidthScale = 1f
+    private var gestureOffsetX = 0f
+    private var gestureOffsetY = 0f
+    private var previewScaleX = 1f
+    private var previewScaleY = 1f
+
+    private val glyphBaseBounds = RectF()
+    private val glyphBounds = RectF()
+    private val glyphBoundsSource = Rect()
+    private val fallbackTypeface: Typeface = loadFallbackTypeface()
+    private val typefaceCache = LinkedHashMap<Int, Typeface>()
+
+    private val bitmapPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    )
+
+    private val shaderPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    )
+
+    private val shadowPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        colorFilter = PorterDuffColorFilter(
+            Color.argb(38, 3, 9, 22),
+            PorterDuff.Mode.SRC_IN
+        )
+    }
+
+    private val clockOcclusionPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    }
+
+    private val fallbackGlyphPaint = Paint(
+        Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        color = Color.WHITE
+        alpha = 218
+    }
+
+    private val clockLayerBounds = RectF()
+
+    private val clockPreferences = context.getSharedPreferences(
+        wallpaperContent.compositionPreferencesName,
+        Context.MODE_PRIVATE
+    )
+
+    init {
+        clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
+            .coerceIn(0.10f, 0.90f)
+        val savedCenterY = clockPreferences.getFloat("center_y", LEGACY_DEFAULT_CLOCK_Y)
+        val positionMigrationDone = clockPreferences.getBoolean("reference_position_v1", false)
+        val studioPositionMigrationDone =
+            clockPreferences.getBoolean("clock_studio_safe_position_v2", false)
+        // Reposition only the old untouched defaults so the entire live clock
+        // remains visible above the appearance sheet. Preserve custom positions.
+        clockCenterY = if (
+            !studioPositionMigrationDone &&
+            (savedCenterY == PREVIOUS_DEFAULT_CLOCK_Y ||
+                (!positionMigrationDone && savedCenterY == LEGACY_DEFAULT_CLOCK_Y))
+        ) {
+            DEFAULT_CLOCK_Y
+        } else {
+            savedCenterY.coerceIn(0.10f, 0.78f)
+        }
+        clockScale = clockPreferences.getFloat("clock_scale", 1f)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        clockWidthScale = clockPreferences.getFloat("clock_width_scale", 1f)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+        readAppearancePreferences()
+        if (!positionMigrationDone || !studioPositionMigrationDone) {
+            clockPreferences.edit()
+                .putBoolean("reference_position_v1", true)
+                .putBoolean("clock_studio_safe_position_v2", true)
+                .putFloat("center_y", clockCenterY)
+                .apply()
+        }
+    }
+
+    fun setViewport(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        if (width == surfaceWidth && height == surfaceHeight && backdrop != null) return
+
+        surfaceWidth = width
+        surfaceHeight = height
+        rebuildBackdrop()
+    }
+
+    fun reloadWallpaper() {
+        rebuildBackdrop()
+    }
+
+    /** Digit Lab only: fixed glyph sample; null restores the real clock. */
+    fun setTestTimeOverride(value: String?) {
+        val normalized = value
+            ?.filter { it in '0'..'9' || it == ':' }
+            ?.take(10)
+            ?.takeIf { it.isNotEmpty() }
+        if (normalized == testTimeOverride) return
+        testTimeOverride = normalized
+        cachedTimeText = null
+        if (surfaceWidth > 0 && surfaceHeight > 0) {
+            rebuildGlyphMask(force = true)
+        }
+    }
+
+    fun reloadAppliedState() {
+        clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
+            .coerceIn(0.10f, 0.90f)
+        clockCenterY = clockPreferences.getFloat("center_y", DEFAULT_CLOCK_Y)
+            .coerceIn(0.10f, 0.78f)
+        clockScale = clockPreferences.getFloat("clock_scale", 1f)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        clockWidthScale = clockPreferences.getFloat("clock_width_scale", 1f)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+        readAppearancePreferences()
+        rebuildBackdrop()
+    }
+
+    /**
+     * Apply the Font & Color sheet without restarting the wallpaper service.
+     * Typeface and colour settings are stored alongside the clock composition.
+     */
+    fun reloadAppearance(rebuildDistanceField: Boolean = true) {
+        ClockDiagnostics.record("Renderer reload start: sdf=$rebuildDistanceField surface=${surfaceWidth}x${surfaceHeight}")
+        val previousStyle = clockFontStyle
+        val previousWeight = clockFontWeight
+        val previousColor = clockColor
+        val previousGlassMode = glassMode
+
+        readAppearancePreferences()
+        val glyphAppearanceChanged =
+            previousStyle != clockFontStyle || previousWeight != clockFontWeight
+
+        if (glyphAppearanceChanged) {
+            typefaceCache.clear()
+            cachedTimeText = null
+            if (surfaceWidth > 0 && surfaceHeight > 0) {
+                try {
+                    rebuildGlyphMask(
+                        force = true,
+                        rebuildDistanceField = rebuildDistanceField
+                    )
+                } catch (memoryError: OutOfMemoryError) {
+                    ClockDiagnostics.report("renderer-glyph-mask-out-of-memory", memoryError)
+                    Log.e(TAG, "Clock weight preview ran out of memory; keeping the last rendered mask.", memoryError)
+                } catch (exception: RuntimeException) {
+                    ClockDiagnostics.report("renderer-glyph-mask", exception)
+                    Log.e(TAG, "Clock weight preview could not rebuild its glyph mask.", exception)
+                }
+            }
+        } else if (rebuildDistanceField && glyphSdfStale && surfaceWidth > 0) {
+            rebuildGlyphSdf()
+        }
+
+        if (glassShader == null && surfaceWidth > 0 && surfaceHeight > 0) {
+            rebuildGlassShader()
+        } else if (
+            glyphAppearanceChanged ||
+            previousColor != clockColor ||
+            previousGlassMode != glassMode
+        ) {
+            updateGlassShaderAppearance()
+        }
+    }
+
+    private fun updateGlassShaderAppearance() {
+        val shader = glassShader ?: return
+        try {
+            shader.setFloatUniform(
+                "uAccentColor",
+                Color.red(adaptiveAccentColor) / 255f,
+                Color.green(adaptiveAccentColor) / 255f,
+                Color.blue(adaptiveAccentColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uClockTint",
+                Color.red(clockColor) / 255f,
+                Color.green(clockColor) / 255f,
+                Color.blue(clockColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uTintStrength",
+                if (clockColor == Color.WHITE) 0f else 0.16f
+            )
+            shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
+        } catch (exception: RuntimeException) {
+            Log.w(TAG, "Could not update clock material uniforms.", exception)
+            rebuildGlassShader()
+        }
+    }
+
+    private fun readAppearancePreferences() {
+        clockFontStyle = clockPreferences.getInt("clock_font_style", 0).coerceIn(0, 3)
+        clockFontWeight = clockPreferences.getInt("clock_font_weight", 400)
+            .coerceIn(100, 900)
+        clockColor = clockPreferences.getInt("clock_color", Color.WHITE)
+        glassMode = clockPreferences.getBoolean("clock_glass_mode", true)
+    }
+
+    fun isClockHit(x: Float, y: Float): Boolean {
+        if (glyphBounds.isEmpty) return false
+        val hit = RectF(glyphBounds)
+        val margin = (context.resources.displayMetrics.density * 44f)
+        hit.inset(-margin, -margin)
+        return hit.contains(x, y)
+    }
+
+    fun moveClockBy(deltaX: Float, deltaY: Float) {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+
+        val previousX = clockCenterX
+        val previousY = clockCenterY
+        clockCenterX = (clockCenterX + deltaX / surfaceWidth)
+            .coerceIn(0.10f, 0.90f)
+        clockCenterY = (clockCenterY + deltaY / surfaceHeight)
+            .coerceIn(0.10f, 0.78f)
+
+        // Keep the cached glyph/SDF textures. Moving a canvas transform is
+        // effectively free compared with rebuilding two full distance fields.
+        gestureOffsetX += (clockCenterX - previousX) * surfaceWidth
+        gestureOffsetY += (clockCenterY - previousY) * surfaceHeight
+        updatePreviewBounds()
+    }
+
+    fun beginScaleGesture() {
+        pinchStartClockScale = clockScale
+    }
+
+    fun scaleClock(distanceRatio: Float) {
+        if (!distanceRatio.isFinite() || distanceRatio <= 0f) return
+        // Use the original scale at pointer-down, not accumulated MOVE deltas.
+        // That prevents event-rate jitter and lets every new pinch start cleanly.
+        val requestedScale = (pinchStartClockScale * distanceRatio)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        // Derive the pinch ceiling from the actual rendered glyph bounds,
+        // not a guessed font-size fraction. This keeps the preview and final
+        // committed mask on exactly the same vertical limit.
+        val maxPreviewRatio = if (!glyphBaseBounds.isEmpty && surfaceHeight > 0) {
+            (surfaceHeight * MAX_COMMITTED_HEIGHT_FRACTION /
+                glyphBaseBounds.height().coerceAtLeast(1f)).coerceAtLeast(1f)
+        } else {
+            MAX_CLOCK_SCALE / maskClockScale.coerceAtLeast(0.01f)
+        }
+        previewScaleY = (requestedScale / maskClockScale.coerceAtLeast(0.01f))
+            .coerceIn(0.25f, maxPreviewRatio)
+        clockScale = (maskClockScale * previewScaleY)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        updatePreviewBounds()
+    }
+
+    fun beginWidthScaleGesture() {
+        pinchStartClockWidthScale = clockWidthScale
+    }
+
+    fun scaleClockWidth(distanceRatio: Float) {
+        if (!distanceRatio.isFinite() || distanceRatio <= 0f) return
+
+        val maxAllowedScale = if (!glyphBaseBounds.isEmpty && surfaceWidth > 0) {
+            (
+                surfaceWidth * MAX_COMMITTED_WIDTH_FRACTION *
+                    maskClockWidthScale /
+                    glyphBaseBounds.width().coerceAtLeast(1f)
+                ).coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+        } else {
+            MAX_CLOCK_WIDTH_SCALE
+        }
+
+        clockWidthScale = (pinchStartClockWidthScale * distanceRatio)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, maxAllowedScale)
+        previewScaleX = clockWidthScale / maskClockWidthScale.coerceAtLeast(0.01f)
+        updatePreviewBounds()
+    }
+
+    fun finishGesture() {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+        rebuildGlyphMask(force = true)
+    }
+
+    private fun updatePreviewBounds() {
+        if (glyphBaseBounds.isEmpty) {
+            glyphBounds.setEmpty()
+            return
+        }
+        glyphBounds.set(glyphBaseBounds)
+        val transform = Matrix().apply {
+            setScale(
+                previewScaleX,
+                previewScaleY,
+                glyphBaseBounds.centerX(),
+                glyphBaseBounds.centerY()
+            )
+        }
+        transform.mapRect(glyphBounds)
+        glyphBounds.offset(gestureOffsetX, gestureOffsetY)
+    }
+
+    fun setDeviceTilt(x: Float, y: Float) {
+        if (!x.isFinite() || !y.isFinite()) return
+        deviceTiltX += (x.coerceIn(-1f, 1f) - deviceTiltX) * 0.22f
+        deviceTiltY += (y.coerceIn(-1f, 1f) - deviceTiltY) * 0.22f
+    }
+
+    fun persistComposition() {
+        clockPreferences.edit()
+            .putFloat("center_x", clockCenterX)
+            .putFloat("center_y", clockCenterY)
+            .putFloat("clock_scale", clockScale)
+            .putFloat("clock_width_scale", clockWidthScale)
+            .apply()
+    }
+
+    fun draw(canvas: Canvas, timeSeconds: Float) {
+        val width = surfaceWidth
+        val height = surfaceHeight
+        if (width <= 0 || height <= 0) return
+
+        rebuildGlyphMask(force = false)
+
+        // Keep the original selected wallpaper as the only background image.
+        // The user selection is an alpha mask applied to the clock layer only.
+        val background = backdrop ?: return
+        canvas.drawBitmap(background, 0f, 0f, bitmapPaint)
+
+        val mask = glyphMask ?: return
+        if (glyphBounds.isEmpty) return
+
+        val shadowOffset = max(2f, height * 0.0015f)
+        clockLayerBounds.set(glyphBounds)
+        clockLayerBounds.inset(-shadowOffset * 2f, -shadowOffset * 2f)
+        clockLayerBounds.intersect(
+            0f,
+            0f,
+            width.toFloat(),
+            height.toFloat()
+        )
+
+        // Draw the clock in isolation. DST_OUT then removes only the clock
+        // pixels beneath the user-selected object. The untouched wallpaper
+        // remains visible below, so the selected object never replaces it.
+        val layerSave = canvas.saveLayer(clockLayerBounds, null)
+        try {
+            val transformSave = canvas.save()
+            canvas.translate(gestureOffsetX, gestureOffsetY)
+            canvas.scale(
+                previewScaleX,
+                previewScaleY,
+                glyphBaseBounds.centerX(),
+                glyphBaseBounds.centerY()
+            )
+
+            val shadowSave = canvas.save()
+            canvas.translate(0f, shadowOffset)
+            canvas.drawBitmap(mask, 0f, 0f, shadowPaint)
+            canvas.restoreToCount(shadowSave)
+
+            var shaderDrawn = false
+            val shader = glassShader
+            if (canvas.isHardwareAccelerated && shader != null) {
+                try {
+                    shader.setFloatUniform(
+                        "uResolution",
+                        width.toFloat(),
+                        height.toFloat()
+                    )
+                    shader.setFloatUniform("uTime", timeSeconds)
+                    shader.setFloatUniform("uTilt", deviceTiltX, deviceTiltY)
+                    shader.setFloatUniform(
+                        "uClockCenter",
+                        glyphBaseBounds.centerX() / width.toFloat(),
+                        glyphBaseBounds.centerY() / height.toFloat()
+                    )
+                    shaderPaint.shader = shader
+                    canvas.drawRect(glyphBaseBounds, shaderPaint)
+                    shaderPaint.shader = null
+                    shaderDrawn = true
+                } catch (exception: RuntimeException) {
+                    shaderPaint.shader = null
+                    if (!shaderFailureReported) {
+                        shaderFailureReported = true
+                        ClockDiagnostics.report("agsl-render-frame", exception)
+                    }
+                    Log.w(TAG, "AGSL rendering failed; showing a visible clock fallback.", exception)
+                }
+            }
+
+            // During a pinch/drag, transform the cached mask and shader rather
+            // than regenerating their pixel data on the UI thread.
+            if (!shaderDrawn) {
+                fallbackGlyphPaint.color = clockColor
+                fallbackGlyphPaint.alpha = if (glassMode) 218 else 232
+                canvas.drawBitmap(mask, 0f, 0f, fallbackGlyphPaint)
+            }
+            canvas.restoreToCount(transformSave)
+
+            // Keep the selected foreground object fixed in wallpaper space;
+            // only the clock layer is transformed beneath its depth mask.
+            foregroundOcclusionMask?.let { occlusionMask ->
+                canvas.drawBitmap(occlusionMask, 0f, 0f, clockOcclusionPaint)
+            }
+        } finally {
+            canvas.restoreToCount(layerSave)
+            shaderPaint.shader = null
+        }
+    }
+
+    fun release() {
+        glassShader = null
+        glyphMask?.takeUnless { it.isRecycled }?.recycle()
+        glyphMask = null
+        glyphSdf?.takeUnless { it.isRecycled }?.recycle()
+        glyphSdf = null
+        retiredGlyphMasks.forEach { if (!it.isRecycled) it.recycle() }
+        retiredGlyphMasks.clear()
+        retiredGlyphSdfs.forEach { if (!it.isRecycled) it.recycle() }
+        retiredGlyphSdfs.clear()
+        backdrop?.recycle()
+        if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
+        foregroundOcclusionMask?.recycle()
+        backdrop = null
+        wallpaperSample = null
+        foregroundOcclusionMask = null
+        cachedTimeText = null
+    }
+
+    private fun rebuildBackdrop() {
+        val width = surfaceWidth
+        val height = surfaceHeight
+        if (width <= 0 || height <= 0) return
+
+        val wallpaperFile = context.filesDir.resolve(wallpaperContent.sourceFileName)
+        val manualMaskFile = context.filesDir.resolve(wallpaperContent.manualForegroundFileName)
+
+        val decodedWallpaper = if (
+            wallpaperFile.exists() && wallpaperFile.length() > 0L
+        ) {
+            decodeWallpaper(wallpaperFile.absolutePath, width, height)
+        } else {
+            null
+        }
+
+        val decodedMask = manualMaskFile
+            .takeIf { it.exists() && it.length() > 0L }
+            ?.let { decodeWallpaper(it.absolutePath, width, height) }
+
+        val wallpaperOutput = Bitmap.createBitmap(
+            width,
+            height,
+            Bitmap.Config.ARGB_8888
+        )
+
+        if (decodedWallpaper != null) {
+            drawCoverBitmap(Canvas(wallpaperOutput), decodedWallpaper, width, height)
+            decodedWallpaper.recycle()
+        } else {
+            Log.e(TAG, "Selected wallpaper could not be decoded; using the fallback background.")
+            drawDefaultBackdrop(Canvas(wallpaperOutput), width, height)
+        }
+
+        // This is only a per-pixel alpha mask. Never draw it as an image.
+        // Its alpha erases clock pixels where the selected object overlaps.
+        val occlusionOutput = decodedMask?.let { sourceMask ->
+            Bitmap.createBitmap(
+                width,
+                height,
+                Bitmap.Config.ARGB_8888
+            ).also { output ->
+                drawCoverBitmap(Canvas(output), sourceMask, width, height)
+                sourceMask.recycle()
+            }
+        }
+
+        backdrop?.recycle()
+        if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
+        foregroundOcclusionMask?.recycle()
+
+        adaptiveAccentColor = extractWallpaperAccent(wallpaperOutput)
+        backdrop = wallpaperOutput
+        wallpaperSample = wallpaperOutput
+        foregroundOcclusionMask = occlusionOutput
+
+        cachedTimeText = null
+        rebuildGlyphMask(force = true)
+        rebuildGlassShader()
+    }
+
+    private fun drawCoverBitmap(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        width: Int,
+        height: Int
+    ) {
+        val scale = max(
+            width.toFloat() / bitmap.width,
+            height.toFloat() / bitmap.height
+        )
+        val dx = (width - bitmap.width * scale) / 2f
+        val dy = (height - bitmap.height * scale) / 2f
+        val matrix = Matrix().apply {
+            setScale(scale, scale)
+            postTranslate(dx, dy)
+        }
+        canvas.drawBitmap(bitmap, matrix, bitmapPaint)
+    }
+
+    private fun decodeWallpaper(
+        path: String,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(path, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+            var sampleSize = 1
+            while (
+                bounds.outWidth / (sampleSize * 2) >= targetWidth * 2 ||
+                bounds.outHeight / (sampleSize * 2) >= targetHeight * 2
+            ) {
+                sampleSize *= 2
+            }
+
+            BitmapFactory.decodeFile(
+                path,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inDither = true
+                }
+            )
+        } catch (exception: Exception) {
+            Log.e(TAG, "Could not decode wallpaper image.", exception)
+            null
+        }
+    }
+
+    private fun drawDefaultBackdrop(
+        canvas: Canvas,
+        width: Int,
+        height: Int
+    ) {
+        val base = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                intArrayOf(
+                    Color.rgb(3, 8, 20),
+                    Color.rgb(14, 18, 48),
+                    Color.rgb(47, 8, 67),
+                    Color.rgb(6, 5, 18)
+                ),
+                null,
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), base)
+
+        val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(
+                width * 0.78f,
+                height * 0.43f,
+                width * 0.78f,
+                intArrayOf(
+                    Color.argb(105, 72, 102, 181),
+                    Color.argb(0, 72, 102, 181)
+                ),
+                null,
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
+    }
+
+    private fun rebuildGlyphMask(
+        force: Boolean,
+        rebuildDistanceField: Boolean = true
+    ) {
+        val timeText = currentTimeText()
+        if (!force && timeText == cachedTimeText && glyphMask != null) return
+
+        val width = surfaceWidth
+        val height = surfaceHeight
+        if (width <= 0 || height <= 0) return
+
+        val previousMask = glyphMask
+
+        val mask = try {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        } catch (memoryError: OutOfMemoryError) {
+            Log.e(TAG, "Unable to allocate the clock glyph mask at ${width}x${height}.", memoryError)
+            return
+        }
+        val maskCanvas = Canvas(mask)
+        maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+
+        val glyphs = timeText.map { it.toString() }
+        // The expansion parameter changes the optical width of each numeral
+        // independently. The clock becomes taller as the user enlarges it,
+        // while the digits gain carefully controlled width rather than being
+        // uniformly stretched into a wider line.
+        val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
+            .coerceIn(0f, 1f)
+        // The official Apple SF Pro variable font supplies real wght and wdth
+        // axes. User-selected weight and width are applied before the adaptive
+        // per-glyph optical shaping below.
+        val fontWeight = clockFontWeight
+        val fontWidth = clockFontWidthCoordinate()
+        val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
+        val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
+        val trackingEm = TRACKING_EM * 0.55f
+        val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
+
+        val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.LEFT
+            style = Paint.Style.FILL
+            typeface = typefaceFor(fontWeight, 28, fontWidth)
+            isSubpixelText = true
+        }
+
+        fun measureLine(size: Float): Float {
+            sizingPaint.textSize = size
+            val tracking = size * trackingEm
+            val naturalWidth = glyphs.sumOf { glyph ->
+                val advance = if (glyph == ":") {
+                    size * colonAdvanceEm
+                } else {
+                    sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+                }
+                advance.toDouble()
+            }.toFloat() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+
+            return naturalWidth * CLOCK_GLYPH_WIDTH_SCALE
+        }
+
+        // Fit the expanded per-digit advances to the usable line width. This
+        // keeps the clock centred and prevents minute digits colliding as the
+        // optical profiles transition from compact to expanded.
+        var low = 1f
+        var high = min(maxBaseHeight, width * 0.90f)
+        repeat(28) {
+            val candidate = (low + high) * 0.5f
+            if (measureLine(candidate) <= maxWidth) low = candidate else high = candidate
+        }
+        val fontSize = low
+        sizingPaint.textSize = fontSize
+
+        val metrics = sizingPaint.fontMetrics
+        val centerX = clockCenterX * width
+        val centerY = clockCenterY * height
+        val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
+        val tracking = fontSize * trackingEm
+        val advances = glyphs.map { glyph ->
+            if (glyph == ":") {
+                fontSize * colonAdvanceEm
+            } else {
+                sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+            }
+        }
+        val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+        var cursorX = centerX - totalWidth * 0.5f
+
+        val composedPath = Path().apply { fillType = Path.FillType.WINDING }
+        val digitTwoPaths = mutableListOf<Path>()
+        val composedBounds = RectF()
+        val colonCenters = mutableListOf<Pair<Float, Float>>()
+        var hasBounds = false
+
+        glyphs.forEachIndexed { index, glyph ->
+            if (glyph == ":") {
+                val dotOffset = fontSize * COLON_DOT_OFFSET_EM
+                val dotX = cursorX + advances[index] * 0.5f
+                colonCenters += dotX to (centerY - dotOffset)
+                colonCenters += dotX to (centerY + dotOffset)
+            } else {
+                // Generate the character's real SF Pro outline once. A
+                // progressively condensed horizontal transform adapts the
+                // *shape* of each digit as vertical expansion increases;
+                // the vertical expansion below then makes the tall iOS form.
+                val glyphPaint = Paint(sizingPaint).apply {
+                    typeface = typefaceFor(fontWeight, 28, fontWidth)
+                    textSize = fontSize
+                    style = Paint.Style.FILL
+                    strokeWidth = 0f
+                }
+                val glyphPath = Path()
+                glyphPaint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, glyphPath)
+
+                val pathBounds = RectF()
+                glyphPath.computeBounds(pathBounds, true)
+                if (!pathBounds.isEmpty) {
+                    val compactWidth = glyphWidthProfile(glyph, expansion)
+                    val condensedTransform = Matrix().apply {
+                        setScale(
+                            compactWidth,
+                            glyphHeightFactor(glyph),
+                            pathBounds.centerX(),
+                            pathBounds.centerY()
+                        )
+                    }
+                    val oneCenterX = cursorX + advances[index] * 0.5f
+                    val oneBounds = if (glyph == "1") {
+                        val oneWidth = max(
+                            fontSize * 0.24f,
+                            pathBounds.width() * 2f
+                        ).coerceAtMost(advances[index] * 0.92f)
+                        RectF(
+                            oneCenterX - oneWidth * 0.5f,
+                            pathBounds.top,
+                            oneCenterX + oneWidth * 0.5f,
+                            pathBounds.bottom
+                        )
+                    } else {
+                        pathBounds
+                    }
+                    val sourceGlyphPath = if (glyph == "1") {
+                        buildReferenceOnePath(oneBounds)
+                    } else {
+                        glyphPath
+                    }
+                    val opticalPath = Path()
+                    val shapeCenterX = if (glyph == "1") oneCenterX else pathBounds.centerX()
+                    val shapeTransform = Matrix().apply {
+                        setScale(
+                            compactWidth,
+                            glyphHeightFactor(glyph),
+                            shapeCenterX,
+                            pathBounds.centerY()
+                        )
+                    }
+                    sourceGlyphPath.transform(shapeTransform, opticalPath)
+                    if (glyph == "2") {
+                        digitTwoPaths += Path(opticalPath)
+                    } else {
+                        composedPath.addPath(opticalPath)
+                    }
+
+                    val opticalBounds = RectF()
+                    opticalPath.computeBounds(opticalBounds, true)
+                    if (!opticalBounds.isEmpty) {
+                        if (!hasBounds) {
+                            composedBounds.set(opticalBounds)
+                            hasBounds = true
+                        } else {
+                            composedBounds.union(opticalBounds)
+                        }
+                    }
+                }
+            }
+            cursorX += advances[index] + tracking
+        }
+
+        if (hasBounds) {
+            // Horizontal pinch is independent from the vertical clock scale.
+            // Clamp against the actual glyph outline after viewport changes.
+            val maxSafeWidthScale = (
+                width * MAX_COMMITTED_WIDTH_FRACTION /
+                    (composedBounds.width().coerceAtLeast(1f) *
+                        CLOCK_GLYPH_WIDTH_SCALE)
+                ).coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+            clockWidthScale = clockWidthScale.coerceAtMost(maxSafeWidthScale)
+
+            // Apply native optical proportions and independent X/Y scales.
+            val naturalShapeTransform = Matrix().apply {
+                setScale(
+                    CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale,
+                    CLOCK_GLYPH_HEIGHT_SCALE,
+                    centerX,
+                    centerY
+                )
+            }
+            val naturalShapePath = Path()
+            composedPath.transform(naturalShapeTransform, naturalShapePath)
+            naturalShapePath.computeBounds(composedBounds, true)
+
+            val naturalDigitTwoPaths = digitTwoPaths.map { sourcePath ->
+                Path().also { sourcePath.transform(naturalShapeTransform, it) }
+            }
+            naturalDigitTwoPaths.forEach { twoPath ->
+                val twoBounds = RectF()
+                twoPath.computeBounds(twoBounds, true)
+                composedBounds.union(twoBounds)
+            }
+
+            val dotRadius = fontSize * COLON_DOT_RADIUS_EM * 1.08f
+            val naturalDotOffset = fontSize * COLON_DOT_OFFSET_EM * CLOCK_GLYPH_HEIGHT_SCALE
+            colonCenters.forEach { (dotX, originalY) ->
+                val naturalX = centerX +
+                    (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale
+                val naturalY = centerY +
+                    (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
+                val bounds = RectF(
+                    naturalX - dotRadius,
+                    naturalY - dotRadius,
+                    naturalX + dotRadius,
+                    naturalY + dotRadius
+                )
+                composedBounds.union(bounds)
+            }
+
+            // Enforce the safe viewport limit against the actual expanded
+            // outlines, including the colon, before committing the scale.
+            val allowedScaleY = (
+                height * MAX_COMMITTED_HEIGHT_FRACTION /
+                    composedBounds.height().coerceAtLeast(1f)
+                ).coerceAtLeast(1f)
+            val committedScaleY = clockScale.coerceAtMost(allowedScaleY)
+            if (committedScaleY != clockScale) {
+                clockScale = committedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+            }
+
+            val verticalTransform = Matrix().apply {
+                setScale(1f, committedScaleY, centerX, centerY)
+            }
+            val finalPath = Path()
+            naturalShapePath.transform(verticalTransform, finalPath)
+            val finalDigitTwoPaths = naturalDigitTwoPaths.map { sourcePath ->
+                Path().also { sourcePath.transform(verticalTransform, it) }
+            }
+
+            // Keep the two colon dots circular as the clock grows. Only their
+            // separation follows the vertical expansion.
+            colonCenters.forEach { (dotX, originalY) ->
+                val naturalX = centerX +
+                    (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale
+                val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
+                val finalY = centerY + (naturalY - centerY) * committedScaleY
+                finalPath.addCircle(naturalX, finalY, dotRadius, Path.Direction.CW)
+            }
+
+            val finalBounds = RectF()
+            finalPath.computeBounds(finalBounds, true)
+            finalDigitTwoPaths.forEach { twoPath ->
+                val twoBounds = RectF()
+                twoPath.computeBounds(twoBounds, true)
+                finalBounds.union(twoBounds)
+            }
+            val inset = max(2f, fontSize * 0.025f)
+            glyphBounds.set(
+                (finalBounds.left - inset).coerceAtLeast(0f),
+                (finalBounds.top - inset).coerceAtLeast(0f),
+                (finalBounds.right + inset).coerceAtMost(width.toFloat()),
+                (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
+            )
+
+            // Preserve Apple's flatter SF Pro terminals. Edge softness is
+            // supplied by antialiasing and the optical bevel shader, not by
+            // rounding the outline path itself.
+            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            maskCanvas.drawPath(finalPath, maskPaint)
+
+            // Only the "2" has a subtly softened corner treatment. The small
+            // radius rounds its lower foot and terminal transitions without
+            // changing the flatter SF Pro ends of 1, 4, 5 or 7.
+            val terminalFillet = (fontSize * 0.012f).coerceAtLeast(1f)
+            val digitTwoPaint = Paint(maskPaint).apply {
+                pathEffect = CornerPathEffect(terminalFillet)
+            }
+            finalDigitTwoPaths.forEach { twoPath ->
+                maskCanvas.drawPath(twoPath, digitTwoPaint)
+            }
+        } else {
+            glyphBounds.setEmpty()
+            glyphBaseBounds.setEmpty()
+        }
+
+        glyphMask = mask
+        if (rebuildDistanceField) {
+            rebuildGlyphSdf()
+        } else {
+            // Keep the previous bevel field alive while the new weight mask is
+            // previewed. The final accurate SDF is generated once on release.
+            glyphSdfStale = true
+            updateGlyphMaskInput()
+        }
+        retireGlyphMask(previousMask)
+
+        glyphBaseBounds.set(glyphBounds)
+        maskClockScale = clockScale
+        maskClockWidthScale = clockWidthScale
+        gestureOffsetX = 0f
+        gestureOffsetY = 0f
+        previewScaleX = 1f
+        previewScaleY = 1f
+        cachedTimeText = timeText
+    }
+
+    private fun rebuildGlyphSdf() {
+        val mask = glyphMask
+        if (mask == null || mask.isRecycled || glyphBounds.isEmpty) {
+            glyphSdfStale = false
+            return
+        }
+
+        val previousSdf = glyphSdf
+        val previousOriginX = glyphSdfOriginX
+        val previousOriginY = glyphSdfOriginY
+        val previousScale = glyphSdfScale
+
+        val replacement = try {
+            createGlyphSdf(mask, glyphBounds)
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("glyph-sdf-allocation-out-of-memory", memoryError)
+            Log.w(
+                TAG,
+                "SDF allocation skipped; keeping the previous bevel field.",
+                memoryError
+            )
+            null
+        }
+
+        if (replacement != null) {
+            glyphSdf = replacement
+            glyphSdfStale = false
+            updateGlyphMaskInput()
+            retireGlyphSdf(previousSdf)
+        } else {
+            glyphSdf = previousSdf
+            glyphSdfOriginX = previousOriginX
+            glyphSdfOriginY = previousOriginY
+            glyphSdfScale = previousScale
+            glyphSdfStale = previousSdf != null
+            updateGlyphMaskInput()
+        }
+    }
+
+    private fun retireGlyphMask(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled || bitmap === glyphMask) return
+        retiredGlyphMasks += bitmap
+        while (retiredGlyphMasks.size > 1) {
+            val oldest = retiredGlyphMasks.removeAt(0)
+            if (!oldest.isRecycled) oldest.recycle()
+        }
+    }
+
+    private fun retireGlyphSdf(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled || bitmap === glyphSdf) return
+        retiredGlyphSdfs += bitmap
+        while (retiredGlyphSdfs.size > 1) {
+            val oldest = retiredGlyphSdfs.removeAt(0)
+            if (!oldest.isRecycled) oldest.recycle()
+        }
+    }
+
+    /** Widths are optical advances in a single normalized cap-height grid. */
+    private fun vectorDigitAdvanceEm(glyph: String): Float = when (glyph) {
+        "0" -> 0.43f
+        "1" -> 0.38f
+        "2" -> 0.39f
+        "3" -> 0.39f
+        "4" -> 0.42f
+        "5" -> 0.39f
+        "6" -> 0.41f
+        "7" -> 0.39f
+        "8" -> 0.43f
+        "9" -> 0.41f
+        else -> 0.39f
+    }
+
+    /**
+     * Custom iOS-inspired display numerals. Each digit is built on the same
+     * cap-height grid and uses the same stroke weight, round caps and joins.
+     * 0 and 8 are filled silhouettes with real counters; other digits are
+     * continuous centerline contours rendered with the shared stroke paint.
+     */
+    private fun buildVectorDigitPath(glyph: String, bounds: RectF): Path {
+        val l = bounds.left
+        val t = bounds.top
+        val w = bounds.width()
+        val h = bounds.height()
+        val r = bounds.right
+        val b = bounds.bottom
+        fun x(fraction: Float) = l + w * fraction
+        fun y(fraction: Float) = t + h * fraction
+        val path = Path()
+
+        when (glyph) {
+            "0" -> {
+                // Broad, softly squared outer bowl with a tall rounded
+                // rectangular counter. Side, top and bottom walls stay near
+                // the same optical thickness.
+                path.fillType = Path.FillType.EVEN_ODD
+                path.addRoundRect(
+                    RectF(x(0.04f), y(0.012f), x(0.96f), y(0.988f)),
+                    h * 0.145f, h * 0.145f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(x(0.27f), y(0.115f), x(0.73f), y(0.885f)),
+                    h * 0.075f, h * 0.075f, Path.Direction.CCW
+                )
+            }
+            "1" -> {
+                // A narrower angled flag flows into a straight stem. The
+                // short foot is optically centred rather than spanning the
+                // entire advance box.
+                path.moveTo(x(0.18f), y(0.235f))
+                path.cubicTo(x(0.29f), y(0.19f), x(0.43f), y(0.085f), x(0.55f), y(0.065f))
+                path.lineTo(x(0.55f), y(0.925f))
+                path.moveTo(x(0.30f), y(0.925f))
+                path.lineTo(x(0.79f), y(0.925f))
+            }
+            "2" -> {
+                path.moveTo(x(0.12f), y(0.235f))
+                path.cubicTo(x(0.14f), y(0.075f), x(0.75f), y(0.025f), x(0.87f), y(0.205f))
+                path.cubicTo(x(0.99f), y(0.385f), x(0.78f), y(0.565f), x(0.54f), y(0.735f))
+                path.lineTo(x(0.16f), y(0.925f))
+                path.lineTo(x(0.87f), y(0.925f))
+            }
+            "3" -> {
+                // Two balanced lobes share a smooth right-hand spine. Avoid
+                // reversing the tangent at the waist: that created the
+                // swollen, pinched joint in the previous version.
+                path.moveTo(x(0.13f), y(0.16f))
+                path.cubicTo(x(0.32f), y(0.035f), x(0.73f), y(0.035f), x(0.86f), y(0.19f))
+                path.cubicTo(x(0.93f), y(0.27f), x(0.89f), y(0.41f), x(0.89f), y(0.50f))
+                // Matching vertical handles make the waist tangent continuous.
+                path.cubicTo(x(0.89f), y(0.59f), x(0.95f), y(0.71f), x(0.85f), y(0.82f))
+                path.cubicTo(x(0.71f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
+            }
+            "4" -> {
+                path.moveTo(x(0.70f), y(0.925f))
+                path.lineTo(x(0.70f), y(0.075f))
+                path.moveTo(x(0.10f), y(0.60f))
+                path.lineTo(x(0.91f), y(0.60f))
+                path.moveTo(x(0.12f), y(0.60f))
+                path.lineTo(x(0.66f), y(0.075f))
+            }
+            "5" -> {
+                path.moveTo(x(0.87f), y(0.075f))
+                path.lineTo(x(0.14f), y(0.075f))
+                path.lineTo(x(0.14f), y(0.455f))
+                path.cubicTo(x(0.36f), y(0.385f), x(0.77f), y(0.40f), x(0.86f), y(0.595f))
+                path.cubicTo(x(0.87f), y(0.81f), x(0.74f), y(0.975f), x(0.49f), y(0.935f))
+                path.cubicTo(x(0.31f), y(0.925f), x(0.18f), y(0.875f), x(0.14f), y(0.80f))
+            }
+            "6" -> {
+                path.moveTo(x(0.82f), y(0.095f))
+                path.cubicTo(x(0.49f), y(0.09f), x(0.14f), y(0.34f), x(0.14f), y(0.65f))
+                path.cubicTo(x(0.14f), y(0.89f), x(0.36f), y(0.965f), x(0.60f), y(0.93f))
+                path.cubicTo(x(0.86f), y(0.89f), x(0.87f), y(0.66f), x(0.76f), y(0.545f))
+                path.cubicTo(x(0.60f), y(0.43f), x(0.31f), y(0.49f), x(0.14f), y(0.67f))
+            }
+            "7" -> {
+                path.moveTo(x(0.14f), y(0.075f))
+                path.lineTo(x(0.86f), y(0.075f))
+                path.cubicTo(x(0.70f), y(0.36f), x(0.51f), y(0.65f), x(0.31f), y(0.925f))
+            }
+            "8" -> {
+                path.fillType = Path.FillType.EVEN_ODD
+                // A broader upper bowl and slightly fuller lower bowl, with
+                // tall rounded-square counters and a controlled waist.
+                path.moveTo(x(0.50f), y(0.012f))
+                path.cubicTo(x(0.22f), y(0.012f), x(0.055f), y(0.115f), x(0.055f), y(0.265f))
+                path.cubicTo(x(0.055f), y(0.405f), x(0.235f), y(0.465f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.235f), y(0.535f), x(0.055f), y(0.605f), x(0.055f), y(0.755f))
+                path.cubicTo(x(0.055f), y(0.905f), x(0.22f), y(0.988f), x(0.50f), y(0.988f))
+                path.cubicTo(x(0.78f), y(0.988f), x(0.945f), y(0.905f), x(0.945f), y(0.755f))
+                path.cubicTo(x(0.945f), y(0.605f), x(0.765f), y(0.535f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.765f), y(0.465f), x(0.945f), y(0.405f), x(0.945f), y(0.265f))
+                path.cubicTo(x(0.945f), y(0.115f), x(0.78f), y(0.012f), x(0.50f), y(0.012f))
+                path.close()
+                path.addRoundRect(
+                    RectF(x(0.265f), y(0.115f), x(0.735f), y(0.415f)),
+                    h * 0.055f, h * 0.055f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(x(0.265f), y(0.585f), x(0.735f), y(0.885f)),
+                    h * 0.055f, h * 0.055f, Path.Direction.CW
+                )
+            }
+            "9" -> {
+                path.addRoundRect(
+                    RectF(x(0.13f), y(0.035f), x(0.87f), y(0.59f)),
+                    h * 0.17f, h * 0.17f, Path.Direction.CW
+                )
+                path.moveTo(x(0.86f), y(0.43f))
+                path.cubicTo(x(0.86f), y(0.64f), x(0.70f), y(0.83f), x(0.42f), y(0.93f))
+            }
+        }
+        return path
+    }
+    /**
+     * The lock-screen "1" uses a dedicated display silhouette instead of
+     * SF Pro's narrow text numeral: a short angled flag, straight stem and
+     * small baseline foot. It is fitted to the measured glyph box, so tracking
+     * and line layout remain unchanged.
+     */
+    private fun buildReferenceOnePath(bounds: RectF): Path {
+        val left = bounds.left
+        val top = bounds.top
+        val width = bounds.width().coerceAtLeast(1f)
+        val height = bounds.height().coerceAtLeast(1f)
+        fun x(value: Float) = left + width * value
+        fun y(value: Float) = top + height * value
+
+        return Path().apply {
+            moveTo(x(0.12f), y(0.235f))
+            cubicTo(
+                x(0.25f), y(0.195f),
+                x(0.42f), y(0.075f),
+                x(0.55f), y(0.055f)
+            )
+            lineTo(x(0.69f), y(0.055f))
+            lineTo(x(0.69f), y(0.875f))
+            lineTo(x(0.93f), y(0.875f))
+            lineTo(x(0.93f), y(0.975f))
+            lineTo(x(0.12f), y(0.975f))
+            lineTo(x(0.12f), y(0.875f))
+            lineTo(x(0.47f), y(0.875f))
+            lineTo(x(0.47f), y(0.245f))
+            cubicTo(
+                x(0.39f), y(0.285f),
+                x(0.25f), y(0.345f),
+                x(0.15f), y(0.375f)
+            )
+            close()
+        }
+    }
+
+    /**
+     * Builds a compact signed-distance field around the current glyph bounds.
+     * A two-pass 5/7 chamfer transform closely approximates Euclidean
+     * distance and keeps contour normals directionally consistent.
+     */
+    private fun createGlyphSdf(source: Bitmap, bounds: RectF): Bitmap? {
+        if (source.isRecycled || bounds.isEmpty) return null
+
+        val padding = max(
+            SDF_PADDING_PX,
+            (context.resources.displayMetrics.density * 30f).roundToInt()
+        )
+        val left = (bounds.left.roundToInt() - padding).coerceIn(0, source.width - 1)
+        val top = (bounds.top.roundToInt() - padding).coerceIn(0, source.height - 1)
+        val right = (bounds.right.roundToInt() + padding).coerceIn(left + 1, source.width)
+        val bottom = (bounds.bottom.roundToInt() + padding).coerceIn(top + 1, source.height)
+
+        val cropWidth = right - left
+        val cropHeight = bottom - top
+        val cropPixels = cropWidth.toLong() * cropHeight.toLong()
+        if (cropPixels <= 0L) return null
+
+        // Keep the preview at native SDF resolution for crisp bevels. Only
+        // downsample unusually large full-screen crops to bound temporary memory.
+        val maxSdfPixels = 420_000f
+        val sdfScale = min(
+            1f,
+            kotlin.math.sqrt(maxSdfPixels / cropPixels.toFloat())
+        ).coerceAtLeast(0.40f)
+        val sdfWidth = max(1, (cropWidth * sdfScale).roundToInt())
+        val sdfHeight = max(1, (cropHeight * sdfScale).roundToInt())
+        val pixelCountLong = sdfWidth.toLong() * sdfHeight.toLong()
+        if (pixelCountLong <= 0L || pixelCountLong > 450_000L) return null
+
+        val pixelCount = pixelCountLong.toInt()
+        ClockDiagnostics.record("SDF allocation start: crop=${cropWidth}x${cropHeight} output=${sdfWidth}x${sdfHeight} pixels=$pixelCount")
+        val sourcePixels = IntArray(pixelCount)
+        if (sdfScale >= 0.999f) {
+            source.getPixels(sourcePixels, 0, sdfWidth, left, top, sdfWidth, sdfHeight)
+        } else {
+            val sampleBitmap = Bitmap.createBitmap(
+                sdfWidth,
+                sdfHeight,
+                Bitmap.Config.ARGB_8888
+            )
+            try {
+                val sampleCanvas = Canvas(sampleBitmap)
+                sampleCanvas.drawBitmap(
+                    source,
+                    Rect(left, top, right, bottom),
+                    Rect(0, 0, sdfWidth, sdfHeight),
+                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                )
+                sampleBitmap.getPixels(sourcePixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
+            } finally {
+                sampleBitmap.recycle()
+            }
+        }
+
+        val maxUnits = (SDF_RANGE_PX * SDF_CARDINAL_COST.toFloat()).roundToInt()
+        val infinity = (maxUnits + 1).toShort()
+        val distanceToOutside = ShortArray(pixelCount)
+        val distanceToInside = ShortArray(pixelCount)
+        for (index in 0 until pixelCount) {
+            val inside = Color.alpha(sourcePixels[index]) >= 128
+            distanceToOutside[index] = if (inside) infinity else 0
+            distanceToInside[index] = if (inside) 0 else infinity
+        }
+
+        chamferDistance(distanceToOutside, sdfWidth, sdfHeight, maxUnits)
+        chamferDistance(distanceToInside, sdfWidth, sdfHeight, maxUnits)
+
+        val sdfPixels = IntArray(pixelCount)
+        for (index in 0 until pixelCount) {
+            val alpha = Color.alpha(sourcePixels[index])
+            val inside = alpha >= 128
+            val signedUnits = if (inside) {
+                distanceToOutside[index].toInt()
+            } else {
+                -distanceToInside[index].toInt()
+            }
+            // Preserve fractional coverage from the original antialiased edge
+            // rather than snapping every contour pixel to fully inside/outside.
+            val coverageCorrection = if (alpha in 1..254) {
+                (alpha / 255f - 0.5f) / sdfScale
+            } else {
+                0f
+            }
+            val signedOutputPixels =
+                signedUnits / SDF_CARDINAL_COST.toFloat() / sdfScale +
+                    coverageCorrection
+            val encoded = (
+                0.5f + signedOutputPixels / (2f * SDF_RANGE_PX)
+            ).coerceIn(0f, 1f)
+            sdfPixels[index] = Color.argb(
+                (encoded * 255f).roundToInt(),
+                255,
+                255,
+                255
+            )
+        }
+
+        return Bitmap.createBitmap(
+            sdfWidth,
+            sdfHeight,
+            Bitmap.Config.ARGB_8888
+        ).also { sdf ->
+            sdf.setPixels(sdfPixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
+            glyphSdfOriginX = left.toFloat()
+            glyphSdfOriginY = top.toFloat()
+            glyphSdfScale = sdfScale
+            ClockDiagnostics.record("SDF allocation complete: $pixelCount pixels")
+        }
+    }
+
+    private fun chamferDistance(
+        distances: ShortArray,
+        width: Int,
+        height: Int,
+        maxUnits: Int
+    ) {
+        for (y in 0 until height) {
+            val row = y * width
+            for (x in 0 until width) {
+                val index = row + x
+                var best = distances[index].toInt()
+                if (x > 0) {
+                    best = min(
+                        best,
+                        distances[index - 1].toInt() + SDF_CARDINAL_COST
+                    )
+                }
+                if (y > 0) {
+                    best = min(
+                        best,
+                        distances[index - width].toInt() + SDF_CARDINAL_COST
+                    )
+                    if (x > 0) {
+                        best = min(
+                            best,
+                            distances[index - width - 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                    if (x + 1 < width) {
+                        best = min(
+                            best,
+                            distances[index - width + 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                }
+                distances[index] = min(best, maxUnits).toShort()
+            }
+        }
+        for (y in height - 1 downTo 0) {
+            val row = y * width
+            for (x in width - 1 downTo 0) {
+                val index = row + x
+                var best = distances[index].toInt()
+                if (x + 1 < width) {
+                    best = min(
+                        best,
+                        distances[index + 1].toInt() + SDF_CARDINAL_COST
+                    )
+                }
+                if (y + 1 < height) {
+                    best = min(
+                        best,
+                        distances[index + width].toInt() + SDF_CARDINAL_COST
+                    )
+                    if (x > 0) {
+                        best = min(
+                            best,
+                            distances[index + width - 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                    if (x + 1 < width) {
+                        best = min(
+                            best,
+                            distances[index + width + 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                }
+                distances[index] = min(best, maxUnits).toShort()
+            }
+        }
+    }
+
+    private fun buildAdaptiveZeroPath(bounds: RectF): Path {
+        val width = bounds.width().coerceAtLeast(1f)
+        val height = bounds.height().coerceAtLeast(1f)
+        val centerX = bounds.centerX()
+        val outer = RectF(
+            bounds.left - width * 0.075f,
+            bounds.top,
+            bounds.right + width * 0.075f,
+            bounds.bottom
+        )
+        val outerWidth = outer.width()
+
+        return Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+            // Broad vertical sides with rounded shoulders: avoid the narrow,
+            // elliptical zero produced by simply stretching a text glyph.
+            addRoundRect(
+                outer,
+                outerWidth * 0.30f,
+                height * 0.115f,
+                Path.Direction.CW
+            )
+            val counter = RectF(
+                centerX - outerWidth * 0.205f,
+                bounds.top + height * 0.145f,
+                centerX + outerWidth * 0.205f,
+                bounds.bottom - height * 0.145f
+            )
+            addRoundRect(
+                counter,
+                outerWidth * 0.16f,
+                height * 0.075f,
+                Path.Direction.CCW
+            )
+        }
+    }
+
+    private fun buildAdaptiveEightPath(bounds: RectF): Path {
+        val left = bounds.left
+        val right = bounds.right
+        val top = bounds.top
+        val bottom = bounds.bottom
+        val width = bounds.width().coerceAtLeast(1f)
+        val height = bounds.height().coerceAtLeast(1f)
+        val centerX = bounds.centerX()
+        val waistY = bounds.centerY()
+
+        return Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+
+            // A continuous outer silhouette: broad upper/lower bowls with a
+            // soft inward waist, keeping the characteristic SF-like rhythm.
+            moveTo(centerX, top)
+            cubicTo(left + width * 0.22f, top, left, top + height * 0.10f,
+                left, top + height * 0.27f)
+            cubicTo(left, top + height * 0.40f, left + width * 0.13f,
+                top + height * 0.46f, centerX, waistY)
+            cubicTo(left + width * 0.13f, top + height * 0.54f, left,
+                top + height * 0.61f, left, top + height * 0.75f)
+            cubicTo(left, bottom - height * 0.10f, left + width * 0.22f,
+                bottom, centerX, bottom)
+            cubicTo(right - width * 0.22f, bottom, right,
+                bottom - height * 0.10f, right, top + height * 0.75f)
+            cubicTo(right, top + height * 0.61f, right - width * 0.13f,
+                top + height * 0.54f, centerX, waistY)
+            cubicTo(right - width * 0.13f, top + height * 0.46f, right,
+                top + height * 0.40f, right, top + height * 0.27f)
+            cubicTo(right, top + height * 0.10f, right - width * 0.22f,
+                top, centerX, top)
+            close()
+
+            // Tall rounded-square counters are the defining detail of the
+            // expanded lock-screen 8; EVEN_ODD cuts them from the silhouette.
+            val counterLeft = left + width * 0.245f
+            val counterRight = right - width * 0.245f
+            val counterRadiusX = width * 0.095f
+            val counterRadiusY = height * 0.045f
+            addRoundRect(
+                RectF(
+                    counterLeft,
+                    top + height * 0.125f,
+                    counterRight,
+                    top + height * 0.425f
+                ),
+                counterRadiusX,
+                counterRadiusY,
+                Path.Direction.CW
+            )
+            addRoundRect(
+                RectF(
+                    counterLeft - width * 0.008f,
+                    top + height * 0.575f,
+                    counterRight + width * 0.008f,
+                    bottom - height * 0.115f
+                ),
+                counterRadiusX,
+                counterRadiusY,
+                Path.Direction.CW
+            )
+        }
+    }
+
+    /**
+     * Small per-digit optical advances remain on top of Apple's true wdth axis.
+     * The smooth per-glyph curve preserves the tall lock-screen proportions.
+     */
+    private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
+        val progress = expansion.coerceIn(0f, 1f)
+        val compact = when (glyph) {
+            "1" -> 0.94f
+            "2" -> 1.08f
+            "3" -> 1.04f
+            "4" -> 1.08f
+            "5" -> 1.04f
+            "6" -> 1.04f
+            "7" -> 0.96f
+            "8" -> 1.08f
+            "9" -> 1.04f
+            "0" -> 1.07f
+            else -> 1.00f
+        }
+        val expanded = when (glyph) {
+            "1" -> 0.97f
+            "2" -> 1.13f
+            "3" -> 1.07f
+            "4" -> 1.12f
+            "5" -> 1.07f
+            "6" -> 1.08f
+            "7" -> 0.98f
+            "8" -> 1.12f
+            "9" -> 1.08f
+            "0" -> 1.11f
+            else -> 1.00f
+        }
+        return compact + (expanded - compact) * progress
+    }
+
+    private fun glyphHeightFactor(glyph: String): Float {
+        val optical = when (glyph) {
+            "1" -> 1.015f
+            "4", "7" -> 0.985f
+            "3", "5" -> 1.01f
+            else -> 1.0f
+        }
+        return optical
+    }
+
+    private fun wallpaperWeightAdjustment(
+        x: Float,
+        y: Float,
+        radius: Float
+    ): Int {
+        val image = backdrop ?: return 0
+        if (image.isRecycled || image.width <= 0 || image.height <= 0) return 0
+
+        val centerX = x.roundToInt().coerceIn(0, image.width - 1)
+        val centerY = y.roundToInt().coerceIn(0, image.height - 1)
+        val offset = radius.roundToInt().coerceAtLeast(1)
+        var luminance = 0f
+        var samples = 0
+
+        for (dy in -1..1) {
+            for (dx in -1..1) {
+                val sx = (centerX + dx * offset).coerceIn(0, image.width - 1)
+                val sy = (centerY + dy * offset).coerceIn(0, image.height - 1)
+                val pixel = image.getPixel(sx, sy)
+                luminance += (
+                    Color.red(pixel) * 0.2126f +
+                        Color.green(pixel) * 0.7152f +
+                        Color.blue(pixel) * 0.0722f
+                    ) / 255f
+                samples++
+            }
+        }
+
+        val average = luminance / samples.coerceAtLeast(1)
+        return when {
+            average > 0.70f -> 28
+            average > 0.54f -> 14
+            average < 0.14f -> 8
+            else -> 0
+        }
+    }
+
+    private fun clockFontWidthCoordinate(): Int = when (clockFontStyle) {
+        1 -> SF_PRO_WIDTH_CONDENSED
+        2 -> SF_PRO_WIDTH_COMPRESSED
+        3 -> SF_PRO_WIDTH_EXPANDED
+        else -> SF_PRO_WIDTH_REGULAR
+    }
+
+    private fun typefaceFor(
+        weight: Int,
+        opticalSize: Int,
+        widthProfile: Int
+    ): Typeface {
+        val safeWeight = weight.coerceIn(100, 900)
+        val safeWidth = widthProfile.coerceIn(SF_PRO_WIDTH_COMPRESSED, SF_PRO_WIDTH_EXPANDED)
+        val cacheKey = safeWeight * 1000 + safeWidth
+        typefaceCache[cacheKey]?.let { return it }
+
+        val variableFace = try {
+            Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
+                .setFontVariationSettings(
+                    "'wght' $safeWeight, 'wdth' $safeWidth"
+                )
+                .build()
+        } catch (fontException: Exception) {
+            ClockDiagnostics.record("SF Pro renderer font fallback: ${fontException.javaClass.simpleName}")
+            Log.w(
+                TAG,
+                "Official Apple SF Pro variable font unavailable; using its Display Thin face.",
+                fontException
+            )
+            fallbackTypeface
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("renderer-sf-pro-typeface-allocation", memoryError)
+            fallbackTypeface
+        }
+
+        if (typefaceCache.size >= 4) {
+            typefaceCache.clear()
+        }
+        typefaceCache[cacheKey] = variableFace
+        return variableFace
+    }
+
+    private fun updateGlyphMaskInput() {
+        val shader = glassShader ?: return
+        val mask = glyphMask ?: return
+        try {
+            shader.setInputShader(
+                "uGlyphMask",
+                BitmapShader(mask, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            )
+            val sdf = glyphSdf ?: mask
+            shader.setInputShader(
+                "uGlyphSdf",
+                BitmapShader(sdf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            )
+            shader.setFloatUniform("uSdfOrigin", glyphSdfOriginX, glyphSdfOriginY)
+            shader.setFloatUniform("uSdfScale", glyphSdfScale)
+            shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
+        } catch (exception: RuntimeException) {
+            ClockDiagnostics.report("shader-glyph-input-refresh", exception)
+            Log.w(TAG, "Could not refresh glyph mask/SDF inputs.", exception)
+            glassShader = null
+        }
+    }
+
+    private fun extractWallpaperAccent(bitmap: Bitmap): Int {
+        // Pick the strongest recurring saturated hue as the wallpaper's
+        // secondary accent. Near-white and near-black samples are ignored.
+        val bins = 24
+        val weights = DoubleArray(bins)
+        val red = DoubleArray(bins)
+        val green = DoubleArray(bins)
+        val blue = DoubleArray(bins)
+        val hsv = FloatArray(3)
+        val stepX = max(1, bitmap.width / 72)
+        val stepY = max(1, bitmap.height / 144)
+
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                Color.colorToHSV(pixel, hsv)
+                val saturation = hsv[1]
+                val value = hsv[2]
+                if (saturation >= 0.28f && value >= 0.22f && value <= 0.98f) {
+                    val bin = ((hsv[0] / 360f) * bins)
+                        .toInt()
+                        .coerceIn(0, bins - 1)
+                    val weight = saturation.toDouble() *
+                        (0.45 + value.toDouble() * 0.55)
+                    weights[bin] += weight
+                    red[bin] += Color.red(pixel) * weight
+                    green[bin] += Color.green(pixel) * weight
+                    blue[bin] += Color.blue(pixel) * weight
+                }
+                x += stepX
+            }
+            y += stepY
+        }
+
+        var best = 0
+        for (index in 1 until bins) {
+            if (weights[index] > weights[best]) best = index
+        }
+        if (weights[best] <= 0.0) return Color.rgb(145, 150, 160)
+
+        return Color.rgb(
+            (red[best] / weights[best]).toInt().coerceIn(0, 255),
+            (green[best] / weights[best]).toInt().coerceIn(0, 255),
+            (blue[best] / weights[best]).toInt().coerceIn(0, 255)
+        )
+    }
+
+    private fun rebuildGlassShader() {
+        val background = wallpaperSample ?: return
+        val mask = glyphMask ?: return
+
+        try {
+            val shader = RuntimeShader(AGSL)
+            shader.setInputShader(
+                "uWallpaper",
+                BitmapShader(
+                    background,
+                    Shader.TileMode.CLAMP,
+                    Shader.TileMode.CLAMP
+                )
+            )
+            shader.setInputShader(
+                "uGlyphMask",
+                BitmapShader(
+                    mask,
+                    Shader.TileMode.CLAMP,
+                    Shader.TileMode.CLAMP
+                )
+            )
+            val sdf = glyphSdf ?: mask
+            shader.setInputShader(
+                "uGlyphSdf",
+                BitmapShader(sdf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            )
+            shader.setFloatUniform("uSdfOrigin", glyphSdfOriginX, glyphSdfOriginY)
+            shader.setFloatUniform("uSdfScale", glyphSdfScale)
+            shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
+            shader.setFloatUniform(
+                "uResolution",
+                surfaceWidth.toFloat(),
+                surfaceHeight.toFloat()
+            )
+            shader.setFloatUniform(
+                "uAccentColor",
+                Color.red(adaptiveAccentColor) / 255f,
+                Color.green(adaptiveAccentColor) / 255f,
+                Color.blue(adaptiveAccentColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uClockTint",
+                Color.red(clockColor) / 255f,
+                Color.green(clockColor) / 255f,
+                Color.blue(clockColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uTintStrength",
+                if (clockColor == Color.WHITE) 0f else 0.16f
+            )
+            shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
+            shader.setFloatUniform(
+                "uClockCenter",
+                clockCenterX,
+                clockCenterY
+            )
+            glassShader = shader
+        } catch (exception: RuntimeException) {
+            ClockDiagnostics.report("agsl-shader-initialization", exception)
+            Log.w(TAG, "Unable to initialize AGSL shader.", exception)
+            glassShader = null
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("agsl-shader-out-of-memory", memoryError)
+            glassShader = null
+        }
+    }
+
+    private fun currentTimeText(): String {
+        testTimeOverride?.let { return it }
+        val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+        return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault())
+            .format(java.util.Date())
+    }
+
+    private fun loadFallbackTypeface(): Typeface {
+        return try {
+            Typeface.createFromAsset(context.assets, FONT_ASSET_PATH)
+        } catch (exception: Exception) {
+            Log.w(TAG, "SF Pro Display Thin unavailable; using system light font.", exception)
+            Typeface.create("sans-serif-light", Typeface.NORMAL)
+        }
+    }
+}

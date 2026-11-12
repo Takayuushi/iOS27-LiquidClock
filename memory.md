@@ -349,3 +349,24 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - On-device compare both wallpaper types: high-contrast diagonal light wallpaper and Spider-Man. Check that the 0/2 white bands are less harsh, the 2's curve has a smoother continuous reflection, and overall Glass remains reflective rather than cloudy.
 - Verify the repeated-2 fix with `2:20`, `12:22` and `22:22`.
 - Review the `7` silhouette as a separate glyph issue; do not change it blindly without matching the reference.
+
+
+## Standalone Digit Lab APK requested (13 Nov 2026)
+
+### User clarified scope
+- User explicitly requested a separate APK, not a page, option, test mode or feature added to the production app.
+- Do not add Digit Lab controls, test-time hooks, manifest entries, dependencies or runtime code to the production `:app` module.
+
+### Separate project implemented
+- Independent Gradle root under `digit-lab/`; it is not included by the production root `settings.gradle.kts`.
+- Separate application ID: `com.example.ios27clock.digitlab`; can be installed alongside the production app.
+- Uses a copied snapshot of `LiquidWallpaperRenderer`, its SDF glyph mask and AGSL shader. Only the copied renderer has a test-only fixed-time override.
+- Own app package/files/preferences. No wallpaper service and no calls to `WallpaperManager`; it renders only inside its own full-screen preview.
+- Features: choose image, enter any 1–10 character digit/colon sample, presets for all digits and repeated digits, switch Liquid Glass/Frosted Glass, change font width and weight, drag/pinch clock.
+- Dedicated workflow `.github/workflows/digit-lab.yml` builds and uploads a separate `liquid-clock-digit-lab-debug` APK. SF Pro fonts are downloaded and subset at build time, not committed.
+- Production app source, manifest, Gradle settings and runtime behaviour are unchanged.
+
+### Build and verification
+- Standalone project commit/build: pending.
+- After install, use the same wallpaper and inspect `0123456789`, `00:00`, `11:11`, `22:22`, `55:55`, `88:88`, `99:99` in both materials.
+- If the production renderer changes later, sync it into the Digit Lab snapshot, keeping only the test-time override as a harness addition.
