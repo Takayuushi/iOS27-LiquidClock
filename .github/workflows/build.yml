@@ -170,7 +170,60 @@ jobs:
                   print(f"  named value: {label}")
           PY
 
-          echo "Official Apple SF Pro variable and display fonts installed into build assets."
+          # Only the live clock's digits and colon are used at runtime.
+          # Apple's complete family contains many scripts and glyphs that would
+          # otherwise be mapped into a new direct buffer for every weight/width
+          # variation. Keep the official variable axes but subset the cmap.
+          python3 - "$ASSET_FONT_DIR/SF-Pro.ttf" <<'PY'
+          import os
+          import sys
+          from fontTools.ttLib import TTFont
+          from fontTools.subset import Options, Subsetter
+
+          path = sys.argv[1]
+          original_size = os.path.getsize(path)
+          font = TTFont(path)
+
+          options = Options()
+          options.name_IDs = ["*"]
+          options.name_languages = ["*"]
+          options.layout_features = ["*"]
+          options.glyph_names = True
+          options.notdef_glyph = True
+          options.notdef_outline = True
+          options.recommended_glyphs = True
+
+          subsetter = Subsetter(options=options)
+          subsetter.populate(text="0123456789:")
+          subsetter.subset(font)
+
+          axes = {axis.axisTag for axis in font["fvar"].axes}
+          if not {"wght", "wdth"}.issubset(axes):
+              raise SystemExit("Subsetting unexpectedly removed Apple's weight/width axes.")
+
+          temporary = path + ".clock-subset"
+          font.save(temporary)
+          font.close()
+
+          check = TTFont(temporary)
+          check_axes = {axis.axisTag for axis in check["fvar"].axes}
+          if not {"wght", "wdth"}.issubset(check_axes):
+              raise SystemExit("Clock subset is missing the variable weight/width axes.")
+          if "cmap" not in check or "glyf" not in check:
+              raise SystemExit("Clock subset is missing its TrueType character outlines.")
+          check.close()
+
+          subset_size = os.path.getsize(temporary)
+          if subset_size > 1_000_000:
+              raise SystemExit(f"Clock font subset is unexpectedly large: {subset_size} bytes")
+          os.replace(temporary, path)
+          print(
+              f"Clock-only SF Pro variable font: {original_size:,} -> "
+              f"{subset_size:,} bytes (digits 0-9 and colon; wght/wdth retained)"
+          )
+          PY
+
+          echo "Official Apple SF Pro clock subset and display faces installed into build assets."
 
       - name: Restore persistent debug signing key
         uses: actions/cache@v4
