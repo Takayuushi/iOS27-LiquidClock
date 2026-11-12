@@ -49,12 +49,13 @@ internal class LiquidWallpaperRenderer(
         private const val VARIABLE_FONT_ASSET_PATH = "fonts/SF-Pro.ttf"
 
         private const val DEFAULT_CLOCK_X = 0.50f
-        private const val DEFAULT_CLOCK_Y = 0.31f
+        private const val DEFAULT_CLOCK_Y = 0.27f
         private const val LEGACY_DEFAULT_CLOCK_Y = 0.36f
+        private const val PREVIOUS_DEFAULT_CLOCK_Y = 0.31f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
         private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val SF_PRO_WIDTH_COMPRESSED = 47
+        private const val SF_PRO_WIDTH_COMPRESSED = 50
         private const val SF_PRO_WIDTH_CONDENSED = 60
         private const val SF_PRO_WIDTH_REGULAR = 100
         private const val SF_PRO_WIDTH_EXPANDED = 132
@@ -201,7 +202,8 @@ internal class LiquidWallpaperRenderer(
             colour += float3(0.97, 0.98, 1.0) * innerBevel * 0.22;
             colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.92, 0.56, solidMode);
             colour += uAccentColor * fillSpecular * mix(0.28, 0.18, solidMode);
-            colour -= float3(0.12, 0.14, 0.20) * bevelShade;\n            colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.16;
+            colour -= float3(0.12, 0.14, 0.20) * bevelShade;
+            colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.16;
             colour += float3(1.0, 1.0, 1.0) * outerLip * 0.10;
 
             // Glass stays highly transmissive. Frosted mode has a denser veil
@@ -306,13 +308,16 @@ internal class LiquidWallpaperRenderer(
     init {
         clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
             .coerceIn(0.10f, 0.90f)
-        val savedCenterY = clockPreferences.getFloat("center_y", DEFAULT_CLOCK_Y)
+        val savedCenterY = clockPreferences.getFloat("center_y", LEGACY_DEFAULT_CLOCK_Y)
         val positionMigrationDone = clockPreferences.getBoolean("reference_position_v1", false)
-        // Move only the untouched legacy default. A position the user dragged
-        // manually is kept exactly as saved.
+        val studioPositionMigrationDone =
+            clockPreferences.getBoolean("clock_studio_safe_position_v2", false)
+        // Reposition only the old untouched defaults so the entire live clock
+        // remains visible above the appearance sheet. Preserve custom positions.
         clockCenterY = if (
-            !positionMigrationDone &&
-            savedCenterY == LEGACY_DEFAULT_CLOCK_Y
+            !studioPositionMigrationDone &&
+            (savedCenterY == PREVIOUS_DEFAULT_CLOCK_Y ||
+                (!positionMigrationDone && savedCenterY == LEGACY_DEFAULT_CLOCK_Y))
         ) {
             DEFAULT_CLOCK_Y
         } else {
@@ -321,9 +326,10 @@ internal class LiquidWallpaperRenderer(
         clockScale = clockPreferences.getFloat("clock_scale", 1f)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
         readAppearancePreferences()
-        if (!positionMigrationDone) {
+        if (!positionMigrationDone || !studioPositionMigrationDone) {
             clockPreferences.edit()
                 .putBoolean("reference_position_v1", true)
+                .putBoolean("clock_studio_safe_position_v2", true)
                 .putFloat("center_y", clockCenterY)
                 .apply()
         }
@@ -415,7 +421,7 @@ internal class LiquidWallpaperRenderer(
     private fun readAppearancePreferences() {
         clockFontStyle = clockPreferences.getInt("clock_font_style", 0).coerceIn(0, 3)
         clockFontWeight = clockPreferences.getInt("clock_font_weight", 400)
-            .coerceIn(1, 1000)
+            .coerceIn(100, 900)
         clockColor = clockPreferences.getInt("clock_color", Color.WHITE)
         glassMode = clockPreferences.getBoolean("clock_glass_mode", true)
     }
@@ -1540,7 +1546,7 @@ internal class LiquidWallpaperRenderer(
         opticalSize: Int,
         widthProfile: Int
     ): Typeface {
-        val safeWeight = weight.coerceIn(1, 1000)
+        val safeWeight = weight.coerceIn(100, 900)
         val safeWidth = widthProfile.coerceIn(SF_PRO_WIDTH_COMPRESSED, SF_PRO_WIDTH_EXPANDED)
         val cacheKey = safeWeight * 1000 + safeWidth
         typefaceCache[cacheKey]?.let { return it }
