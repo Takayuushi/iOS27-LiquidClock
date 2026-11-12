@@ -2,6 +2,13 @@ plugins {
     id("com.android.application")
 }
 
+// GitHub Actions run numbers are monotonic for this workflow, so every
+// downloaded APK is a valid in-place update of the previous one.
+val ciBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER")
+    .orElse("2")
+    .get()
+    .toInt()
+
 android {
     namespace = "com.example.ios27clock"
     compileSdk = 37
@@ -10,8 +17,8 @@ android {
         applicationId = "com.example.ios27clock"
         minSdk = 37
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = ciBuildNumber
+        versionName = "1.0.$ciBuildNumber"
     }
 
     compileOptions {
