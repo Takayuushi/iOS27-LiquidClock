@@ -286,7 +286,9 @@ class ClockAppearanceActivity : Activity() {
                     previewHandler.removeCallbacks(weightPreviewRunnable)
                     weightPreviewQueued = false
                     refreshFontTiles()
-                    persistAppearance()
+                    // Keep the live preview responsive, but leave the expensive
+                    // final SDF for the full-resolution wallpaper after close.
+                    persistAppearance(rebuildDistanceField = false)
                 }
             })
         }
@@ -466,9 +468,9 @@ class ClockAppearanceActivity : Activity() {
             .apply()
     }
 
-    private fun persistAppearance() {
+    private fun persistAppearance(rebuildDistanceField: Boolean = true) {
         saveAppearancePreferences()
-        preview.reloadAppearance()
+        preview.reloadAppearance(rebuildDistanceField = rebuildDistanceField)
         pendingWallpaperCommit = true
     }
 
