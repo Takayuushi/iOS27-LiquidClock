@@ -47,7 +47,8 @@ class ClockAppearanceActivity : Activity() {
             Color.rgb(255, 183, 133)
         )
 
-        private val FONT_NAMES = arrayOf("Default", "Tall", "Rounded", "Condensed")
+        private val FONT_NAMES = arrayOf("Regular", "Condensed", "Compressed", "Expanded")
+        private val WIDTH_COORDINATES = intArrayOf(100, 75, 30, 150)
         private const val PANEL_COLOR = 0xFFE5F0FD.toInt()
     }
 
@@ -63,7 +64,7 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var solidOption: TextView
 
     private var selectedStyle = 0
-    private var selectedWeight = 640
+    private var selectedWeight = 400
     private var selectedColor = Color.WHITE
     private var glassMode = true
 
@@ -76,7 +77,7 @@ class ClockAppearanceActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         selectedStyle = preferences.getInt(KEY_FONT_STYLE, 0).coerceIn(0, 3)
-        selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 640).coerceIn(100, 900)
+        selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(1, 1000)
         selectedColor = preferences.getInt(KEY_COLOR, Color.WHITE)
         glassMode = preferences.getBoolean(KEY_GLASS_MODE, true)
 
@@ -106,7 +107,7 @@ class ClockAppearanceActivity : Activity() {
             setTextColor(Color.WHITE)
             setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
             gravity = Gravity.CENTER
-            shadowLayer(dp(4).toFloat(), 0f, dp(1).toFloat(), 0x55000000)
+            setShadowLayer(dp(4).toFloat(), 0f, dp(1).toFloat(), 0x55000000)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 dp(42),
@@ -224,8 +225,8 @@ class ClockAppearanceActivity : Activity() {
         panel.addView(weightLabel)
 
         val weightSeek = SeekBar(this).apply {
-            max = 800
-            progress = selectedWeight - 100
+            max = 999
+            progress = selectedWeight - 1
             progressTintList = android.content.res.ColorStateList.valueOf(Color.rgb(70, 70, 70))
             thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             progressBackgroundTintList =
@@ -240,8 +241,9 @@ class ClockAppearanceActivity : Activity() {
             }
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    selectedWeight = progress + 100
+                    selectedWeight = progress + 1
                     weightLabel.text = "Weight  ·  $selectedWeight"
+                    refreshFontTiles()
                     if (fromUser) persistAppearance(notifyWallpaper = false)
                 }
 
@@ -270,24 +272,16 @@ class ClockAppearanceActivity : Activity() {
             ).apply { topMargin = dp(10) }
         }
 
-        val baseTypeface = try {
-            resources.getFont(R.font.sf_pro_display)
-        } catch (_: Exception) {
-            Typeface.create("sans-serif", Typeface.NORMAL)
-        }
-
         fontTiles = FONT_NAMES.mapIndexed { index, _ ->
             TextView(this).apply {
                 text = "12"
                 textSize = 36f
                 gravity = Gravity.CENTER
                 setTextColor(Color.BLACK)
-                typeface = when (index) {
-                    2 -> Typeface.create("sans-serif-rounded", Typeface.NORMAL)
-                    else -> baseTypeface
-                }
-                if (index == 1) scaleY = 1.10f
-                if (index == 3) scaleX = 0.84f
+                typeface = officialSfProTypeface(
+                    selectedWeight,
+                    WIDTH_COORDINATES[index]
+                )
                 background = fontTileBackground(index == selectedStyle)
                 layoutParams = LinearLayout.LayoutParams(0, dp(76), 1f).apply {
                     marginStart = dp(3)
@@ -415,6 +409,20 @@ class ClockAppearanceActivity : Activity() {
     private fun refreshFontTiles() {
         fontTiles.forEachIndexed { index, tile ->
             tile.background = fontTileBackground(index == selectedStyle)
+            tile.typeface = officialSfProTypeface(
+                selectedWeight,
+                WIDTH_COORDINATES[index]
+            )
+        }
+    }
+
+    private fun officialSfProTypeface(weight: Int, width: Int): Typeface {
+        return try {
+            Typeface.Builder(assets, "fonts/SF-Pro.ttf")
+                .setFontVariationSettings("'wght' $weight, 'wdth' $width")
+                .build()
+        } catch (_: Exception) {
+            Typeface.create("sans-serif", Typeface.NORMAL)
         }
     }
 
