@@ -226,6 +226,10 @@ internal class LiquidWallpaperRenderer(
     private var deviceTiltX = 0f
     private var deviceTiltY = 0f
     private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
+    private var clockFontStyle = 0
+    private var clockFontWeight = 640
+    private var clockColor = Color.WHITE
+    private var glassMode = true
     private var glassShader: RuntimeShader? = null
     private var cachedTimeText: String? = null
     private var clockCenterX = DEFAULT_CLOCK_X
@@ -298,6 +302,7 @@ internal class LiquidWallpaperRenderer(
         }
         clockScale = clockPreferences.getFloat("clock_scale", 1f)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        readAppearancePreferences()
         if (!positionMigrationDone) {
             clockPreferences.edit()
                 .putBoolean("reference_position_v1", true)
@@ -317,6 +322,42 @@ internal class LiquidWallpaperRenderer(
 
     fun reloadWallpaper() {
         rebuildBackdrop()
+    }
+
+    /**
+     * Apply the Font & Color sheet without restarting the wallpaper service.
+     * Typeface and colour settings are stored alongside the clock composition.
+     */
+    fun reloadAppearance() {
+        val previousStyle = clockFontStyle
+        val previousWeight = clockFontWeight
+        val previousColor = clockColor
+        val previousGlassMode = glassMode
+
+        readAppearancePreferences()
+        if (previousStyle != clockFontStyle || previousWeight != clockFontWeight) {
+            typefaceCache.clear()
+            cachedTimeText = null
+            if (surfaceWidth > 0 && surfaceHeight > 0) {
+                rebuildGlyphMask(force = true)
+            }
+        }
+        if (
+            previousStyle != clockFontStyle ||
+            previousWeight != clockFontWeight ||
+            previousColor != clockColor ||
+            previousGlassMode != glassMode
+        ) {
+            rebuildGlassShader()
+        }
+    }
+
+    private fun readAppearancePreferences() {
+        clockFontStyle = clockPreferences.getInt("clock_font_style", 0).coerceIn(0, 3)
+        clockFontWeight = clockPreferences.getInt("clock_font_weight", 640)
+            .coerceIn(100, 900)
+        clockColor = clockPreferences.getInt("clock_color", Color.WHITE)
+        glassMode = clockPreferences.getBoolean("clock_glass_mode", true)
     }
 
     fun isClockHit(x: Float, y: Float): Boolean {
@@ -454,7 +495,7 @@ internal class LiquidWallpaperRenderer(
 
             var shaderDrawn = false
             val shader = glassShader
-            if (canvas.isHardwareAccelerated && shader != null) {
+            if (glassMode && canvas.isHardwareAccelerated && shader != null) {
                 try {
                     shader.setFloatUniform(
                         "uResolution",
@@ -481,6 +522,8 @@ internal class LiquidWallpaperRenderer(
             // During a pinch/drag, transform the cached mask and shader rather
             // than regenerating their pixel data on the UI thread.
             if (!shaderDrawn) {
+                fallbackGlyphPaint.color = clockColor
+                fallbackGlyphPaint.alpha = if (glassMode) 218 else 255
                 canvas.drawBitmap(mask, 0f, 0f, fallbackGlyphPaint)
             }
             canvas.restoreToCount(transformSave)
@@ -686,7 +729,7 @@ internal class LiquidWallpaperRenderer(
         // Match the SF Pro reference more closely: keep the normal/default
         // width coordinate for now, and explicitly vary weight per digit.
         // A wdth axis is only enabled after CI confirms it exists in this font.
-        val fontWeight = 640
+        val fontWeight = clockFontWeight
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         val trackingEm = TRACKING_EM * 0.55f
@@ -1267,14 +1310,23 @@ internal class LiquidWallpaperRenderer(
             "0" -> 1.11f
             else -> 1.00f
         }
-        return compact + (expanded - compact) * progress
+        val styleWidth = when (clockFontStyle) {
+            1 -> 0.96f // Tall: narrower side bearings with a longer vertical rhythm.
+            2 -> 1.00f // Rounded: let the rounded face define its own width.
+            3 -> 0.86f // Condensed: a visibly tighter display cut.
+            else -> 1.00f
+        }
+        return (compact + (expanded - compact) * progress) * styleWidth
     }
 
-    private fun glyphHeightFactor(glyph: String): Float = when (glyph) {
-        "1" -> 1.015f
-        "4", "7" -> 0.985f
-        "3", "5" -> 1.01f
-        else -> 1.0f
+    private fun glyphHeightFactor(glyph: String): Float {
+        val optical = when (glyph) {
+            "1" -> 1.015f
+            "4", "7" -> 0.985f
+            "3", "5" -> 1.01f
+            else -> 1.0f
+        }
+        return optical * if (clockFontStyle == 1) 1.075f else 1.0f
     }
 
     private fun glyphWeightOffset(glyph: String): Int = when (glyph) {
@@ -1328,18 +1380,29 @@ internal class LiquidWallpaperRenderer(
         widthProfile: Float
     ): Typeface {
         val safeWeight = weight.coerceIn(100, 900)
-        typefaceCache[safeWeight]?.let { return it }
+        val cacheKey = clockFontStyle * 1000 + safeWeight
+        typefaceCache[cacheKey]?.let { return it }
 
         val variableFace = try {
-            // The verified SF Pro asset exposes wght only. Width variation is
-            // performed on extracted glyph paths; opsz is fixed in this asset.
-            Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
-                .setFontVariationSettings("'wght' $safeWeight")
-                .build()
+            if (clockFontStyle == 2) {
+                val roundedStyle = when {
+                    safeWeight >= 700 -> Typeface.BOLD
+                    safeWeight < 350 -> Typeface.NORMAL
+                    else -> Typeface.NORMAL
+                }
+                Typeface.create("sans-serif-rounded", roundedStyle)
+            } else {
+                // SF Pro's wght axis supplies real weight variation. The
+                // condensed and tall presets are optical path treatments
+                // applied after extracting these native glyph outlines.
+                Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
+                    .setFontVariationSettings("'wght' $safeWeight")
+                    .build()
+            }
         } catch (fontException: Exception) {
             Log.w(
                 TAG,
-                "Variable SF Pro unavailable; falling back to the installed light face.",
+                "Requested clock face unavailable; falling back to SF Pro Display Thin.",
                 fontException
             )
             fallbackTypeface
@@ -1348,7 +1411,7 @@ internal class LiquidWallpaperRenderer(
         if (typefaceCache.size >= 64) {
             typefaceCache.clear()
         }
-        typefaceCache[safeWeight] = variableFace
+        typefaceCache[cacheKey] = variableFace
         return variableFace
     }
 
@@ -1456,11 +1519,16 @@ internal class LiquidWallpaperRenderer(
                 surfaceWidth.toFloat(),
                 surfaceHeight.toFloat()
             )
+            val materialTint = if (clockColor == Color.WHITE) {
+                adaptiveAccentColor
+            } else {
+                clockColor
+            }
             shader.setFloatUniform(
                 "uAccentColor",
-                Color.red(adaptiveAccentColor) / 255f,
-                Color.green(adaptiveAccentColor) / 255f,
-                Color.blue(adaptiveAccentColor) / 255f
+                Color.red(materialTint) / 255f,
+                Color.green(materialTint) / 255f,
+                Color.blue(materialTint) / 255f
             )
             shader.setFloatUniform(
                 "uClockCenter",
