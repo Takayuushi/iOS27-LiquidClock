@@ -90,6 +90,7 @@ internal class LiquidWallpaperRenderer(
         uniform float2 uTilt;
         uniform float uSdfRange;
         uniform float uFrosted;
+        uniform float uTintStrength;
         uniform float uTime;
         uniform float3 uAccentColor;
         uniform float3 uClockTint;
@@ -162,19 +163,22 @@ internal class LiquidWallpaperRenderer(
                 blurE + blurF + blurG + blurH
             ) * 0.125;
 
-            // Lift the selected hue into a translucent pastel tint. This keeps
-            // a deep violet swatch from turning the glass grey or muddy.
-            float3 pastelTint = mix(
+            // The wallpaper itself supplies the material colour. Glass uses
+            // the local sharp sample; Solid uses its locally blurred counterpart.
+            // The extracted wallpaper accent is reserved for a restrained rim
+            // reflection. A manually chosen swatch is only a small optional wash.
+            float3 wallpaperGlassColour = mix(refracted, center, 0.08);
+            float3 wallpaperFrostColour = frostedWallpaper;
+            float3 glassFace = mix(
+                wallpaperGlassColour,
                 uClockTint,
-                float3(0.90, 0.87, 0.99),
-                0.58
+                uTintStrength
             );
-
-            // Glass is mostly the refracted wallpaper with a restrained
-            // colour wash. Solid is mostly blurred wallpaper with a milky,
-            // coloured veil. These paths intentionally remain distinct.
-            float3 glassFace = mix(refracted, pastelTint, 0.18);
-            float3 frostedFace = mix(frostedWallpaper, pastelTint, 0.40);
+            float3 frostedFace = mix(
+                wallpaperFrostColour,
+                uClockTint,
+                uTintStrength * 0.78
+            );
             float3 body = mix(glassFace, frostedFace, solidMode);
 
             // A restrained inner volume and a bright, thin contour create the
@@ -193,10 +197,10 @@ internal class LiquidWallpaperRenderer(
 
             float3 colour = body;
             colour *= mix(0.94, 1.035, interiorVolume);
-            colour += pastelTint * fresnel * 0.16;
+            colour += uAccentColor * fresnel * 0.12;
             colour += float3(0.94, 0.95, 1.0) * innerBevel * 0.14;
             colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.72, 0.42, solidMode);
-            colour += pastelTint * fillSpecular * mix(0.24, 0.16, solidMode);
+            colour += uAccentColor * fillSpecular * mix(0.20, 0.13, solidMode);
             colour -= float3(0.10, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * outerLip * 0.035;
 
@@ -391,6 +395,10 @@ internal class LiquidWallpaperRenderer(
                 Color.red(clockColor) / 255f,
                 Color.green(clockColor) / 255f,
                 Color.blue(clockColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uTintStrength",
+                if (clockColor == Color.WHITE) 0f else 0.16f
             )
             shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
         } catch (exception: RuntimeException) {
