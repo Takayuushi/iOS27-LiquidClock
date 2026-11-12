@@ -2,6 +2,32 @@
 
 > Living handover notes for future development sessions. Documentation only: this file is not read by the Android app, Gradle, or the rendering code.
 
+## NON-NEGOTIABLE HANDOVER RULE — Apple font and renderer parity
+
+This section is deliberately repeated near the top of memory.md so it is not missed when a new chat starts or the previous chat reaches its length limit.
+
+### Official Apple SF Pro only
+- The production app and the separate Digit Lab APK must use **Apple's official SF Pro variable font and Display faces**, extracted from Apple's official `SF-Pro.dmg`.
+- Official source URL: `https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg`.
+- **Never use the old GitHub mirror** (`raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts`) as the font source. That pre-switch mirror did not provide the variable-font behaviour we need, especially the real weight/width variation axes.
+- Preserve and validate the actual Apple variable-font axes: `wght` (weight) and `wdth` (width). Do not replace them with static faces, synthetic bolding, a system fallback, a community font, or a font subset that has lost either axis.
+- Production switched in commit `19f727982706117a6c62622e948da67f8296b0ff` (“Use Apple's official SF Pro variable font and display faces”), 12 Nov 2026 at 12:18 UTC. Build #190 was the first production CI run to install the official Apple package (font step passed; later unrelated Kotlin compile error); build #192 was the first successful APK using it.
+- Digit Lab must also download the same official Apple DMG. Its digit-only subset is acceptable only when it retains and validates both `wght` and `wdth` axes. GitHub is the CI/source-code host, not the font provider.
+
+### Production / Digit Lab renderer parity
+- Digit Lab exists only as a separate test APK, but it must exercise the **current production renderer**, not an old or independently maintained approximation.
+- Whenever the production `LiquidWallpaperRenderer.kt` changes, sync that exact source into `digit-lab/app/src/main/java/com/example/ios27clock/LiquidWallpaperRenderer.kt`.
+- The only intentional renderer difference allowed in Digit Lab is its test-only fixed-time override (`setTestTimeOverride` / `currentTimeText` hook). Keep the actual glyph geometry, custom digit paths, SDF generation, AGSL shader, material/reflection calculations, spacing and transforms identical.
+- Do not call the renderers “identical” until a source comparison verifies that removing only the Digit Lab test-time hook makes the files match (or every additional difference is explicitly listed and justified).
+- Keep the Digit Lab package ID, isolated preferences/files and no-`WallpaperManager` behaviour. Do not add Digit Lab testing controls or fixed-time hooks to the production app.
+
+### Current work to resume after a new chat
+- User reported the production clock's `0` still has a false white light band and a cracked upper inner curve; the `1` still has a badly wrong silhouette. The user has previously seen the `7` drawn correctly, so do not blindly redesign glyphs or assume the official font changed.
+- A source audit found production renderer SHA `98f49dd9240378918b96e65957f1537c21f7f6ee` and Digit Lab renderer SHA `53b4c54ff02e215ae7ccbd9fdf1dd785d2650541`. They are **not byte-identical**; Digit Lab is an older renderer snapshot plus its test-time hook. Sync the production renderer into Digit Lab before treating it as a trustworthy test of current glyph geometry.
+- Main branch for active work: `feature/live-wallpaper-big-clock`.
+- The user's immediate request is to build both the production APK and the separate Digit Lab APK correctly with Apple's official SF Pro assets/axes. Do not substitute the GitHub mirror, and do not add test functionality to the production app.
+- Before handing over APKs, verify each workflow's build SHA, font-install log, variable-axis validation, APK compile result and uploaded artifact. A successful workflow run for an earlier SHA is not proof for the current source.
+
 ## Project identity and working rules
 
 - **Repository:** `Takayuushi/iOS27-LiquidClock`
@@ -389,32 +415,6 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Latest verified Digit Lab APK build: run #2 — success; artifact ID `13985425247`.
 - On-device installation and visual quality checks remain pending.
 
-
-## NON-NEGOTIABLE HANDOVER RULE — Apple font and renderer parity
-
-This section is deliberately repeated near the top of memory.md so it is not missed when a new chat starts or the previous chat reaches its length limit.
-
-### Official Apple SF Pro only
-- The production app and the separate Digit Lab APK must use **Apple's official SF Pro variable font and Display faces**, extracted from Apple's official `SF-Pro.dmg`.
-- Official source URL: `https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg`.
-- **Never use the old GitHub mirror** (`raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts`) as the font source. That pre-switch mirror did not provide the variable-font behaviour we need, especially the real weight/width variation axes.
-- Preserve and validate the actual Apple variable-font axes: `wght` (weight) and `wdth` (width). Do not replace them with static faces, synthetic bolding, a system fallback, a community font, or a font subset that has lost either axis.
-- Production switched in commit `19f727982706117a6c62622e948da67f8296b0ff` (“Use Apple's official SF Pro variable font and display faces”), 12 Nov 2026 at 12:18 UTC. Build #190 was the first production CI run to install the official Apple package (font step passed; later unrelated Kotlin compile error); build #192 was the first successful APK using it.
-- Digit Lab must also download the same official Apple DMG. Its digit-only subset is acceptable only when it retains and validates both `wght` and `wdth` axes. GitHub is the CI/source-code host, not the font provider.
-
-### Production / Digit Lab renderer parity
-- Digit Lab exists only as a separate test APK, but it must exercise the **current production renderer**, not an old or independently maintained approximation.
-- Whenever the production `LiquidWallpaperRenderer.kt` changes, sync that exact source into `digit-lab/app/src/main/java/com/example/ios27clock/LiquidWallpaperRenderer.kt`.
-- The only intentional renderer difference allowed in Digit Lab is its test-only fixed-time override (`setTestTimeOverride` / `currentTimeText` hook). Keep the actual glyph geometry, custom digit paths, SDF generation, AGSL shader, material/reflection calculations, spacing and transforms identical.
-- Do not call the renderers “identical” until a source comparison verifies that removing only the Digit Lab test-time hook makes the files match (or every additional difference is explicitly listed and justified).
-- Keep the Digit Lab package ID, isolated preferences/files and no-`WallpaperManager` behaviour. Do not add Digit Lab testing controls or fixed-time hooks to the production app.
-
-### Current work to resume after a new chat
-- User reported the production clock's `0` still has a false white light band and a cracked upper inner curve; the `1` still has a badly wrong silhouette. The user has previously seen the `7` drawn correctly, so do not blindly redesign glyphs or assume the official font changed.
-- A source audit found production renderer SHA `98f49dd9240378918b96e65957f1537c21f7f6ee` and Digit Lab renderer SHA `53b4c54ff02e215ae7ccbd9fdf1dd785d2650541`. They are **not byte-identical**; Digit Lab is an older renderer snapshot plus its test-time hook. Sync the production renderer into Digit Lab before treating it as a trustworthy test of current glyph geometry.
-- Main branch for active work: `feature/live-wallpaper-big-clock`.
-- The user's immediate request is to build both the production APK and the separate Digit Lab APK correctly with Apple's official SF Pro assets/axes. Do not substitute the GitHub mirror, and do not add test functionality to the production app.
-- Before handing over APKs, verify each workflow's build SHA, font-install log, variable-axis validation, APK compile result and uploaded artifact. A successful workflow run for an earlier SHA is not proof for the current source.
 
 ## CRITICAL — Official Apple SF Pro source and exact switch build (verified from Actions logs)
 
