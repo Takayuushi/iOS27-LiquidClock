@@ -839,12 +839,12 @@ internal class LiquidWallpaperRenderer(
     private fun vectorDigitAdvanceEm(glyph: String): Float = when (glyph) {
         "0" -> 0.36f
         "1" -> 0.29f
-        "2" -> 0.34f
-        "3" -> 0.34f
-        "4" -> 0.37f
-        "5" -> 0.34f
+        "2" -> 0.35f
+        "3" -> 0.35f
+        "4" -> 0.39f
+        "5" -> 0.36f
         "6" -> 0.36f
-        "7" -> 0.33f
+        "7" -> 0.34f
         "8" -> 0.37f
         "9" -> 0.36f
         else -> 0.34f
@@ -887,46 +887,46 @@ internal class LiquidWallpaperRenderer(
                 path.lineTo(x(0.82f), y(0.925f))
             }
             "2" -> {
-                path.moveTo(x(0.11f), y(0.245f))
-                path.cubicTo(x(0.13f), y(0.075f), x(0.76f), y(0.025f), x(0.89f), y(0.22f))
-                path.cubicTo(x(1.00f), y(0.405f), x(0.76f), y(0.585f), x(0.52f), y(0.755f))
-                path.lineTo(x(0.12f), y(0.925f))
-                path.lineTo(x(0.90f), y(0.925f))
+                path.moveTo(x(0.15f), y(0.245f))
+                path.cubicTo(x(0.16f), y(0.075f), x(0.78f), y(0.025f), x(0.86f), y(0.22f))
+                path.cubicTo(x(0.88f), y(0.405f), x(0.72f), y(0.585f), x(0.50f), y(0.755f))
+                path.lineTo(x(0.15f), y(0.925f))
+                path.lineTo(x(0.86f), y(0.925f))
             }
             "3" -> {
-                path.moveTo(x(0.13f), y(0.16f))
-                path.cubicTo(x(0.34f), y(0.025f), x(0.84f), y(0.035f), x(0.87f), y(0.265f))
-                path.cubicTo(x(0.89f), y(0.425f), x(0.69f), y(0.49f), x(0.49f), y(0.50f))
-                path.cubicTo(x(0.71f), y(0.505f), x(0.91f), y(0.59f), x(0.88f), y(0.79f))
-                path.cubicTo(x(0.85f), y(0.985f), x(0.34f), y(0.985f), x(0.11f), y(0.83f))
+                path.moveTo(x(0.15f), y(0.16f))
+                path.cubicTo(x(0.34f), y(0.025f), x(0.82f), y(0.035f), x(0.85f), y(0.265f))
+                path.cubicTo(x(0.87f), y(0.425f), x(0.68f), y(0.49f), x(0.50f), y(0.50f))
+                path.cubicTo(x(0.70f), y(0.505f), x(0.87f), y(0.59f), x(0.85f), y(0.79f))
+                path.cubicTo(x(0.83f), y(0.975f), x(0.34f), y(0.975f), x(0.15f), y(0.91f))
             }
             "4" -> {
                 path.moveTo(x(0.70f), y(0.925f))
                 path.lineTo(x(0.70f), y(0.075f))
-                path.moveTo(x(0.08f), y(0.595f))
-                path.lineTo(x(0.92f), y(0.595f))
-                path.moveTo(x(0.10f), y(0.595f))
+                path.moveTo(x(0.13f), y(0.595f))
+                path.lineTo(x(0.87f), y(0.595f))
+                path.moveTo(x(0.13f), y(0.595f))
                 path.lineTo(x(0.66f), y(0.075f))
             }
             "5" -> {
-                path.moveTo(x(0.90f), y(0.075f))
-                path.lineTo(x(0.13f), y(0.075f))
-                path.lineTo(x(0.13f), y(0.455f))
-                path.cubicTo(x(0.36f), y(0.385f), x(0.78f), y(0.40f), x(0.88f), y(0.595f))
-                path.cubicTo(x(0.995f), y(0.81f), x(0.76f), y(0.975f), x(0.49f), y(0.935f))
-                path.cubicTo(x(0.31f), y(0.925f), x(0.17f), y(0.875f), x(0.10f), y(0.80f))
+                path.moveTo(x(0.87f), y(0.075f))
+                path.lineTo(x(0.14f), y(0.075f))
+                path.lineTo(x(0.14f), y(0.455f))
+                path.cubicTo(x(0.36f), y(0.385f), x(0.77f), y(0.40f), x(0.86f), y(0.595f))
+                path.cubicTo(x(0.87f), y(0.81f), x(0.74f), y(0.975f), x(0.49f), y(0.935f))
+                path.cubicTo(x(0.31f), y(0.925f), x(0.18f), y(0.875f), x(0.14f), y(0.80f))
             }
             "6" -> {
                 path.moveTo(x(0.82f), y(0.095f))
-                path.cubicTo(x(0.49f), y(0.09f), x(0.13f), y(0.34f), x(0.13f), y(0.65f))
-                path.cubicTo(x(0.13f), y(0.89f), x(0.36f), y(0.965f), x(0.60f), y(0.93f))
-                path.cubicTo(x(0.88f), y(0.89f), x(0.92f), y(0.66f), x(0.76f), y(0.545f))
-                path.cubicTo(x(0.60f), y(0.43f), x(0.31f), y(0.49f), x(0.13f), y(0.67f))
+                path.cubicTo(x(0.49f), y(0.09f), x(0.14f), y(0.34f), x(0.14f), y(0.65f))
+                path.cubicTo(x(0.14f), y(0.89f), x(0.36f), y(0.965f), x(0.60f), y(0.93f))
+                path.cubicTo(x(0.86f), y(0.89f), x(0.87f), y(0.66f), x(0.76f), y(0.545f))
+                path.cubicTo(x(0.60f), y(0.43f), x(0.31f), y(0.49f), x(0.14f), y(0.67f))
             }
             "7" -> {
-                path.moveTo(x(0.08f), y(0.075f))
-                path.lineTo(x(0.92f), y(0.075f))
-                path.cubicTo(x(0.73f), y(0.36f), x(0.53f), y(0.65f), x(0.31f), y(0.925f))
+                path.moveTo(x(0.14f), y(0.075f))
+                path.lineTo(x(0.86f), y(0.075f))
+                path.cubicTo(x(0.70f), y(0.36f), x(0.51f), y(0.65f), x(0.31f), y(0.925f))
             }
             "8" -> {
                 path.fillType = Path.FillType.EVEN_ODD
@@ -951,11 +951,11 @@ internal class LiquidWallpaperRenderer(
             }
             "9" -> {
                 path.addRoundRect(
-                    RectF(x(0.08f), y(0.035f), x(0.92f), y(0.59f)),
+                    RectF(x(0.13f), y(0.035f), x(0.87f), y(0.59f)),
                     h * 0.17f, h * 0.17f, Path.Direction.CW
                 )
                 path.moveTo(x(0.86f), y(0.43f))
-                path.cubicTo(x(0.88f), y(0.64f), x(0.70f), y(0.83f), x(0.42f), y(0.93f))
+                path.cubicTo(x(0.86f), y(0.64f), x(0.70f), y(0.83f), x(0.42f), y(0.93f))
             }
         }
         return path
