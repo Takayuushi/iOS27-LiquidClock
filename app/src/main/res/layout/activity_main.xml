@@ -48,7 +48,7 @@
             android:layout_height="54dp"
             android:layout_marginTop="18dp"
             android:backgroundTint="#DAECFF"
-            android:text="Font &amp; Color"
+            android:text="@string/font_and_color"
             android:textAllCaps="false"
             android:textColor="#101A2A"
             android:textSize="15sp" />
