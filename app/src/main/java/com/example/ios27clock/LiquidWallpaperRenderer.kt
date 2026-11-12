@@ -115,9 +115,9 @@ internal class LiquidWallpaperRenderer(
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
             float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 2.8);
-            float innerBevel = 1.0 - smoothstep(0.5, 13.0, max(signedDistance, 0.0));
-            float outerLip = 1.0 - smoothstep(0.25, 3.8, max(-signedDistance, 0.0));
+            float edgeBand = exp(-abs(signedDistance) / 2.25);
+            float innerBevel = 1.0 - smoothstep(0.7, 15.0, max(signedDistance, 0.0));
+            float outerLip = 1.0 - smoothstep(0.25, 4.5, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(1.0, 18.0, signedDistance);
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
@@ -127,7 +127,7 @@ internal class LiquidWallpaperRenderer(
             // Glass bends the wallpaper around each contour. Frosted mode
             // reduces the sharp refraction and uses a separate wide blur.
             float solidMode = clamp(uFrosted, 0.0, 1.0);
-            float displacement = (2.0 + edgeBand * 10.0 + innerBevel * 1.8) *
+            float displacement = (4.0 + edgeBand * 18.0 + innerBevel * 2.8) *
                 mix(1.0, 0.68, solidMode);
             float2 warp = normal * displacement +
                 tilt * 1.0 +
@@ -135,7 +135,7 @@ internal class LiquidWallpaperRenderer(
             float2 samplePoint = clamp(p + warp, float2(0.0), uResolution);
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
-            float2 dispersion = normal * (0.8 + edgeBand * 4.0);
+            float2 dispersion = normal * (1.4 + edgeBand * 9.0);
             float red = uWallpaper.eval(
                 clamp(samplePoint + dispersion, float2(0.0), uResolution)
             ).r;
@@ -147,7 +147,7 @@ internal class LiquidWallpaperRenderer(
             // Eight-tap, wide-radius sampling gives Solid a genuine frosted
             // appearance: the wallpaper remains recognizable, but details
             // diffuse instead of showing through as a sharp second image.
-            float blurRadius = 20.0;
+            float blurRadius = 38.0;
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(blurRadius * 0.7071, blurRadius * 0.7071);
@@ -163,15 +163,21 @@ internal class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
+            float3 milkyFrost = mix(
+                frostedWallpaper,
+                float3(0.94, 0.95, 0.98),
+                0.20
+            );
+            milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
 
             // The wallpaper itself supplies the material colour. Glass uses
             // the local sharp sample; Solid uses its locally blurred counterpart.
             // The extracted wallpaper accent is reserved for a restrained rim
             // reflection. A manually chosen swatch is only a small optional wash.
             float3 wallpaperGlassColour = mix(refracted, center, 0.08);
-            float3 wallpaperFrostColour = frostedWallpaper;
+            float3 wallpaperFrostColour = milkyFrost;
             float3 glassFace = mix(
-                wallpaperGlassColour,
+                mix(wallpaperGlassColour, uAccentColor, 0.06),
                 uClockTint,
                 uTintStrength
             );
@@ -192,30 +198,33 @@ internal class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.2
             ) * edgeBand;
-            float keySpecular = pow(facing, 13.0) * edgeBand;
-            float fillSpecular = pow(oppositeFacing, 9.0) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.24;
+            float keySpecular = pow(facing, 6.0) * edgeBand;
+            float fillSpecular = pow(oppositeFacing, 5.0) * edgeBand;
+            float bevelShade = innerBevel * (1.0 - facing) * 0.28;
 
             float3 colour = body;
             colour *= mix(0.94, 1.035, interiorVolume);
-            colour += uAccentColor * fresnel * 0.18;
-            colour += float3(0.97, 0.98, 1.0) * innerBevel * 0.22;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.92, 0.56, solidMode);
-            colour += uAccentColor * fillSpecular * mix(0.28, 0.18, solidMode);
-            colour -= float3(0.12, 0.14, 0.20) * bevelShade;
+            colour += uAccentColor * fresnel * 0.24;
+            colour += float3(0.98, 0.99, 1.0) * innerBevel * 0.30;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(1.10, 0.70, solidMode);
+            colour += uAccentColor * fillSpecular * mix(0.34, 0.22, solidMode);
+            colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.16;
-            colour += float3(1.0, 1.0, 1.0) * outerLip * 0.10;
+            colour += float3(1.0, 1.0, 1.0) * outerLip * 0.14;
+            float rimReflection = exp(-abs(signedDistance - 3.0) / 2.4) *
+                pow(max(dot(normal, keyLight), 0.0), 2.5);
+            colour += float3(1.0, 1.0, 1.0) * rimReflection * mix(0.56, 0.34, solidMode);
 
             // Glass stays highly transmissive. Frosted mode has a denser veil
             // so it visibly diffuses the wallpaper, but never becomes opaque paint.
-            float glassOpacity = mix(0.34, 0.43, interiorVolume);
-            float solidOpacity = 0.78;
+            float glassOpacity = mix(0.27, 0.34, interiorVolume);
+            float solidOpacity = 0.84;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.22, 0.13, solidMode) +
-                    outerLip * 0.10
+                    edgeBand * mix(0.27, 0.15, solidMode) +
+                    outerLip * 0.13
                 ),
                 0.0,
                 1.0
