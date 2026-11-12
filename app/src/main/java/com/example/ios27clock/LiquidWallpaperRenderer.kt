@@ -260,6 +260,7 @@ internal class LiquidWallpaperRenderer(
     private var clockColor = Color.WHITE
     private var glassMode = true
     private var glassShader: RuntimeShader? = null
+    private var shaderFailureReported = false
     private var cachedTimeText: String? = null
     private var clockCenterX = DEFAULT_CLOCK_X
     private var clockCenterY = DEFAULT_CLOCK_Y
@@ -593,6 +594,10 @@ internal class LiquidWallpaperRenderer(
                     shaderDrawn = true
                 } catch (exception: RuntimeException) {
                     shaderPaint.shader = null
+                    if (!shaderFailureReported) {
+                        shaderFailureReported = true
+                        ClockDiagnostics.report("agsl-render-frame", exception)
+                    }
                     Log.w(TAG, "AGSL rendering failed; showing a visible clock fallback.", exception)
                 }
             }
