@@ -14,7 +14,7 @@
         android:paddingStart="22dp"
         android:paddingTop="38dp"
         android:paddingEnd="22dp"
-        android:paddingBottom="28dp">
+        android:paddingBottom="30dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -23,13 +23,13 @@
             android:orientation="horizontal">
 
             <TextView
-                android:layout_width="42dp"
-                android:layout_height="42dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/bg_status_chip"
                 android:gravity="center"
                 android:text="◈"
                 android:textColor="#C7E6FF"
-                android:textSize="22sp" />
+                android:textSize="23sp" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -42,7 +42,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
-                    android:letterSpacing="0.12"
+                    android:letterSpacing="0.10"
                     android:text="LIQUID CLOCK"
                     android:textColor="#E6F1FF"
                     android:textSize="12sp" />
@@ -50,7 +50,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="3dp"
                     android:text="LOCK SCREEN STUDIO"
                     android:textColor="#8597B1"
                     android:textSize="10sp" />
@@ -73,30 +73,31 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="34dp"
+            android:layout_marginTop="42dp"
             android:fontFamily="sans-serif-medium"
             android:lineSpacingExtra="-2dp"
-            android:text="Make time\nfeel liquid."
+            android:text="Your wallpaper.\nYour clock."
             android:textColor="#F4F7FF"
             android:textSize="34sp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="9dp"
-            android:text="A glass clock, shaped around your wallpaper."
+            android:layout_marginTop="10dp"
+            android:text="Choose an image, shape its depth, then tune the live clock in one studio."
             android:textColor="#A7B6CC"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:lineSpacingExtra="3dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="26dp"
+            android:layout_marginTop="34dp"
             android:background="@drawable/bg_studio_card"
             android:orientation="vertical"
-            android:paddingStart="20dp"
+            android:paddingStart="18dp"
             android:paddingTop="18dp"
-            android:paddingEnd="20dp"
+            android:paddingEnd="18dp"
             android:paddingBottom="18dp">
 
             <LinearLayout
@@ -111,7 +112,7 @@
                     android:layout_weight="1"
                     android:fontFamily="sans-serif-medium"
                     android:letterSpacing="0.10"
-                    android:text="WALLPAPER PREVIEW"
+                    android:text="CURRENT WALLPAPER"
                     android:textColor="#9FB5D1"
                     android:textSize="10sp" />
 
@@ -123,95 +124,52 @@
                     android:paddingTop="4dp"
                     android:paddingEnd="10dp"
                     android:paddingBottom="4dp"
-                    android:text="LIVE"
+                    android:text="SOURCE"
                     android:textColor="#BFE8FF"
                     android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
+                android:id="@+id/wallpaper_selection_status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:fontFamily="sans-serif-thin"
-                android:letterSpacing="-0.04"
-                android:gravity="center"
-                android:text="10:47"
-                android:textColor="#E7F3FF"
-                android:textSize="68sp" />
-
-            <TextView
-                android:id="@+id/wallpaper_selection_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="2dp"
-                android:background="@drawable/bg_status_chip"
-                android:paddingStart="13dp"
-                android:paddingTop="7dp"
-                android:paddingEnd="13dp"
-                android:paddingBottom="7dp"
+                android:layout_marginTop="15dp"
                 android:text="@string/wallpaper_not_selected"
-                android:textColor="#C7D9EF"
-                android:textSize="11sp" />
+                android:textColor="#D8E7F9"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/choose_wallpaper_button"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="17dp"
+                android:background="@drawable/bg_primary_action"
+                android:fontFamily="sans-serif-medium"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:stateListAnimator="@null"
+                android:text="@string/choose_wallpaper"
+                android:textAllCaps="false"
+                android:textColor="#102038"
+                android:textSize="15sp" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="30dp"
             android:fontFamily="sans-serif-medium"
             android:letterSpacing="0.10"
-            android:text="CUSTOMIZE"
+            android:text="DEPTH &amp; LAYERING"
             android:textColor="#8498B4"
             android:textSize="11sp" />
-
-        <Button
-            android:id="@+id/clock_appearance_button"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_secondary_action"
-            android:fontFamily="sans-serif-medium"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:stateListAnimator="@null"
-            android:text="@string/font_and_color"
-            android:textAllCaps="false"
-            android:textColor="#EAF4FF"
-            android:textSize="15sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:layout_marginTop="24dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.10"
-            android:text="WALLPAPER"
-            android:textColor="#8498B4"
-            android:textSize="11sp" />
-
-        <Button
-            android:id="@+id/choose_wallpaper_button"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_primary_action"
-            android:fontFamily="sans-serif-medium"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:stateListAnimator="@null"
-            android:text="@string/choose_wallpaper"
-            android:textAllCaps="false"
-            android:textColor="#102038"
-            android:textSize="15sp" />
 
         <Button
             android:id="@+id/edit_foreground_button"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
+            android:layout_height="56dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/bg_secondary_action"
             android:fontFamily="sans-serif-medium"
@@ -223,17 +181,28 @@
             android:textColor="#D8E7F9"
             android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/apply_live_wallpaper_button"
+        <TextView
             android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="18dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="30dp"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.10"
+            android:text="CLOCK APPEARANCE"
+            android:textColor="#8498B4"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/clock_appearance_button"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bg_primary_action"
             android:fontFamily="sans-serif-medium"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:stateListAnimator="@null"
-            android:text="@string/preview_and_set"
+            android:text="Open Clock Studio"
             android:textAllCaps="false"
             android:textColor="#102038"
             android:textSize="15sp" />
@@ -241,9 +210,9 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
             android:gravity="center"
-            android:text="Drag to position  •  Pinch to resize"
+            android:text="Live preview, font, weight, colour and material — together."
             android:textColor="#71849F"
             android:textSize="11sp" />
 
