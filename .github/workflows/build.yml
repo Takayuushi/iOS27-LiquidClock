@@ -5,9 +5,21 @@ on:
     branches:
       - main
       - 'feature/**'
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
   pull_request:
     branches:
       - main
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
   workflow_dispatch:
 
 permissions:

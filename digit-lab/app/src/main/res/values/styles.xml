@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="DigitLabTheme" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#C7E5FF</item>
+    <style name="DigitLabTheme" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#A8C9FF</item>
+        <item name="colorOnPrimary">#062F55</item>
+        <item name="colorPrimaryContainer">#24496F</item>
+        <item name="colorOnPrimaryContainer">#D5E6FF</item>
+        <item name="colorSecondary">#B9C8E2</item>
+        <item name="colorSurface">#101827</item>
+        <item name="colorSurfaceVariant">#1D2A3D</item>
+        <item name="colorOnSurface">#E5ECF7</item>
+        <item name="colorOnSurfaceVariant">#B8C5D9</item>
         <item name="android:statusBarColor">#00000000</item>
         <item name="android:navigationBarColor">#E8090E18</item>
         <item name="android:windowLightStatusBar">false</item>

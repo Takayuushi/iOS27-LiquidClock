@@ -22,7 +22,9 @@ import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.SeekBar
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.slider.Slider
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -47,12 +49,12 @@ class DigitLabActivity : Activity() {
     private lateinit var renderer: LiquidWallpaperRenderer
     private lateinit var preview: RendererPreview
     private lateinit var sampleInput: EditText
-    private lateinit var modeGlass: TextView
-    private lateinit var modeFrosted: TextView
+    private lateinit var modeGlass: MaterialButton
+    private lateinit var modeFrosted: MaterialButton
     private lateinit var weightValue: TextView
     private lateinit var panel: View
     private lateinit var expandButton: TextView
-    private var styleButtons: List<TextView> = emptyList()
+    private var styleButtons: List<MaterialButton> = emptyList()
     private var glassMode = true
     private var fontStyle = 0
     private var fontWeight = 400
@@ -126,11 +128,18 @@ class DigitLabActivity : Activity() {
     }
 
     private fun buildPanel(): View {
+        val card = MaterialCardView(this).apply {
+            radius = dp(28).toFloat()
+            cardElevation = dp(16).toFloat()
+            strokeWidth = dp(1)
+            setStrokeColor(0x443F5878)
+            setCardBackgroundColor(0xF20C1422.toInt())
+            useCompatPadding = false
+        }
         val scroll = android.widget.ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            background = roundedBackground(0xE90B1220.toInt(), dp(24))
-            elevation = dp(18).toFloat()
+            setBackgroundColor(Color.TRANSPARENT)
         }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -232,19 +241,21 @@ class DigitLabActivity : Activity() {
         weightRow.addView(weightValue)
         content.addView(weightRow)
 
-        content.addView(SeekBar(this).apply {
-            max = 800
-            progress = fontWeight - 100
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (!fromUser) return
-                    fontWeight = progress + 100
-                    weightValue.text = fontWeight.toString()
-                    handler.removeCallbacks(applyWeight)
-                    handler.postDelayed(applyWeight, 180L)
-                }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+        content.addView(Slider(this).apply {
+            valueFrom = 100f
+            valueTo = 900f
+            stepSize = 1f
+            value = fontWeight.toFloat()
+            addOnChangeListener { _, value, fromUser ->
+                if (!fromUser) return@addOnChangeListener
+                fontWeight = value.toInt()
+                weightValue.text = fontWeight.toString()
+                handler.removeCallbacks(applyWeight)
+                handler.postDelayed(applyWeight, 180L)
+            }
+            addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+                override fun onStartTrackingTouch(slider: Slider) = Unit
+                override fun onStopTrackingTouch(slider: Slider) {
                     handler.removeCallbacks(applyWeight)
                     applyWeight.run()
                 }
@@ -262,7 +273,8 @@ class DigitLabActivity : Activity() {
         content.addView(actions)
 
         scroll.addView(content)
-        return scroll
+        card.addView(scroll)
+        return card
     }
 
     private fun sectionLabel(text: String) = TextView(this).apply {
@@ -273,20 +285,24 @@ class DigitLabActivity : Activity() {
         setPadding(0, dp(6), 0, dp(5))
     }
 
-    private fun makeButton(label: String, action: () -> Unit) =
+    private fun makeButton(label: String, action: () -> Unit): MaterialButton =
         makeChip(label, false, action)
 
     private fun makeChip(label: String, selected: Boolean, action: () -> Unit) =
-        TextView(this).apply {
+        MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = label
             textSize = 12f
-            gravity = Gravity.CENTER
-            setPadding(dp(10), 0, dp(10), 0)
-            setTextColor(Color.WHITE)
-            background = roundedBackground(
-                if (selected) 0xFF34547A.toInt() else 0xFF1B293C.toInt(),
-                dp(12)
-            )
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            cornerRadius = dp(14)
+            minHeight = dp(40)
+            minimumHeight = dp(40)
+            setPadding(dp(12), 0, dp(12), 0)
+            setTextColor(if (selected) 0xFFEAF3FF.toInt() else 0xFFD5E0F0.toInt())
+            backgroundTintList = android.content.res.ColorStateList.valueOf(if (selected) 0xFF31577F.toInt() else 0xFF1B293B.toInt())
+            strokeWidth = dp(1)
+            strokeColor = android.content.res.ColorStateList.valueOf(if (selected) 0xFF6E9AC8.toInt() else 0xFF35465D.toInt())
             setOnClickListener { action() }
         }
 
@@ -303,16 +319,15 @@ class DigitLabActivity : Activity() {
 
     private fun updateStyleButtons() {
         styleButtons.forEachIndexed { index, chip ->
-            chip.background = roundedBackground(
-                if (index == fontStyle) 0xFF34547A.toInt() else 0xFF1B293C.toInt(),
-                dp(10)
-            )
+            val selected = index == fontStyle
+            chip.backgroundTintList = android.content.res.ColorStateList.valueOf(if (selected) 0xFF31577F.toInt() else 0xFF1B293B.toInt())
+            chip.strokeColor = android.content.res.ColorStateList.valueOf(if (selected) 0xFF6E9AC8.toInt() else 0xFF35465D.toInt())
         }
     }
 
     private fun updateModeButtons() {
-        modeGlass.background = roundedBackground(if (glassMode) 0xFF34547A.toInt() else 0xFF1B293C.toInt(), dp(12))
-        modeFrosted.background = roundedBackground(if (!glassMode) 0xFF34547A.toInt() else 0xFF1B293C.toInt(), dp(12))
+        modeGlass.backgroundTintList = android.content.res.ColorStateList.valueOf(if (glassMode) 0xFF31577F.toInt() else 0xFF1B293B.toInt())
+        modeFrosted.backgroundTintList = android.content.res.ColorStateList.valueOf(if (!glassMode) 0xFF31577F.toInt() else 0xFF1B293B.toInt())
     }
 
     private fun setGlassMode(useGlass: Boolean) {

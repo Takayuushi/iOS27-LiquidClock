@@ -5,7 +5,6 @@ on:
     branches: ['feature/**']
     paths:
       - 'digit-lab/**'
-      - '.github/workflows/digit-lab.yml'
       - '.github/scripts/prepare-digit-lab-fonts.sh'
   pull_request:
     paths:
