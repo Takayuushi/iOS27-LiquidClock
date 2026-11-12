@@ -840,7 +840,7 @@ class ClockAppearanceActivity : Activity() {
 
     private class WallpaperClockPreview(
         context: Context,
-        private val onClockInteraction: () -> Unit
+        private val onPreviewTouch: () -> Unit
     ) : View(context) {
         private val renderer = LiquidWallpaperRenderer(context)
         private var renderWidth = 0
@@ -933,17 +933,26 @@ class ClockAppearanceActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     val x = renderX(event.x)
                     val y = renderY(event.y)
-                    if (!renderer.isClockHit(x, y)) return false
 
-                    onClockInteraction()
-                    ClockDiagnostics.record("Clock preview touch started at x=${x.toInt()} y=${y.toInt()}")
+                    // Any touch on the exposed wallpaper preview dismisses the
+                    // controls. Clock hit-testing only decides whether this same
+                    // gesture should also move or resize the clock.
+                    onPreviewTouch()
                     activePointerId = event.getPointerId(0)
                     lastTouchX = x
                     lastTouchY = y
-                    draggingClock = true
                     pinchingClock = false
                     touchGestureCaptured = true
                     parent?.requestDisallowInterceptTouchEvent(true)
+
+                    draggingClock = renderer.isClockHit(x, y)
+                    ClockDiagnostics.record(
+                        if (draggingClock) {
+                            "Clock preview touch started at x=${x.toInt()} y=${y.toInt()}"
+                        } else {
+                            "Wallpaper preview touched outside clock at x=${x.toInt()} y=${y.toInt()}; controls collapsing"
+                        }
+                    )
                     return true
                 }
 

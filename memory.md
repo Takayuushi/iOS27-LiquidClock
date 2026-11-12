@@ -194,3 +194,24 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 3. Confirm frosted/Solid mode has a gentle satin shine without becoming glossy chrome or losing its translucent frosted look.
 4. Continue inspecting other digits during real use and make only glyph-specific changes when an actual defect is visible.
 5. Preserve wallpaper preview/applied separation and horizontal pinch behaviour.
+
+
+## Preview tap-to-dismiss controller behaviour (13 Nov 2026)
+
+### User request
+- The controller/appearance panel was only sliding down when a touch landed on the clock glyph itself.
+- Change it so **any touch in the exposed wallpaper preview area** slides the controller panel down.
+- The clock's position must not matter: even if it is dragged below/behind the controller panel, the user can tap another visible part of the wallpaper preview to dismiss the panel.
+- Preserve clock drag and the existing horizontal/vertical two-finger pinch interactions when the touch begins on the clock.
+- The floating arrow remains the way to expand the controller panel again.
+
+### Implemented
+- Renamed the WallpaperClockPreview interaction callback from clock-specific onClockInteraction to preview-wide onPreviewTouch.
+- Every ACTION_DOWN reaching the preview now invokes the panel-collapse callback and is captured by the preview.
+- Renderer hit-testing is retained only to decide whether a gesture should also initiate clock dragging. A touch outside the glyph dismisses the controls without moving the clock.
+- Existing pointer/pinch paths are unchanged; touches on the actual clock continue to drag or resize it.
+- A visible control-panel overlay still receives its own child-control touches; this change applies to the exposed wallpaper preview area.
+
+### Verification
+- Static source change committed; Android build and device behaviour pending.
+- Test: tap empty preview space; the panel should slide down. Tap the clock; the panel should slide down and dragging should still move it. With the clock placed underneath the panel, tap a different exposed preview area to dismiss the panel. Tap the floating arrow to show the panel again.
