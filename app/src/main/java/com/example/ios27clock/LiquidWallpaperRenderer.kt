@@ -68,7 +68,7 @@ internal class LiquidWallpaperRenderer(
         private const val BASE_WEIGHT_MAX = 820
         private const val COLON_ADVANCE_EM = 0.105f
         private const val COLON_DOT_RADIUS_EM = 0.040f
-        private const val GLYPH_STROKE_FRACTION = 0.205f
+        private const val GLYPH_STROKE_FRACTION = 0.135f
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 2.55f
@@ -706,7 +706,8 @@ internal class LiquidWallpaperRenderer(
         val advances = glyphs.map { advanceFor(it, glyphHeight) }
         val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
         var cursorX = centerX - totalWidth * 0.5f
-        val composedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
+        val composedPath = Path()
+        val colonPath = Path()
         val composedBounds = RectF()
         var hasBounds = false
 
@@ -715,8 +716,8 @@ internal class LiquidWallpaperRenderer(
                 val radius = glyphHeight * COLON_DOT_RADIUS_EM * 1.08f
                 val offset = glyphHeight * COLON_DOT_OFFSET_EM
                 val dotX = cursorX + advances[index] * 0.5f
-                composedPath.addCircle(dotX, centerY - offset, radius, Path.Direction.CW)
-                composedPath.addCircle(dotX, centerY + offset, radius, Path.Direction.CW)
+                colonPath.addCircle(dotX, centerY - offset, radius, Path.Direction.CW)
+                colonPath.addCircle(dotX, centerY + offset, radius, Path.Direction.CW)
                 val colonBounds = RectF(
                     dotX - radius, centerY - offset - radius,
                     dotX + radius, centerY + offset + radius
@@ -759,6 +760,11 @@ internal class LiquidWallpaperRenderer(
             val naturalShapePath = Path()
             composedPath.transform(naturalShapeTransform, naturalShapePath)
             naturalShapePath.computeBounds(composedBounds, true)
+            val naturalColonPath = Path()
+            colonPath.transform(naturalShapeTransform, naturalColonPath)
+            val naturalColonBounds = RectF()
+            naturalColonPath.computeBounds(naturalColonBounds, true)
+            if (!naturalColonBounds.isEmpty) composedBounds.union(naturalColonBounds)
 
             val allowedScaleY = (
                 height * MAX_COMMITTED_HEIGHT_FRACTION /
@@ -774,7 +780,16 @@ internal class LiquidWallpaperRenderer(
             val finalPath = Path()
             naturalShapePath.transform(verticalTransform, finalPath)
             finalPath.computeBounds(composedBounds, true)
+            val finalColonPath = Path()
+            naturalColonPath.transform(verticalTransform, finalColonPath)
+            val finalColonBounds = RectF()
+            finalColonPath.computeBounds(finalColonBounds, true)
+            if (!finalColonBounds.isEmpty) composedBounds.union(finalColonBounds)
 
+            // The vector paths are centerlines, so reserve half the common
+            // stroke on every side before creating the mask/SDF.
+            val commonStrokeWidth = glyphHeight * GLYPH_STROKE_FRACTION
+            composedBounds.inset(-commonStrokeWidth * 0.5f, -commonStrokeWidth * 0.5f)
             val inset = max(2f, glyphHeight * 0.025f)
             glyphBounds.set(
                 (composedBounds.left - inset).coerceAtLeast(0f),
@@ -784,6 +799,17 @@ internal class LiquidWallpaperRenderer(
             )
             maskCanvas.drawPath(
                 finalPath,
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                    color = Color.WHITE
+                    style = Paint.Style.STROKE
+                    strokeWidth = commonStrokeWidth
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    strokeMiter = 1f
+                }
+            )
+            maskCanvas.drawPath(
+                finalColonPath,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.FILL
@@ -838,10 +864,11 @@ internal class LiquidWallpaperRenderer(
                 w * 0.34f, h * 0.23f, Path.Direction.CW
             )
             "1" -> {
-                centerline.moveTo(left + w * 0.27f, top + h * 0.22f)
-                centerline.lineTo(left + w * 0.53f, top + h * 0.045f)
-                centerline.lineTo(left + w * 0.53f, bottom - h * 0.055f)
-                centerline.lineTo(left + w * 0.20f, bottom - h * 0.055f)
+                centerline.moveTo(left + w * 0.25f, top + h * 0.22f)
+                centerline.lineTo(left + w * 0.52f, top + h * 0.045f)
+                centerline.lineTo(left + w * 0.52f, bottom - h * 0.055f)
+                centerline.moveTo(left + w * 0.22f, bottom - h * 0.055f)
+                centerline.lineTo(right - w * 0.16f, bottom - h * 0.055f)
             }
             "2" -> {
                 centerline.moveTo(left + w * 0.14f, top + h * 0.24f)
@@ -899,14 +926,10 @@ internal class LiquidWallpaperRenderer(
             else -> return Path()
         }
 
-        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = w * GLYPH_STROKE_FRACTION
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-            strokeMiter = 1f
-        }
-        return Path().also { filled -> stroke.getFillPath(centerline, filled) }
+        // Return the centerline. The complete clock mask strokes all digits
+        // with one shared width, eliminating per-character weight variation
+        // and self-intersection holes from merged filled outlines.
+        return centerline
     }
 
     /**
