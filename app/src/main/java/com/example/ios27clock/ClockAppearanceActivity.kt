@@ -10,6 +10,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -54,7 +56,7 @@ class ClockAppearanceActivity : Activity() {
 
         private const val WALLPAPER_SOURCE_FILE = "liquid_clock_wallpaper_source.img"
         private val FONT_NAMES = arrayOf("Regular", "Condensed", "Compressed", "Expanded")
-        private val WIDTH_COORDINATES = intArrayOf(100, 75, 30, 150)
+        private val WIDTH_COORDINATES = intArrayOf(100, 60, 47, 132)
         private const val PANEL_COLOR = 0xFFE5F0FD.toInt()
     }
 
@@ -68,6 +70,17 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var colorTiles: List<FrameLayout>
     private var swatches: IntArray = FALLBACK_SWATCHES.copyOf()
     private val previewTypefaceCache = LinkedHashMap<Int, Typeface>()
+    private val previewHandler = Handler(Looper.getMainLooper())
+    private var weightPreviewQueued = false
+    private var pendingWallpaperCommit = false
+    private val weightPreviewRunnable = Runnable {
+        weightPreviewQueued = false
+        if (::preview.isInitialized) {
+            saveAppearancePreferences()
+            preview.reloadAppearance()
+            pendingWallpaperCommit = true
+        }
+    }
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
     private lateinit var solidOption: TextView
@@ -255,11 +268,21 @@ class ClockAppearanceActivity : Activity() {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     selectedWeight = progress + 1
                     weightLabel.text = selectedWeight.toString()
+
+                    // Rebuild only the reduced-resolution editor preview at a
+                    // controlled rate while dragging. The full-resolution live
+                    // wallpaper is refreshed once after the editor closes.
+                    if (fromUser && !weightPreviewQueued) {
+                        weightPreviewQueued = true
+                        previewHandler.postDelayed(weightPreviewRunnable, 140L)
+                    }
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
 
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    previewHandler.removeCallbacks(weightPreviewRunnable)
+                    weightPreviewQueued = false
                     refreshFontTiles()
                     persistAppearance()
                 }
@@ -432,19 +455,19 @@ class ClockAppearanceActivity : Activity() {
         return outer
     }
 
-    private fun persistAppearance() {
+    private fun saveAppearancePreferences() {
         preferences.edit()
             .putInt(KEY_FONT_STYLE, selectedStyle)
             .putInt(KEY_FONT_WEIGHT, selectedWeight)
             .putInt(KEY_COLOR, selectedColor)
             .putBoolean(KEY_GLASS_MODE, glassMode)
             .apply()
+    }
 
+    private fun persistAppearance() {
+        saveAppearancePreferences()
         preview.reloadAppearance()
-        sendBroadcast(
-            Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
-                .setPackage(packageName)
-        )
+        pendingWallpaperCommit = true
     }
 
     private fun refreshFontTiles() {
@@ -640,6 +663,17 @@ class ClockAppearanceActivity : Activity() {
     }
 
     override fun onDestroy() {
+        previewHandler.removeCallbacks(weightPreviewRunnable)
+
+        // Apply one full-resolution update only after the editor has released
+        // its downsampled renderer. This avoids holding two large glyph/SDF
+        // allocations while the wallpaper engine rebuilds the clock.
+        if (pendingWallpaperCommit) {
+            sendBroadcast(
+                Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
+                    .setPackage(packageName)
+            )
+        }
         if (::preview.isInitialized) preview.releaseRenderer()
         super.onDestroy()
     }
