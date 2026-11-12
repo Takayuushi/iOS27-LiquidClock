@@ -202,7 +202,7 @@ jobs:
       - name: Launch wallpaper preview and capture screenshot
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 37.0
+          api-level: '37.0'
           target: google_apis_ps16k
           arch: x86_64
           profile: pixel_8
