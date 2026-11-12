@@ -732,6 +732,7 @@ class ClockAppearanceActivity : Activity() {
         private var activePointerId = MotionEvent.INVALID_POINTER_ID
         private var draggingClock = false
         private var pinchingClock = false
+        private var touchGestureCaptured = false
         private var lastTouchX = 0f
         private var lastTouchY = 0f
         private var pinchStartDistance = 0f
@@ -777,6 +778,7 @@ class ClockAppearanceActivity : Activity() {
                     lastTouchY = y
                     draggingClock = true
                     pinchingClock = false
+                    touchGestureCaptured = true
                     parent?.requestDisallowInterceptTouchEvent(true)
                     return true
                 }
@@ -820,10 +822,19 @@ class ClockAppearanceActivity : Activity() {
                 MotionEvent.ACTION_POINTER_UP -> {
                     if (pinchingClock) {
                         renderer.finishGesture()
-                        renderer.persistComposition()
                         pinchingClock = false
-                        draggingClock = false
                         pinchStartDistance = 0f
+
+                        // Continue as a one-finger drag with whichever pointer
+                        // remains down, so the gesture doesn't get orphaned.
+                        val remainingIndex = if (event.actionIndex == 0) 1 else 0
+                        if (remainingIndex < event.pointerCount) {
+                            activePointerId = event.getPointerId(remainingIndex)
+                            lastTouchX = renderX(event.getX(remainingIndex))
+                            lastTouchY = renderY(event.getY(remainingIndex))
+                            draggingClock = true
+                        }
+                        renderer.persistComposition()
                         invalidate()
                     }
                     return true
@@ -839,12 +850,13 @@ class ClockAppearanceActivity : Activity() {
                     activePointerId = MotionEvent.INVALID_POINTER_ID
                     draggingClock = false
                     pinchingClock = false
+                    touchGestureCaptured = false
                     pinchStartDistance = 0f
                     parent?.requestDisallowInterceptTouchEvent(false)
                     return true
                 }
             }
-            return draggingClock || pinchingClock
+            return touchGestureCaptured
         }
 
         fun reloadAppearance(rebuildDistanceField: Boolean = true) {
