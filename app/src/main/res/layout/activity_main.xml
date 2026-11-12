@@ -43,6 +43,17 @@
             android:textSize="14sp" />
 
         <Button
+            android:id="@+id/clock_appearance_button"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="18dp"
+            android:backgroundTint="#DAECFF"
+            android:text="Font &amp; Color"
+            android:textAllCaps="false"
+            android:textColor="#101A2A"
+            android:textSize="15sp" />
+
+        <Button
             android:id="@+id/choose_wallpaper_button"
             android:layout_width="match_parent"
             android:layout_height="58dp"
