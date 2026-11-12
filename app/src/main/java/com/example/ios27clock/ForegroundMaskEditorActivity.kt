@@ -3,7 +3,6 @@ package com.example.ios27clock
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.widget.Button
 import android.widget.Toast
@@ -105,22 +104,27 @@ class ForegroundMaskEditorActivity : Activity() {
                 R.string.mask_magnetic_off
             }
         )
-        addButton.backgroundTintList = ColorStateList.valueOf(
-            if (addSelected) Color.rgb(77, 151, 210) else Color.rgb(59, 71, 86)
+        addButton.setBackgroundResource(
+            if (addSelected) R.drawable.bg_mask_tool_selected
+            else R.drawable.bg_mask_tool_idle
         )
-        eraseButton.backgroundTintList = ColorStateList.valueOf(
-            if (eraseSelected) Color.rgb(190, 91, 72) else Color.rgb(59, 71, 86)
+        eraseButton.setBackgroundResource(
+            if (eraseSelected) R.drawable.bg_mask_tool_erase
+            else R.drawable.bg_mask_tool_idle
         )
-        magneticButton.backgroundTintList = ColorStateList.valueOf(
+        magneticButton.setBackgroundResource(
             if (drawingView.isMagneticLassoEnabled) {
-                Color.rgb(77, 151, 210)
+                R.drawable.bg_mask_tool_selected
             } else {
-                Color.rgb(59, 71, 86)
+                R.drawable.bg_mask_tool_idle
             }
         )
-        addButton.setTextColor(Color.WHITE)
-        eraseButton.setTextColor(Color.WHITE)
-        magneticButton.setTextColor(Color.WHITE)
+        listOf(addButton, eraseButton, magneticButton).forEach { button ->
+            button.backgroundTintList = null
+            button.setTextColor(Color.WHITE)
+            button.isAllCaps = false
+            button.stateListAnimator = null
+        }
     }
 
     private fun showOneTimeGuide() {
