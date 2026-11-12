@@ -353,6 +353,7 @@ internal class LiquidWallpaperRenderer(
      * Typeface and colour settings are stored alongside the clock composition.
      */
     fun reloadAppearance(rebuildDistanceField: Boolean = true) {
+        ClockDiagnostics.record("Renderer reload start: sdf=$rebuildDistanceField surface=${surfaceWidth}x${surfaceHeight}")
         val previousStyle = clockFontStyle
         val previousWeight = clockFontWeight
         val previousColor = clockColor
@@ -372,8 +373,10 @@ internal class LiquidWallpaperRenderer(
                         rebuildDistanceField = rebuildDistanceField
                     )
                 } catch (memoryError: OutOfMemoryError) {
+                    ClockDiagnostics.report("renderer-glyph-mask-out-of-memory", memoryError)
                     Log.e(TAG, "Clock weight preview ran out of memory; keeping the last rendered mask.", memoryError)
                 } catch (exception: RuntimeException) {
+                    ClockDiagnostics.report("renderer-glyph-mask", exception)
                     Log.e(TAG, "Clock weight preview could not rebuild its glyph mask.", exception)
                 }
             }
@@ -1058,7 +1061,7 @@ internal class LiquidWallpaperRenderer(
     private fun retireGlyphMask(bitmap: Bitmap?) {
         if (bitmap == null || bitmap.isRecycled || bitmap === glyphMask) return
         retiredGlyphMasks += bitmap
-        while (retiredGlyphMasks.size > 2) {
+        while (retiredGlyphMasks.size > 1) {
             val oldest = retiredGlyphMasks.removeAt(0)
             if (!oldest.isRecycled) oldest.recycle()
         }
@@ -1067,7 +1070,7 @@ internal class LiquidWallpaperRenderer(
     private fun retireGlyphSdf(bitmap: Bitmap?) {
         if (bitmap == null || bitmap.isRecycled || bitmap === glyphSdf) return
         retiredGlyphSdfs += bitmap
-        while (retiredGlyphSdfs.size > 2) {
+        while (retiredGlyphSdfs.size > 1) {
             val oldest = retiredGlyphSdfs.removeAt(0)
             if (!oldest.isRecycled) oldest.recycle()
         }
@@ -1234,17 +1237,18 @@ internal class LiquidWallpaperRenderer(
 
         // Keep the preview at native SDF resolution for crisp bevels. Only
         // downsample unusually large full-screen crops to bound temporary memory.
-        val maxSdfPixels = 750_000f
+        val maxSdfPixels = 420_000f
         val sdfScale = min(
             1f,
             kotlin.math.sqrt(maxSdfPixels / cropPixels.toFloat())
-        ).coerceAtLeast(0.50f)
+        ).coerceAtLeast(0.40f)
         val sdfWidth = max(1, (cropWidth * sdfScale).roundToInt())
         val sdfHeight = max(1, (cropHeight * sdfScale).roundToInt())
         val pixelCountLong = sdfWidth.toLong() * sdfHeight.toLong()
-        if (pixelCountLong <= 0L || pixelCountLong > 900_000L) return null
+        if (pixelCountLong <= 0L || pixelCountLong > 450_000L) return null
 
         val pixelCount = pixelCountLong.toInt()
+        ClockDiagnostics.record("SDF allocation start: crop=${cropWidth}x${cropHeight} output=${sdfWidth}x${sdfHeight} pixels=$pixelCount")
         val sourcePixels = IntArray(pixelCount)
         if (sdfScale >= 0.999f) {
             source.getPixels(sourcePixels, 0, sdfWidth, left, top, sdfWidth, sdfHeight)
@@ -1311,6 +1315,7 @@ internal class LiquidWallpaperRenderer(
             glyphSdfOriginX = left.toFloat()
             glyphSdfOriginY = top.toFloat()
             glyphSdfScale = sdfScale
+            ClockDiagnostics.record("SDF allocation complete: $pixelCount pixels")
         }
     }
 
@@ -1558,11 +1563,15 @@ internal class LiquidWallpaperRenderer(
                 )
                 .build()
         } catch (fontException: Exception) {
+            ClockDiagnostics.record("SF Pro renderer font fallback: ${fontException.javaClass.simpleName}")
             Log.w(
                 TAG,
                 "Official Apple SF Pro variable font unavailable; using its Display Thin face.",
                 fontException
             )
+            fallbackTypeface
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("renderer-sf-pro-typeface-allocation", memoryError)
             fallbackTypeface
         }
 
@@ -1590,6 +1599,7 @@ internal class LiquidWallpaperRenderer(
             shader.setFloatUniform("uSdfScale", glyphSdfScale)
             shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
         } catch (exception: RuntimeException) {
+            ClockDiagnostics.report("shader-glyph-input-refresh", exception)
             Log.w(TAG, "Could not refresh glyph mask/SDF inputs.", exception)
             glassShader = null
         }
@@ -1703,7 +1713,11 @@ internal class LiquidWallpaperRenderer(
             )
             glassShader = shader
         } catch (exception: RuntimeException) {
+            ClockDiagnostics.report("agsl-shader-initialization", exception)
             Log.w(TAG, "Unable to initialize AGSL shader.", exception)
+            glassShader = null
+        } catch (memoryError: OutOfMemoryError) {
+            ClockDiagnostics.report("agsl-shader-out-of-memory", memoryError)
             glassShader = null
         }
     }
