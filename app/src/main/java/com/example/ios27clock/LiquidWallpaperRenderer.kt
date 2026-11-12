@@ -60,11 +60,12 @@ internal class LiquidWallpaperRenderer(
         private const val MAX_GLYPH_WIDTH_SCALE = 1.00f
         private const val MIN_GLYPH_HEIGHT_SCALE = 1.00f
         private const val MAX_GLYPH_HEIGHT_SCALE = 1.04f
-        private const val TRACKING_EM = -0.012f
+        private const val TRACKING_EM = 0.035f
         private const val BASE_WEIGHT_MIN = 520
         private const val BASE_WEIGHT_MAX = 820
-        private const val COLON_ADVANCE_EM = 0.30f
-        private const val COLON_DOT_RADIUS_EM = 0.042f
+        private const val COLON_ADVANCE_EM = 0.105f
+        private const val COLON_DOT_RADIUS_EM = 0.040f
+        private const val GLYPH_STROKE_FRACTION = 0.205f
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 2.40f
@@ -645,7 +646,6 @@ internal class LiquidWallpaperRenderer(
     private fun rebuildGlyphMask(force: Boolean) {
         val timeText = currentTimeText()
         if (!force && timeText == cachedTimeText && glyphMask != null) return
-
         val width = surfaceWidth
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
@@ -653,236 +653,78 @@ internal class LiquidWallpaperRenderer(
         val mask = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-
         val glyphs = timeText.map { it.toString() }
-        val expansion = (
-            (clockScale - MIN_CLOCK_SCALE) /
-                (MAX_CLOCK_SCALE - MIN_CLOCK_SCALE)
-            ).coerceIn(0f, 1f)
-        val baseWeight = (
-            BASE_WEIGHT_MIN +
-                (BASE_WEIGHT_MAX - BASE_WEIGHT_MIN) * expansion
-            ).roundToInt()
-        val globalWidthScale =
-            MIN_GLYPH_WIDTH_SCALE +
-                (MAX_GLYPH_WIDTH_SCALE - MIN_GLYPH_WIDTH_SCALE) * expansion
-        val globalHeightScale =
-            MIN_GLYPH_HEIGHT_SCALE +
-                (MAX_GLYPH_HEIGHT_SCALE - MIN_GLYPH_HEIGHT_SCALE) * expansion
 
+        // All glyphs are authored vector contours with a common cap height.
+        // No font metrics or font outlines participate in this layout.
+        val totalAdvanceUnits = glyphs.sumOf { glyph ->
+            (if (glyph == ":") COLON_ADVANCE_EM else glyphAdvanceUnit(glyph)).toDouble()
+        }.toFloat() + TRACKING_EM * (glyphs.size - 1).coerceAtLeast(0)
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxHeight = height * (
             MAX_GLYPH_HEIGHT_FRACTION * clockScale
             ).coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
-        val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
 
         var low = 1f
-        var high = min(height * 0.68f, width * 0.96f)
-        var fontSize = high
-        val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = Color.WHITE
-            textAlign = Paint.Align.LEFT
-            style = Paint.Style.FILL
-            typeface = typefaceFor(baseWeight, 80, glyphWidthProfile("0", expansion))
-            isSubpixelText = true
-        }
-
+        var high = min(height * 0.78f, width * 1.20f)
+        var glyphHeight = high
         repeat(28) {
-            val candidate = (low + high) / 2f
-            sizingPaint.textSize = candidate
-            val tracking = candidate * TRACKING_EM * globalWidthScale
-            var candidateWidth = 0f
-            var visibleHeight = 0f
-
-            glyphs.forEach { glyph ->
-                if (glyph == ":") {
-                    candidateWidth += candidate * COLON_ADVANCE_EM
-                } else {
-                    sizingPaint.typeface = typefaceFor(
-                        (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
-                        (candidate / density).roundToInt().coerceIn(17, 96),
-                        glyphWidthProfile(glyph, expansion)
-                    )
-                    candidateWidth +=
-                        sizingPaint.measureText(glyph) *
-                        globalWidthScale *
-                        glyphWidthProfile(glyph, expansion)
-
-                    val bounds = android.graphics.Rect()
-                    sizingPaint.getTextBounds(glyph, 0, glyph.length, bounds)
-                    visibleHeight = max(
-                        visibleHeight,
-                        bounds.height() * globalHeightScale * glyphHeightFactor(glyph)
-                    )
-                }
-            }
-
-            candidateWidth += tracking * (glyphs.size - 1).coerceAtLeast(0)
-            if (candidateWidth <= maxWidth && visibleHeight <= maxHeight) {
-                fontSize = candidate
+            val candidate = (low + high) * 0.5f
+            if (candidate * totalAdvanceUnits <= maxWidth && candidate <= maxHeight) {
+                glyphHeight = candidate
                 low = candidate
             } else {
                 high = candidate
             }
         }
 
-        sizingPaint.textSize = fontSize
-        sizingPaint.typeface = typefaceFor(
-            baseWeight,
-            (fontSize / density).roundToInt().coerceIn(17, 96),
-            glyphWidthProfile("0", expansion)
-        )
-        val metrics = sizingPaint.fontMetrics
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
-        val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
-        val tracking = fontSize * TRACKING_EM * globalWidthScale
-
-        val advances = glyphs.map { glyph ->
-            if (glyph == ":") {
-                fontSize * COLON_ADVANCE_EM
-            } else {
-                sizingPaint.typeface = typefaceFor(
-                    (baseWeight + glyphWeightOffset(glyph)).coerceIn(100, 900),
-                    (fontSize / density).roundToInt().coerceIn(17, 96),
-                    glyphWidthProfile(glyph, expansion)
-                )
-                sizingPaint.textSize = fontSize
-                sizingPaint.measureText(glyph) * globalWidthScale * glyphWidthProfile(glyph, expansion)
-            }
-        }
-        val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
-        var cursorX = centerX - totalWidth / 2f
-
-        val composedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
-        // Colon dots are deliberately kept out of the vertical glyph transform:
-        // they remain circular while the numerals adapt to the tall lock-screen layout.
-        val colonPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
-        val composedBounds = RectF()
+        val totalWidth = glyphHeight * totalAdvanceUnits
+        var cursorX = centerX - totalWidth * 0.5f
+        val top = centerY - glyphHeight * 0.5f
+        val composedPath = Path()
+        val bounds = RectF()
         var hasBounds = false
 
-        glyphs.forEachIndexed { index, glyph ->
+        glyphs.forEach { glyph ->
             if (glyph == ":") {
-                val dotRadius = fontSize * COLON_DOT_RADIUS_EM
-                val dotOffset = fontSize * COLON_DOT_OFFSET_EM
-                val dotCenterX = cursorX + advances[index] * 0.5f
-                colonPath.addCircle(dotCenterX, centerY - dotOffset, dotRadius, Path.Direction.CW)
-                colonPath.addCircle(dotCenterX, centerY + dotOffset, dotRadius, Path.Direction.CW)
-                val colonBounds = RectF(
-                    dotCenterX - dotRadius,
-                    centerY - dotOffset - dotRadius,
-                    dotCenterX + dotRadius,
-                    centerY + dotOffset + dotRadius
-                )
-                if (!hasBounds) {
-                    composedBounds.set(colonBounds)
-                    hasBounds = true
-                } else {
-                    composedBounds.union(colonBounds)
-                }
+                val radius = glyphHeight * COLON_DOT_RADIUS_EM
+                val offset = glyphHeight * COLON_DOT_OFFSET_EM
+                val dotX = cursorX + glyphHeight * COLON_ADVANCE_EM * 0.5f
+                composedPath.addCircle(dotX, centerY - offset, radius, Path.Direction.CW)
+                composedPath.addCircle(dotX, centerY + offset, radius, Path.Direction.CW)
+                cursorX += glyphHeight * (COLON_ADVANCE_EM + TRACKING_EM)
             } else {
-                val weightForGlyph = (
-                    baseWeight +
-                        glyphWeightOffset(glyph) +
-                        wallpaperWeightAdjustment(
-                            cursorX + advances[index] * 0.5f,
-                            centerY,
-                            fontSize * 0.10f
-                        )
-                    ).coerceIn(100, 900)
-
-                val glyphPaint = Paint(sizingPaint).apply {
-                    typeface = typefaceFor(
-                        weightForGlyph,
-                        (fontSize / density).roundToInt().coerceIn(17, 96),
-                        glyphWidthProfile(glyph, expansion)
-                    )
-                    textSize = fontSize
-                    style = Paint.Style.FILL
-                    strokeWidth = 0f
-                }
-
-                // Every numeral comes from the same SF Pro variable family.
-                val glyphPath = Path()
-                glyphPaint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, glyphPath)
-                val originalBounds = RectF()
-                glyphPath.computeBounds(originalBounds, true)
-
-                if (!originalBounds.isEmpty) {
-                    // Replace the stock oval 0 and 8 with the taller, softly
-                    // squared counter shapes used by the adaptive lock-screen style.
-                    val sourcePath = when (glyph) {
-                        "0" -> buildAdaptiveZeroPath(originalBounds)
-                        "8" -> buildAdaptiveEightPath(originalBounds)
-                        else -> glyphPath
-                    }
-
-                    // The bundled font is not heavy enough for the large glass
-                    // treatment. Expand every outline slightly, preserving its
-                    // counters, before applying the optical layout transform.
-                    val boldPath = Path(sourcePath)
-                    val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        style = Paint.Style.STROKE
-                        strokeWidth = fontSize * (0.018f + expansion * 0.020f)
-                        strokeJoin = Paint.Join.ROUND
-                        strokeCap = Paint.Cap.ROUND
-                    }
-                    val outlinePath = Path()
-                    if (outlinePaint.getFillPath(sourcePath, outlinePath)) {
-                        runCatching { boldPath.op(outlinePath, Path.Op.UNION) }
-                    }
-
-                    val glyphTransform = Matrix().apply {
-                        setScale(
-                            globalWidthScale * glyphWidthProfile(glyph, expansion),
-                            globalHeightScale * glyphHeightFactor(glyph),
-                            originalBounds.centerX(),
-                            originalBounds.centerY()
-                        )
-                    }
-                    val opticalPath = Path()
-                    boldPath.transform(glyphTransform, opticalPath)
-                    composedPath.addPath(opticalPath)
-
-                    val opticalBounds = RectF()
-                    opticalPath.computeBounds(opticalBounds, true)
+                val glyphWidth = glyphHeight * glyphAdvanceUnit(glyph)
+                val glyphRect = RectF(cursorX, top, cursorX + glyphWidth, top + glyphHeight)
+                val glyphPath = buildVectorGlyph(glyph, glyphRect)
+                val glyphPathBounds = RectF()
+                glyphPath.computeBounds(glyphPathBounds, true)
+                if (!glyphPathBounds.isEmpty) {
+                    composedPath.addPath(glyphPath)
                     if (!hasBounds) {
-                        composedBounds.set(opticalBounds)
+                        bounds.set(glyphPathBounds)
                         hasBounds = true
                     } else {
-                        composedBounds.union(opticalBounds)
+                        bounds.union(glyphPathBounds)
                     }
                 }
+                cursorX += glyphWidth + glyphHeight * TRACKING_EM
             }
-            cursorX += advances[index] + tracking
         }
 
         if (hasBounds) {
-            val fitX = ((maxWidth - 8f) / composedBounds.width().coerceAtLeast(1f))
-                .coerceIn(0.01f, 1f)
-            // Unlike the old renderer, allow fitY > 1: the final glyph
-            // geometry must be able to grow vertically, not only shrink.
-            val fitY = ((maxHeight - 8f) / composedBounds.height().coerceAtLeast(1f))
-                .coerceIn(0.01f, 4f)
-            val fittedPath = Path()
-            if (fitX < 0.999f || kotlin.math.abs(fitY - 1f) > 0.001f) {
-                val fitMatrix = Matrix().apply { setScale(fitX, fitY, centerX, centerY) }
-                composedPath.transform(fitMatrix, fittedPath)
-            } else {
-                fittedPath.set(composedPath)
-            }
-            fittedPath.addPath(colonPath)
-            fittedPath.computeBounds(composedBounds, true)
-
-            val inset = max(2f, fontSize * 0.010f)
+            composedPath.computeBounds(bounds, true)
+            val inset = max(2f, glyphHeight * 0.008f)
             glyphBounds.set(
-                (composedBounds.left - inset).coerceAtLeast(0f),
-                (composedBounds.top - inset).coerceAtLeast(0f),
-                (composedBounds.right + inset).coerceAtMost(width.toFloat()),
-                (composedBounds.bottom + inset).coerceAtMost(height.toFloat())
+                (bounds.left - inset).coerceAtLeast(0f),
+                (bounds.top - inset).coerceAtLeast(0f),
+                (bounds.right + inset).coerceAtMost(width.toFloat()),
+                (bounds.bottom + inset).coerceAtMost(height.toFloat())
             )
             maskCanvas.drawPath(
-                fittedPath,
+                composedPath,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.FILL
@@ -907,6 +749,198 @@ internal class LiquidWallpaperRenderer(
         previewScaleY = 1f
         cachedTimeText = timeText
         updateGlyphMaskInput()
+    }
+
+    /** Width of each custom glyph, as a fraction of shared cap height. */
+    private fun glyphAdvanceUnit(glyph: String): Float = when (glyph) {
+        "0" -> 0.235f
+        "1" -> 0.145f
+        "2" -> 0.225f
+        "3" -> 0.225f
+        "4" -> 0.235f
+        "5" -> 0.225f
+        "6" -> 0.235f
+        "7" -> 0.215f
+        "8" -> 0.245f
+        "9" -> 0.235f
+        else -> 0.225f
+    }
+
+    /**
+     * Custom numeral drawing system. A shared round-ended stroke language
+     * keeps the ten independent silhouettes optically consistent.
+     */
+    private fun buildVectorGlyph(glyph: String, bounds: RectF): Path {
+        val l = bounds.left
+        val t = bounds.top
+        val r = bounds.right
+        val b = bounds.bottom
+        val w = bounds.width()
+        val h = bounds.height()
+        val cx = bounds.centerX()
+        val stroke = w * GLYPH_STROKE_FRACTION
+        val half = stroke * 0.5f
+        val result = Path()
+
+        fun strokeContour(contour: Path, thickness: Float = stroke) {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = thickness
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            val filled = Path()
+            if (!paint.getFillPath(contour, filled)) return
+            if (result.isEmpty) result.set(filled)
+            else {
+                val merged = Path()
+                if (merged.op(result, filled, Path.Op.UNION)) result.set(merged)
+                else result.addPath(filled)
+            }
+        }
+
+        when (glyph) {
+            "0" -> {
+                val contour = Path().apply {
+                    addRoundRect(
+                        RectF(l + half, t + half, r - half, b - half),
+                        w * 0.39f, h * 0.105f, Path.Direction.CW
+                    )
+                }
+                strokeContour(contour)
+            }
+            "1" -> {
+                val contour = Path().apply {
+                    moveTo(l + w * 0.73f, t + h * 0.16f)
+                    cubicTo(l + w * 0.62f, t + h * 0.18f,
+                        l + w * 0.47f, t + h * 0.29f,
+                        l + w * 0.31f, t + h * 0.34f)
+                    moveTo(l + w * 0.58f, t + h * 0.17f)
+                    lineTo(l + w * 0.58f, b - h * 0.09f)
+                    moveTo(l + w * 0.20f, b - h * 0.09f)
+                    lineTo(l + w * 0.88f, b - h * 0.09f)
+                }
+                strokeContour(contour)
+            }
+            "2" -> {
+                val contour = Path().apply {
+                    moveTo(l + w * 0.10f, t + h * 0.25f)
+                    cubicTo(l + w * 0.12f, t + h * 0.07f,
+                        l + w * 0.75f, t + h * 0.01f,
+                        l + w * 0.90f, t + h * 0.22f)
+                    cubicTo(l + w * 1.02f, t + h * 0.40f,
+                        l + w * 0.69f, t + h * 0.58f,
+                        l + w * 0.47f, t + h * 0.73f)
+                    lineTo(l + w * 0.10f, b - h * 0.09f)
+                    lineTo(r - w * 0.07f, b - h * 0.09f)
+                }
+                strokeContour(contour)
+            }
+            "3" -> {
+                val contour = Path().apply {
+                    moveTo(l + w * 0.13f, t + h * 0.17f)
+                    cubicTo(l + w * 0.34f, t + h * 0.02f,
+                        l + w * 0.87f, t + h * 0.04f,
+                        l + w * 0.88f, t + h * 0.28f)
+                    cubicTo(l + w * 0.89f, t + h * 0.42f,
+                        l + w * 0.68f, t + h * 0.49f, cx, t + h * 0.50f)
+                    cubicTo(l + w * 0.75f, t + h * 0.50f,
+                        l + w * 0.92f, t + h * 0.61f,
+                        l + w * 0.89f, t + h * 0.79f)
+                    cubicTo(l + w * 0.85f, b + h * 0.03f,
+                        l + w * 0.31f, b + h * 0.02f,
+                        l + w * 0.10f, b - h * 0.12f)
+                }
+                strokeContour(contour)
+            }
+            "4" -> {
+                val contour = Path().apply {
+                    moveTo(l + w * 0.70f, b - h * 0.08f)
+                    lineTo(l + w * 0.70f, t + h * 0.08f)
+                    moveTo(l + w * 0.08f, t + h * 0.59f)
+                    lineTo(r - w * 0.06f, t + h * 0.59f)
+                    moveTo(l + w * 0.10f, t + h * 0.59f)
+                    lineTo(l + w * 0.67f, t + h * 0.08f)
+                }
+                strokeContour(contour)
+            }
+            "5" -> {
+                val contour = Path().apply {
+                    moveTo(r - w * 0.08f, t + h * 0.10f)
+                    lineTo(l + w * 0.12f, t + h * 0.10f)
+                    lineTo(l + w * 0.12f, t + h * 0.47f)
+                    cubicTo(l + w * 0.32f, t + h * 0.39f,
+                        l + w * 0.77f, t + h * 0.39f,
+                        l + w * 0.88f, t + h * 0.59f)
+                    cubicTo(l + w * 1.02f, t + h * 0.84f,
+                        l + w * 0.74f, b + h * 0.02f,
+                        l + w * 0.48f, b - h * 0.08f)
+                    cubicTo(l + w * 0.29f, b - h * 0.08f,
+                        l + w * 0.14f, b - h * 0.14f,
+                        l + w * 0.09f, b - h * 0.21f)
+                }
+                strokeContour(contour)
+            }
+            "6" -> {
+                val loop = Path().apply {
+                    addRoundRect(
+                        RectF(l + half, t + h * 0.39f, r - half, b - half),
+                        w * 0.42f, h * 0.16f, Path.Direction.CW
+                    )
+                }
+                strokeContour(loop)
+                val tail = Path().apply {
+                    moveTo(r - w * 0.10f, t + h * 0.08f)
+                    cubicTo(l + w * 0.61f, t + h * 0.12f,
+                        l + w * 0.24f, t + h * 0.34f,
+                        l + w * 0.16f, t + h * 0.59f)
+                }
+                strokeContour(tail, stroke * 0.94f)
+            }
+            "7" -> {
+                val contour = Path().apply {
+                    moveTo(l + w * 0.08f, t + h * 0.10f)
+                    lineTo(r - w * 0.06f, t + h * 0.10f)
+                    cubicTo(l + w * 0.72f, t + h * 0.36f,
+                        l + w * 0.47f, t + h * 0.64f,
+                        l + w * 0.28f, b - h * 0.08f)
+                }
+                strokeContour(contour)
+            }
+            "8" -> {
+                val upper = Path().apply {
+                    addRoundRect(
+                        RectF(l + half, t + half, r - half, t + h * 0.535f),
+                        w * 0.40f, h * 0.11f, Path.Direction.CW
+                    )
+                }
+                val lower = Path().apply {
+                    addRoundRect(
+                        RectF(l + half, t + h * 0.465f, r - half, b - half),
+                        w * 0.40f, h * 0.11f, Path.Direction.CW
+                    )
+                }
+                strokeContour(upper)
+                strokeContour(lower)
+            }
+            "9" -> {
+                val loop = Path().apply {
+                    addRoundRect(
+                        RectF(l + half, t + half, r - half, t + h * 0.60f),
+                        w * 0.42f, h * 0.15f, Path.Direction.CW
+                    )
+                }
+                strokeContour(loop)
+                val tail = Path().apply {
+                    moveTo(r - w * 0.13f, t + h * 0.40f)
+                    cubicTo(r - w * 0.04f, t + h * 0.66f,
+                        l + w * 0.63f, t + h * 0.83f,
+                        l + w * 0.39f, b - h * 0.06f)
+                }
+                strokeContour(tail, stroke * 0.94f)
+            }
+        }
+        return result
     }
 
     /**
