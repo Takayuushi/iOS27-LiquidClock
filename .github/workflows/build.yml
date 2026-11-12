@@ -163,7 +163,7 @@ jobs:
     name: Render live wallpaper preview on Android 17 emulator
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Download debug APK
@@ -172,15 +172,32 @@ jobs:
           name: iOS27-LiquidClock-Android17-debug
           path: app/build/outputs/apk/debug
 
+      - name: Update SDK command-line tools for versioned Android 17 packages
+        shell: bash
+        run: |
+          set -eu
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          # Ubuntu hosted images may ship cmdline-tools 12.0, which writes an
+          # invalid android-0 target for android-37.0 system images. Update
+          # to 22.0 before avdmanager creates the API 37.0 virtual device.
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "cmdline-tools;latest" >/dev/null
+          if [[ -d "$SDK_ROOT/cmdline-tools/latest-2" ]]; then
+            rm -rf "$SDK_ROOT/cmdline-tools/latest"
+            mv "$SDK_ROOT/cmdline-tools/latest-2" "$SDK_ROOT/cmdline-tools/latest"
+          fi
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
+
       - name: Launch wallpaper preview and capture screenshot
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 37
-          target: google_apis
+          api-level: 37.0
+          target: google_apis_ps16k
           arch: x86_64
           profile: pixel_8
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -no-audio
           disable-animations: true
+          emulator-boot-timeout: 600
           script: |
             set -euo pipefail
             mkdir -p preview-artifacts
