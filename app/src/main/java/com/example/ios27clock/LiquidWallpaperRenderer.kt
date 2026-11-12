@@ -51,8 +51,10 @@ internal class LiquidWallpaperRenderer(
         private const val DEFAULT_CLOCK_X = 0.50f
         private const val DEFAULT_CLOCK_Y = 0.36f
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
-        private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.70f
+        private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
+        private const val CLOCK_GLYPH_WIDTH_SCALE = 0.89f
+        private const val CLOCK_GLYPH_HEIGHT_SCALE = 1.04f
 
         // Keep the natural horizontal layout while the adaptive clock grows
         // vertically. Individual glyph profiles handle optical corrections.
@@ -68,7 +70,7 @@ internal class LiquidWallpaperRenderer(
         private const val GLYPH_STROKE_FRACTION = 0.205f
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
-        private const val MAX_CLOCK_SCALE = 2.40f
+        private const val MAX_CLOCK_SCALE = 2.55f
         private const val SDF_RANGE_PX = 24f
         private const val SDF_PADDING_PX = 28
 
@@ -333,20 +335,22 @@ internal class LiquidWallpaperRenderer(
         if (!distanceRatio.isFinite() || distanceRatio <= 0f) return
         // Use the original scale at pointer-down, not accumulated MOVE deltas.
         // That prevents event-rate jitter and lets every new pinch start cleanly.
-        clockScale = (pinchStartClockScale * distanceRatio)
+        val requestedScale = (pinchStartClockScale * distanceRatio)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
-
-        val targetHeightFraction =
-            (MAX_GLYPH_HEIGHT_FRACTION * clockScale)
-                .coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
-        val cachedHeightFraction =
-            (MAX_GLYPH_HEIGHT_FRACTION * maskClockScale)
-                .coerceAtMost(MAX_COMMITTED_HEIGHT_FRACTION)
-        // Match the exact height target used by the final vector rebuild.
-        // Width stays untouched, so enlargement remains vertical only.
+        // Derive the pinch ceiling from the actual rendered glyph bounds,
+        // not a guessed font-size fraction. This keeps the preview and final
+        // committed mask on exactly the same vertical limit.
+        val maxPreviewRatio = if (!glyphBaseBounds.isEmpty && surfaceHeight > 0) {
+            (surfaceHeight * MAX_COMMITTED_HEIGHT_FRACTION /
+                glyphBaseBounds.height().coerceAtLeast(1f)).coerceAtLeast(1f)
+        } else {
+            MAX_CLOCK_SCALE / maskClockScale.coerceAtLeast(0.01f)
+        }
         previewScaleX = 1f
-        previewScaleY = (targetHeightFraction / cachedHeightFraction)
-            .coerceIn(0.40f, 2.8f)
+        previewScaleY = (requestedScale / maskClockScale.coerceAtLeast(0.01f))
+            .coerceIn(0.25f, maxPreviewRatio)
+        clockScale = (maskClockScale * previewScaleY)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
         updatePreviewBounds()
     }
 
@@ -655,7 +659,7 @@ internal class LiquidWallpaperRenderer(
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         val glyphs = timeText.map { it.toString() }
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
-        val fontWeight = 620
+        val fontWeight = 720
         val font = typefaceFor(fontWeight, 28, 1f)
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = height * MAX_GLYPH_HEIGHT_FRACTION
@@ -739,8 +743,23 @@ internal class LiquidWallpaperRenderer(
         }
 
         if (hasBounds) {
-            // Apply expansion to the complete line around its centre. X remains
-            // exactly 1.0: this is a vertical-only adaptive clock, not a zoom.
+            // The iPhone reference is slightly taller but materially narrower.
+            // Apply that fixed typographic proportion before the user-controlled
+            // vertical expansion; pinch still has no horizontal scale component.
+            val naturalShapeTransform = Matrix().apply {
+                setScale(
+                    CLOCK_GLYPH_WIDTH_SCALE,
+                    CLOCK_GLYPH_HEIGHT_SCALE,
+                    centerX,
+                    centerY
+                )
+            }
+            val naturalShapePath = Path()
+            composedPath.transform(naturalShapeTransform, naturalShapePath)
+            naturalShapePath.computeBounds(composedBounds, true)
+
+            // Enforce the ceiling against the real post-normalization glyph
+            // bounds so the clock cannot crop or exceed the usable viewport.
             val allowedScaleY = (
                 height * MAX_COMMITTED_HEIGHT_FRACTION /
                     composedBounds.height().coerceAtLeast(1f)
@@ -753,7 +772,7 @@ internal class LiquidWallpaperRenderer(
                 setScale(1f, committedScaleY, centerX, centerY)
             }
             val finalPath = Path()
-            composedPath.transform(verticalTransform, finalPath)
+            naturalShapePath.transform(verticalTransform, finalPath)
             finalPath.computeBounds(composedBounds, true)
 
             val inset = max(2f, fontSize * 0.025f)
