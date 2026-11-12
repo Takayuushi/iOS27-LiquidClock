@@ -161,9 +161,7 @@ jobs:
           set -euo pipefail
 
           WORK_DIR="${RUNNER_TEMP}/apple-sf-pro-inspection"
-          DMG_DIR="$WORK_DIR/dmg"
-          PKG_DIR="$WORK_DIR/pkg"
-          mkdir -p "$DMG_DIR" "$PKG_DIR"
+          mkdir -p "$WORK_DIR"
 
           if ! command -v 7z >/dev/null 2>&1; then
             sudo apt-get update
@@ -175,29 +173,32 @@ jobs:
             --output "$WORK_DIR/SF-Pro.dmg"
 
           echo "Official Apple SF-Pro.dmg size: $(stat -c '%s' "$WORK_DIR/SF-Pro.dmg") bytes"
-          7z x -y -o"$DMG_DIR" "$WORK_DIR/SF-Pro.dmg" >/dev/null
+          echo "Extracting official DMG..."
+          7z x -y "$WORK_DIR/SF-Pro.dmg" -o"$WORK_DIR" | tail -40
 
+          echo "Extracting package payloads..."
           while IFS= read -r -d '' PKG; do
-            PKG_NAME="$(basename "$PKG" .pkg)"
-            DEST="$PKG_DIR/$PKG_NAME"
-            mkdir -p "$DEST"
-            echo "Extracting Apple package: $PKG_NAME"
-            7z x -y -o"$DEST" "$PKG" >/dev/null
+            echo "Package: $PKG"
+            7z x -y "$PKG" -o"$WORK_DIR" | tail -40
+          done < <(find "$WORK_DIR" -type f -name '*.pkg' -print0)
 
-            while IFS= read -r -d '' PAYLOAD; do
-              PAYLOAD_DEST="$DEST/payload-$(basename "$(dirname "$PAYLOAD")")"
-              mkdir -p "$PAYLOAD_DEST"
-              7z x -y -o"$PAYLOAD_DEST" "$PAYLOAD" >/dev/null
-            done < <(find "$DEST" -type f \( -name 'Payload~' -o -name 'Payload' \) -print0)
-          done < <(find "$DMG_DIR" -type f -name '*.pkg' -print0)
+          while IFS= read -r -d '' PAYLOAD; do
+            echo "Payload archive: $PAYLOAD"
+            file "$PAYLOAD"
+            7z l "$PAYLOAD" | tail -35
+            7z x -y "$PAYLOAD" -o"$WORK_DIR" | tail -60
+          done < <(find "$WORK_DIR" -type f \( -name 'Payload~' -o -name 'Payload' \) -print0)
+
+          echo "Files extracted from Apple's package:"
+          find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print | head -200
 
           mapfile -d '' FONT_FILES < <(
             find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print0
           )
 
           if (( ${#FONT_FILES[@]} == 0 )); then
-            echo "No SF Pro font files were found in Apple's official DMG." >&2
-            find "$WORK_DIR" -maxdepth 5 -type f | head -200
+            echo "No SF Pro font files were found after extracting Apple's Payload archives." >&2
+            find "$WORK_DIR" -maxdepth 6 -type f | head -240
             exit 1
           fi
 
