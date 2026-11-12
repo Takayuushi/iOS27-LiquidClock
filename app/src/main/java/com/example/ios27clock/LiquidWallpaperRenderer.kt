@@ -115,8 +115,8 @@ internal class LiquidWallpaperRenderer(
             // obtain the outward-facing contour normal used by glass refraction.
             float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 3.4);
-            float innerBevel = 1.0 - smoothstep(1.0, 12.0, max(signedDistance, 0.0));
+            float edgeBand = exp(-abs(signedDistance) / 4.4);
+            float innerBevel = 1.0 - smoothstep(0.8, 17.0, max(signedDistance, 0.0));
             float outerLip = 1.0 - smoothstep(0.5, 5.5, max(-signedDistance, 0.0));
             float face = smoothstep(-1.5, 5.0, signedDistance);
             float interiorVolume = smoothstep(1.0, 22.0, signedDistance);
@@ -125,7 +125,7 @@ internal class LiquidWallpaperRenderer(
             float waveA = sin(p.y * 0.0038 + uTime * 0.13);
             float waveB = cos(p.x * 0.0028 - uTime * 0.11);
             float solidMode = clamp(uFrosted, 0.0, 1.0);
-            float displacement = (1.8 + edgeBand * 8.6 + innerBevel * 2.4) *
+            float displacement = (2.2 + edgeBand * 10.5 + innerBevel * 3.2) *
                 mix(1.0, 0.48, solidMode);
             float2 warp = normal * displacement +
                 tilt * 1.25 +
@@ -191,8 +191,8 @@ internal class LiquidWallpaperRenderer(
             // Glass receives a visible but translucent wash of the selected
             // swatch. Solid uses that same swatch as its actual face colour,
             // preserving just a trace of wallpaper light beneath the paint.
-            float glassTintStrength = 0.62;
-            float solidWallpaperBleed = 0.055;
+            float glassTintStrength = 0.22;
+            float solidWallpaperBleed = 0.24;
             float3 glassTintedFace = mix(transmitted, uClockTint, glassTintStrength);
             float3 solidTintedFace = mix(uClockTint, transmitted, solidWallpaperBleed);
             float3 solidLight = mix(
@@ -201,7 +201,7 @@ internal class LiquidWallpaperRenderer(
                 interiorVolume
             );
             solidTintedFace *= solidLight;
-            body = mix(body, glassTintedFace, 0.58);
+            body = mix(body, glassTintedFace, 0.32);
             body = mix(body, solidTintedFace, solidMode);
             body *= mix(0.86, 1.025, interiorVolume) * mix(0.97, 1.02, face);
 
@@ -217,7 +217,7 @@ internal class LiquidWallpaperRenderer(
             ) * edgeBand;
             float keySpecular = pow(facing, 12.0) * edgeBand;
             float fillSpecular = pow(oppositeFacing, 8.0) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.21;
+            float bevelShade = innerBevel * (1.0 - facing) * 0.30;
 
             float clockRelativeY = p.y / max(uResolution.y, 1.0) - uClockCenter.y;
             float reflectionTrack = clockRelativeY + tilt.y * 0.035;
@@ -229,18 +229,18 @@ internal class LiquidWallpaperRenderer(
 
             float3 colour = body;
             colour += uAccentColor * fresnel * 0.19;
-            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.19;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.62, 0.22, solidMode);
-            colour += float3(0.68, 0.82, 1.0) * fillSpecular * mix(0.20, 0.08, solidMode);
+            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.29;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.76, 0.46, solidMode);
+            colour += float3(0.68, 0.82, 1.0) * fillSpecular * mix(0.28, 0.18, solidMode);
             colour -= float3(0.09, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
             colour += float3(0.95, 0.78, 0.92) * outerLip * 0.045;
 
-            float clearOpacity = mix(0.56, 0.67, brightSurface);
+            float clearOpacity = mix(0.43, 0.53, brightSurface);
             clearOpacity = mix(clearOpacity, clearOpacity + 0.035, monochrome);
             // Solid is Apple's painted-colour treatment: substantially opaque,
             // tinted with the chosen swatch and shaded softly at its edges.
-            float solidOpacity = 0.965;
+            float solidOpacity = 0.88;
             float bodyOpacity = mix(clearOpacity, solidOpacity, solidMode);
             float alpha = coverage * (
                 bodyOpacity + edgeBand * mix(0.25, 0.12, solidMode) + outerLip * 0.08
@@ -259,6 +259,8 @@ internal class LiquidWallpaperRenderer(
     private var glyphSdf: Bitmap? = null
     private var glyphSdfOriginX = 0f
     private var glyphSdfOriginY = 0f
+    private var glyphSdfScale = 1f
+    private var glyphSdfStale = false
     private var deviceTiltX = 0f
     private var deviceTiltY = 0f
     private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
@@ -364,7 +366,7 @@ internal class LiquidWallpaperRenderer(
      * Apply the Font & Color sheet without restarting the wallpaper service.
      * Typeface and colour settings are stored alongside the clock composition.
      */
-    fun reloadAppearance() {
+    fun reloadAppearance(rebuildDistanceField: Boolean = true) {
         val previousStyle = clockFontStyle
         val previousWeight = clockFontWeight
         val previousColor = clockColor
@@ -375,16 +377,21 @@ internal class LiquidWallpaperRenderer(
             previousStyle != clockFontStyle || previousWeight != clockFontWeight
 
         if (glyphAppearanceChanged) {
+            // The cache contains only the current weight/width instance. Do not
+            // allocate a new full SDF while the user is actively dragging.
             typefaceCache.clear()
             cachedTimeText = null
             if (surfaceWidth > 0 && surfaceHeight > 0) {
-                rebuildGlyphMask(force = true)
+                rebuildGlyphMask(
+                    force = true,
+                    rebuildDistanceField = rebuildDistanceField
+                )
             }
+        } else if (rebuildDistanceField && glyphSdfStale && surfaceWidth > 0) {
+            // On release, finish the bevel once using the final selected weight.
+            rebuildGlyphSdf()
         }
 
-        // A font rebuild refreshes the mask/SDF inputs on the existing shader.
-        // Colour and material changes only need uniform updates, not a new
-        // RuntimeShader or another full-resolution SDF allocation.
         if (glassShader == null && surfaceWidth > 0 && surfaceHeight > 0) {
             rebuildGlassShader()
         } else if (
@@ -773,7 +780,10 @@ internal class LiquidWallpaperRenderer(
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
     }
 
-    private fun rebuildGlyphMask(force: Boolean) {
+    private fun rebuildGlyphMask(
+        force: Boolean,
+        rebuildDistanceField: Boolean = true
+    ) {
         val timeText = currentTimeText()
         if (!force && timeText == cachedTimeText && glyphMask != null) return
 
@@ -781,8 +791,13 @@ internal class LiquidWallpaperRenderer(
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
 
-        glyphSdf?.let { if (!it.isRecycled) it.recycle() }
-        glyphSdf = null
+        if (rebuildDistanceField) {
+            glyphSdf?.let { if (!it.isRecycled) it.recycle() }
+            glyphSdf = null
+            glyphSdfOriginX = 0f
+            glyphSdfOriginY = 0f
+            glyphSdfScale = 1f
+        }
         glyphMask?.let { if (!it.isRecycled) it.recycle() }
         glyphMask = null
 
@@ -994,17 +1009,13 @@ internal class LiquidWallpaperRenderer(
         }
 
         glyphMask = mask
-        glyphSdfOriginX = 0f
-        glyphSdfOriginY = 0f
-        glyphSdf = if (!glyphBounds.isEmpty) {
-            try {
-                createGlyphSdf(mask, glyphBounds)
-            } catch (memoryError: OutOfMemoryError) {
-                Log.w(TAG, "SDF allocation skipped to preserve the live clock after a weight change.", memoryError)
-                null
-            }
+        if (rebuildDistanceField) {
+            rebuildGlyphSdf()
         } else {
-            null
+            // Keep the previous bevel field alive while the new weight mask is
+            // previewed. The final accurate SDF is generated once on release.
+            glyphSdfStale = true
+            updateGlyphMaskInput()
         }
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
@@ -1013,6 +1024,30 @@ internal class LiquidWallpaperRenderer(
         previewScaleX = 1f
         previewScaleY = 1f
         cachedTimeText = timeText
+        updateGlyphMaskInput()
+    }
+
+    private fun rebuildGlyphSdf() {
+        glyphSdf?.let { if (!it.isRecycled) it.recycle() }
+        glyphSdf = null
+        glyphSdfOriginX = 0f
+        glyphSdfOriginY = 0f
+        glyphSdfScale = 1f
+
+        val mask = glyphMask
+        if (mask != null && !mask.isRecycled && !glyphBounds.isEmpty) {
+            glyphSdf = try {
+                createGlyphSdf(mask, glyphBounds)
+            } catch (memoryError: OutOfMemoryError) {
+                Log.w(
+                    TAG,
+                    "SDF allocation skipped; keeping the live clock mask available.",
+                    memoryError
+                )
+                null
+            }
+        }
+        glyphSdfStale = false
         updateGlyphMaskInput()
     }
 
@@ -1160,8 +1195,6 @@ internal class LiquidWallpaperRenderer(
      */
     private fun createGlyphSdf(source: Bitmap, bounds: RectF): Bitmap? {
         if (source.isRecycled || bounds.isEmpty) return null
-        glyphSdfOriginX = 0f
-        glyphSdfOriginY = 0f
 
         val padding = max(
             SDF_PADDING_PX,
@@ -1174,29 +1207,44 @@ internal class LiquidWallpaperRenderer(
 
         val cropWidth = right - left
         val cropHeight = bottom - top
-        val sdfScale = 0.5f
+        val cropPixels = cropWidth.toLong() * cropHeight.toLong()
+        if (cropPixels <= 0L) return null
+
+        // Keep the preview at native SDF resolution for crisp bevels. Only
+        // downsample unusually large full-screen crops to bound temporary memory.
+        val maxSdfPixels = 750_000f
+        val sdfScale = min(
+            1f,
+            kotlin.math.sqrt(maxSdfPixels / cropPixels.toFloat())
+        ).coerceAtLeast(0.50f)
         val sdfWidth = max(1, (cropWidth * sdfScale).roundToInt())
         val sdfHeight = max(1, (cropHeight * sdfScale).roundToInt())
         val pixelCountLong = sdfWidth.toLong() * sdfHeight.toLong()
         if (pixelCountLong <= 0L || pixelCountLong > 900_000L) return null
 
-        val sampleBitmap = Bitmap.createBitmap(
-            sdfWidth,
-            sdfHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val sampleCanvas = Canvas(sampleBitmap)
-        sampleCanvas.drawBitmap(
-            source,
-            Rect(left, top, right, bottom),
-            Rect(0, 0, sdfWidth, sdfHeight),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        )
-
         val pixelCount = pixelCountLong.toInt()
         val sourcePixels = IntArray(pixelCount)
-        sampleBitmap.getPixels(sourcePixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
-        sampleBitmap.recycle()
+        if (sdfScale >= 0.999f) {
+            source.getPixels(sourcePixels, 0, sdfWidth, left, top, sdfWidth, sdfHeight)
+        } else {
+            val sampleBitmap = Bitmap.createBitmap(
+                sdfWidth,
+                sdfHeight,
+                Bitmap.Config.ARGB_8888
+            )
+            try {
+                val sampleCanvas = Canvas(sampleBitmap)
+                sampleCanvas.drawBitmap(
+                    source,
+                    Rect(left, top, right, bottom),
+                    Rect(0, 0, sdfWidth, sdfHeight),
+                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                )
+                sampleBitmap.getPixels(sourcePixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
+            } finally {
+                sampleBitmap.recycle()
+            }
+        }
 
         val maxUnits = (SDF_RANGE_PX * 3f).roundToInt()
         val infinity = (maxUnits + 1).toShort()
@@ -1219,11 +1267,11 @@ internal class LiquidWallpaperRenderer(
             } else {
                 -distanceToInside[index].toInt()
             }
-            // One SDF pixel represents two output pixels.
+            // Convert chamfer distance back into output-pixel units.
             val signedOutputPixels = signedUnits / 3f / sdfScale
             val encoded = (
                 0.5f + signedOutputPixels / (2f * SDF_RANGE_PX)
-                ).coerceIn(0f, 1f)
+            ).coerceIn(0f, 1f)
             sdfPixels[index] = Color.argb(
                 (encoded * 255f).roundToInt(),
                 255,
@@ -1240,6 +1288,7 @@ internal class LiquidWallpaperRenderer(
             sdf.setPixels(sdfPixels, 0, sdfWidth, 0, 0, sdfWidth, sdfHeight)
             glyphSdfOriginX = left.toFloat()
             glyphSdfOriginY = top.toFloat()
+            glyphSdfScale = sdfScale
         }
     }
 
@@ -1516,7 +1565,7 @@ internal class LiquidWallpaperRenderer(
                 BitmapShader(sdf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             )
             shader.setFloatUniform("uSdfOrigin", glyphSdfOriginX, glyphSdfOriginY)
-            shader.setFloatUniform("uSdfScale", if (glyphSdf != null) 0.5f else 1f)
+            shader.setFloatUniform("uSdfScale", glyphSdfScale)
             shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
         } catch (exception: RuntimeException) {
             Log.w(TAG, "Could not refresh glyph mask/SDF inputs.", exception)
@@ -1601,6 +1650,7 @@ internal class LiquidWallpaperRenderer(
                 BitmapShader(sdf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             )
             shader.setFloatUniform("uSdfOrigin", glyphSdfOriginX, glyphSdfOriginY)
+            shader.setFloatUniform("uSdfScale", glyphSdfScale)
             shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
             shader.setFloatUniform(
                 "uResolution",
