@@ -171,8 +171,11 @@ internal class LiquidWallpaperRenderer(
             // at the curved perimeter, where real glass bends light most.
             float solidDispersionEdge =
                 exp(-abs(signedDistance - 2.0) / 7.5);
+            // Keep the colour split restrained; the previous displacement
+            // produced rainbow fringes that looked like digital chromatic
+            // aberration instead of a coherent glass lens.
             float glassDispersionAmount =
-                0.95 + glassRim * 9.0 + glassLens * 2.8;
+                0.40 + glassRim * 3.8 + glassLens * 1.1;
             // Preserve the previously approved Solid dispersion response.
             float solidDispersionAmount =
                 0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
@@ -244,8 +247,11 @@ internal class LiquidWallpaperRenderer(
             // Glass borrows its colour from the refracted wallpaper. The
             // accent is also wallpaper-derived and only colours the glancing
             // reflection; no permanent lavender or white overlay is applied.
-            float3 glassFace = mix(refracted, center, 0.025);
-            glassFace = mix(glassFace, uAccentColor, 0.025);
+            float3 glassFace = mix(refracted, center, 0.08);
+            // The selected accent is sampled from this wallpaper, not a fixed
+            // lavender material. A little more of it gives the transparent
+            // surface a legible body without turning it opaque or frosted.
+            glassFace = mix(glassFace, uAccentColor, 0.095);
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
                 milkyFrost,
@@ -272,7 +278,7 @@ internal class LiquidWallpaperRenderer(
 
             float3 colour = body;
             colour *= mix(0.985, 1.025, glassLens);
-            colour += uAccentColor * fresnel * mix(0.25, 0.15, solidMode);
+            colour += uAccentColor * fresnel * mix(0.42, 0.15, solidMode);
             colour += float3(0.98, 0.99, 1.0) *
                 innerBevel * mix(0.025, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
@@ -281,7 +287,7 @@ internal class LiquidWallpaperRenderer(
                 fillSpecular * mix(0.30, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             colour -= float3(0.08, 0.09, 0.14) *
-                edgeBand * (1.0 - facing) * 0.055;
+                edgeBand * (1.0 - facing) * mix(0.018, 0.055, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
                 outerLip * mix(0.025, 0.07, solidMode);
 
@@ -300,21 +306,35 @@ internal class LiquidWallpaperRenderer(
             float2 clockRelative = p - uClockCenter * uResolution;
             float reflectionAxis = clockRelative.x * -0.42 +
                 clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
-            float softReflection = exp(
-                -pow(reflectionAxis / 52.0, 2.0)
+            // A broad environmental reflection travels across the complete
+            // glass face. It gives the material readable volume even over a
+            // dark or visually quiet wallpaper, without outlining every edge.
+            float broadReflection = exp(
+                -pow(reflectionAxis / 142.0, 2.0)
             ) * glassLens;
-            colour += float3(0.96, 0.98, 1.0) *
-                softReflection * (1.0 - solidMode) * 0.13;
+            float narrowReflection = exp(
+                -pow((reflectionAxis - 48.0) / 34.0, 2.0)
+            ) * glassLens;
+            float3 reflectionColour = mix(
+                uAccentColor,
+                float3(0.97, 0.985, 1.0),
+                0.72
+            );
+            colour += reflectionColour * broadReflection *
+                (1.0 - solidMode) * 0.27;
+            colour += float3(1.0, 1.0, 1.0) * narrowReflection *
+                (1.0 - solidMode) * 0.16;
 
-            // Glass remains transparent, but has enough optical body to be
-            // visible on flat colour fields. Solid's proven opacity is unchanged.
-            float glassOpacity = mix(0.24, 0.33, glassLens);
+            // Increase the transparent face contribution modestly. The
+            // wallpaper is still visible through it, but it no longer vanishes
+            // on dark sections of a high-contrast wallpaper.
+            float glassOpacity = mix(0.36, 0.46, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.34, 0.10, solidMode) +
+                    edgeBand * mix(0.39, 0.10, solidMode) +
                     outerLip * mix(0.045, 0.07, solidMode)
                 ),
                 0.0,
