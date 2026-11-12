@@ -702,7 +702,7 @@ internal class LiquidWallpaperRenderer(
             colonExtraGap * glyphs.count { it == ":" }
         var cursorX = centerX - totalWidth * 0.5f
         val top = centerY - capHeight * 0.5f
-        val strokeWidth = capHeight * 0.092f
+        val glyphStrokeWidth = capHeight * 0.092f
 
         data class GlyphShape(val path: Path, val filled: Boolean)
         val shapes = mutableListOf<GlyphShape>()
@@ -729,7 +729,7 @@ internal class LiquidWallpaperRenderer(
                 val pathBounds = RectF()
                 digitPath.computeBounds(pathBounds, true)
                 if (!isFilled && !pathBounds.isEmpty) {
-                    pathBounds.inset(-strokeWidth * 0.5f, -strokeWidth * 0.5f)
+                    pathBounds.inset(-glyphStrokeWidth * 0.5f, -glyphStrokeWidth * 0.5f)
                 }
                 if (!pathBounds.isEmpty) {
                     if (!hasBounds) {
@@ -763,7 +763,7 @@ internal class LiquidWallpaperRenderer(
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
-                strokeWidth = strokeWidth
+                strokeWidth = glyphStrokeWidth
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
                 strokeMiter = 1f
