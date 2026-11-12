@@ -345,7 +345,7 @@ object ClockDiagnostics {
                 file.isFile && file.name.endsWith(".txt", ignoreCase = true) &&
                     file.name.startsWith("crash-", ignoreCase = true)
             }.orEmpty()
-            files.forEach { file ->
+            files.forEach fileLoop@ { file ->
                 try {
                     val content = file.readText()
                     if (target != null) {
@@ -353,7 +353,7 @@ object ClockDiagnostics {
                             it.write("\n\n---------------- Imported legacy report: ${file.name} ----------------\n")
                             it.write(content)
                             it.flush()
-                        } ?: return@forEach
+                        } ?: return@fileLoop
                     } else {
                         val fallback = File(folder, REPORT_FILE_NAME)
                         fallback.appendText("\n\n---------------- Imported legacy report: ${file.name} ----------------\n$content")
