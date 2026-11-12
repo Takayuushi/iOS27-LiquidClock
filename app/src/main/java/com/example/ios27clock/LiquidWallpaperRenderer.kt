@@ -114,7 +114,7 @@ internal class LiquidWallpaperRenderer(
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
             // A slightly wider finite-difference baseline filters single-pixel
             // SDF stair-steps before they become visible as fractured refraction.
-            float2 sampleStep = float2(4.0, 4.0) * uSdfScale;
+            float2 sampleStep = float2(5.25, 5.25) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -176,30 +176,10 @@ internal class LiquidWallpaperRenderer(
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
 
-            // A small four-direction optical diffusion softens high-contrast
-            // wallpaper lines under the curved lens. It is much tighter than
-            // the frosted material's blur and avoids red/blue edge splitting.
-            float glassSoftRadius = 8.0;
-            float2 glassSoftX = float2(glassSoftRadius, 0.0);
-            float2 glassSoftY = float2(0.0, glassSoftRadius);
-            float3 glassSoft = (
-                uWallpaper.eval(
-                    clamp(samplePoint + glassSoftX, float2(0.0), uResolution)
-                ).rgb +
-                uWallpaper.eval(
-                    clamp(samplePoint - glassSoftX, float2(0.0), uResolution)
-                ).rgb +
-                uWallpaper.eval(
-                    clamp(samplePoint + glassSoftY, float2(0.0), uResolution)
-                ).rgb +
-                uWallpaper.eval(
-                    clamp(samplePoint - glassSoftY, float2(0.0), uResolution)
-                ).rgb
-            ) * 0.25;
-            float3 refracted = mix(center, glassSoft, 0.24);
-
-            // Solid retains its approved frosted-glass diffusion.
-            float blurRadius = 38.0;
+            // Reuse the eight-direction blur below for both materials:
+            // Glass gets a tighter optical diffusion, while Solid retains its
+            // wider frosted response. This avoids a separate anisotropic blur.
+            float blurRadius = mix(18.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -242,6 +222,9 @@ internal class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
+            // A modest portion of the same isotropic sample set softens
+            // harsh wallpaper streaks through Glass without making it opaque.
+            float3 refracted = mix(center, frostedWallpaper, 0.34);
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -322,10 +305,10 @@ internal class LiquidWallpaperRenderer(
                 -pow(reflectionAxis / 142.0, 2.0)
             ) * glassLens;
             float narrowReflection = exp(
-                -pow((reflectionAxis - 48.0) / 34.0, 2.0)
+                -pow((reflectionAxis - 48.0) / 42.0, 2.0)
             ) * glassLens;
             float brightRibbon = exp(
-                -pow((reflectionAxis + 22.0) / 16.0, 2.0)
+                -pow((reflectionAxis + 22.0) / 22.0, 2.0)
             ) * glassLens;
             float secondaryRibbon = exp(
                 -pow((reflectionAxis - 78.0) / 18.0, 2.0)
@@ -351,9 +334,9 @@ internal class LiquidWallpaperRenderer(
             colour += reflectionColour * broadReflection *
                 (1.0 - solidMode) * 0.58;
             colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.50;
+                (1.0 - solidMode) * 0.40;
             colour += float3(1.0, 1.0, 1.0) * brightRibbon *
-                (1.0 - solidMode) * 0.80;
+                (1.0 - solidMode) * 0.60;
             colour += coolReflection * secondaryRibbon *
                 (1.0 - solidMode) * 0.27;
             colour += warmReflection * warmBounce *

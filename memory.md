@@ -326,3 +326,24 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Test explicit times containing multiple twos, especially `2:20`, `12:22`, and `22:22`; confirm every digit is visible, correctly positioned, and not clipped.
 - Recheck the `7` silhouette independently against the reference.
 - Continue to inspect the white bands through `0` and `2` and the wrinkled curved surface. Those remain open visual defects and require a separate controlled shader investigation.
+
+
+## Smooth white streak bands and curved-surface wrinkles (13 Nov 2026)
+
+### User feedback after build #272
+- The hour `2` was missing from `2:20` due to the single-path overwrite. This is fixed in code commit `512180ae17d990f68f711f93caa2194b06948998`; build #273 passed and uploaded artifact `13984475435`.
+- The user also reports the thick white band remains inside `0` and `2`, and a wrinkled/striped texture remains on the curved surface of `2`.
+- The `7` silhouette is still flagged for review against the iOS reference.
+
+### Shader pass implemented after the repeated-2 fix
+- Removed the separate four-tap 8px Glass blur, which was small and directionally biased.
+- Reused the renderer's existing eight-direction sample set for both material modes: Glass uses an 18px sample radius; Solid/Frosted retains its original 38px radius.
+- Blended 34% of the local eight-direction sample into the Glass face to soften bright diagonal wallpaper streaks without replacing the transparent glass body.
+- Increased the SDF normal sampling baseline to 5.25px to smooth curvature-driven normal changes and reduce the wrinkled look.
+- Broadened the narrow/bright reflection ribbons and reduced their peak intensities (0.50 to 0.40 and 0.80 to 0.60), leaving the broad reflection and contour specular in place. The goal is to remove flat white bands while keeping polished edge shine.
+
+### Verification
+- Shader pass commit and CI build: pending.
+- On-device compare both wallpaper types: high-contrast diagonal light wallpaper and Spider-Man. Check that the 0/2 white bands are less harsh, the 2's curve has a smoother continuous reflection, and overall Glass remains reflective rather than cloudy.
+- Verify the repeated-2 fix with `2:20`, `12:22` and `22:22`.
+- Review the `7` silhouette as a separate glyph issue; do not change it blindly without matching the reference.
