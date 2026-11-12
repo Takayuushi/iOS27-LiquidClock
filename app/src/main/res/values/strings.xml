@@ -29,8 +29,8 @@
     <string name="mask_editor_no_wallpaper">Choose a wallpaper before editing its foreground.</string>
     <string name="mask_editor_load_failed">Could not open wallpaper: %1$s</string>
     <string name="mask_editor_save_failed">Could not save selection: %1$s</string>
-    <string name="wallpaper_selected">Wallpaper image imported and ready.</string>
-    <string name="wallpaper_not_selected">No wallpaper image selected yet. Choose an image to begin.</string>
+    <string name="wallpaper_selected">Wallpaper ready</string>
+    <string name="wallpaper_not_selected">Choose a wallpaper to begin</string>
     <string name="wallpaper_imported">Wallpaper image imported.</string>
     <string name="wallpaper_imported_manual_depth">Wallpaper imported. The clock will stay visible. Use Select object to trace anything that should appear in front of it.</string>
     <string name="wallpaper_preparing_depth">Preparing wallpaper depth effect…</string>
