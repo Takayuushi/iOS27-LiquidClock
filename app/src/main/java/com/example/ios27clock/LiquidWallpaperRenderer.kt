@@ -752,23 +752,25 @@ internal class LiquidWallpaperRenderer(
     }
 
     /** Width of each custom glyph, as a fraction of shared cap height. */
+    /** Width of each numeral, relative to the shared cap height. */
     private fun glyphAdvanceUnit(glyph: String): Float = when (glyph) {
-        "0" -> 0.235f
-        "1" -> 0.145f
-        "2" -> 0.225f
-        "3" -> 0.225f
-        "4" -> 0.235f
-        "5" -> 0.225f
-        "6" -> 0.235f
-        "7" -> 0.215f
-        "8" -> 0.245f
-        "9" -> 0.235f
-        else -> 0.225f
+        "0" -> 0.52f
+        "1" -> 0.31f
+        "2" -> 0.49f
+        "3" -> 0.49f
+        "4" -> 0.50f
+        "5" -> 0.49f
+        "6" -> 0.51f
+        "7" -> 0.48f
+        "8" -> 0.52f
+        "9" -> 0.51f
+        else -> 0.49f
     }
 
     /**
-     * Custom numeral drawing system. A shared round-ended stroke language
-     * keeps the ten independent silhouettes optically consistent.
+     * Purpose-built vector numerals. Curved digits share the same rounded
+     * stroke weight, while 0 and 8 are closed filled silhouettes with real
+     * counters. All dimensions are derived from cap height, not glyph width.
      */
     private fun buildVectorGlyph(glyph: String, bounds: RectF): Path {
         val l = bounds.left
@@ -778,11 +780,11 @@ internal class LiquidWallpaperRenderer(
         val w = bounds.width()
         val h = bounds.height()
         val cx = bounds.centerX()
-        val stroke = w * GLYPH_STROKE_FRACTION
+        val stroke = h * 0.105f
         val half = stroke * 0.5f
-        val result = Path()
+        val path = Path()
 
-        fun strokeContour(contour: Path, thickness: Float = stroke) {
+        fun addRoundStroke(contour: Path, thickness: Float = stroke) {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
                 strokeWidth = thickness
@@ -791,156 +793,180 @@ internal class LiquidWallpaperRenderer(
             }
             val filled = Path()
             if (!paint.getFillPath(contour, filled)) return
-            if (result.isEmpty) result.set(filled)
+            if (path.isEmpty) path.set(filled)
             else {
                 val merged = Path()
-                if (merged.op(result, filled, Path.Op.UNION)) result.set(merged)
-                else result.addPath(filled)
+                if (merged.op(path, filled, Path.Op.UNION)) path.set(merged)
+                else path.addPath(filled)
             }
         }
 
         when (glyph) {
             "0" -> {
-                val contour = Path().apply {
-                    addRoundRect(
-                        RectF(l + half, t + half, r - half, b - half),
-                        w * 0.39f, h * 0.105f, Path.Direction.CW
-                    )
-                }
-                strokeContour(contour)
+                path.fillType = Path.FillType.EVEN_ODD
+                path.addRoundRect(
+                    RectF(l + half, t + half, r - half, b - half),
+                    w * 0.39f, h * 0.105f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(l + stroke * 1.12f, t + stroke * 1.12f,
+                        r - stroke * 1.12f, b - stroke * 1.12f),
+                    w * 0.25f, h * 0.065f, Path.Direction.CCW
+                )
             }
             "1" -> {
                 val contour = Path().apply {
-                    moveTo(l + w * 0.73f, t + h * 0.16f)
-                    cubicTo(l + w * 0.62f, t + h * 0.18f,
-                        l + w * 0.47f, t + h * 0.29f,
-                        l + w * 0.31f, t + h * 0.34f)
-                    moveTo(l + w * 0.58f, t + h * 0.17f)
+                    moveTo(l + w * 0.20f, t + h * 0.25f)
+                    cubicTo(l + w * 0.34f, t + h * 0.19f,
+                        l + w * 0.48f, t + h * 0.10f,
+                        l + w * 0.58f, t + h * 0.075f)
                     lineTo(l + w * 0.58f, b - h * 0.09f)
-                    moveTo(l + w * 0.20f, b - h * 0.09f)
-                    lineTo(l + w * 0.88f, b - h * 0.09f)
+                    lineTo(l + w * 0.18f, b - h * 0.09f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "2" -> {
                 val contour = Path().apply {
                     moveTo(l + w * 0.10f, t + h * 0.25f)
-                    cubicTo(l + w * 0.12f, t + h * 0.07f,
-                        l + w * 0.75f, t + h * 0.01f,
-                        l + w * 0.90f, t + h * 0.22f)
-                    cubicTo(l + w * 1.02f, t + h * 0.40f,
-                        l + w * 0.69f, t + h * 0.58f,
-                        l + w * 0.47f, t + h * 0.73f)
+                    cubicTo(l + w * 0.12f, t + h * 0.06f,
+                        l + w * 0.73f, t + h * 0.015f,
+                        l + w * 0.89f, t + h * 0.22f)
+                    cubicTo(l + w * 1.02f, t + h * 0.39f,
+                        l + w * 0.78f, t + h * 0.54f,
+                        l + w * 0.57f, t + h * 0.69f)
                     lineTo(l + w * 0.10f, b - h * 0.09f)
-                    lineTo(r - w * 0.07f, b - h * 0.09f)
+                    lineTo(r - w * 0.08f, b - h * 0.09f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "3" -> {
                 val contour = Path().apply {
-                    moveTo(l + w * 0.13f, t + h * 0.17f)
-                    cubicTo(l + w * 0.34f, t + h * 0.02f,
-                        l + w * 0.87f, t + h * 0.04f,
-                        l + w * 0.88f, t + h * 0.28f)
+                    moveTo(l + w * 0.12f, t + h * 0.16f)
+                    cubicTo(l + w * 0.34f, t + h * 0.025f,
+                        l + w * 0.84f, t + h * 0.035f,
+                        l + w * 0.87f, t + h * 0.27f)
                     cubicTo(l + w * 0.89f, t + h * 0.42f,
-                        l + w * 0.68f, t + h * 0.49f, cx, t + h * 0.50f)
-                    cubicTo(l + w * 0.75f, t + h * 0.50f,
-                        l + w * 0.92f, t + h * 0.61f,
-                        l + w * 0.89f, t + h * 0.79f)
-                    cubicTo(l + w * 0.85f, b + h * 0.03f,
-                        l + w * 0.31f, b + h * 0.02f,
-                        l + w * 0.10f, b - h * 0.12f)
+                        l + w * 0.70f, t + h * 0.49f,
+                        l + w * 0.50f, t + h * 0.50f)
+                    cubicTo(l + w * 0.72f, t + h * 0.50f,
+                        l + w * 0.92f, t + h * 0.59f,
+                        l + w * 0.89f, t + h * 0.78f)
+                    cubicTo(l + w * 0.86f, b - h * 0.015f,
+                        l + w * 0.31f, b + h * 0.005f,
+                        l + w * 0.10f, b - h * 0.15f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "4" -> {
                 val contour = Path().apply {
-                    moveTo(l + w * 0.70f, b - h * 0.08f)
-                    lineTo(l + w * 0.70f, t + h * 0.08f)
+                    moveTo(l + w * 0.69f, b - h * 0.08f)
+                    lineTo(l + w * 0.69f, t + h * 0.075f)
                     moveTo(l + w * 0.08f, t + h * 0.59f)
-                    lineTo(r - w * 0.06f, t + h * 0.59f)
+                    lineTo(r - w * 0.07f, t + h * 0.59f)
                     moveTo(l + w * 0.10f, t + h * 0.59f)
-                    lineTo(l + w * 0.67f, t + h * 0.08f)
+                    lineTo(l + w * 0.67f, t + h * 0.075f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "5" -> {
                 val contour = Path().apply {
-                    moveTo(r - w * 0.08f, t + h * 0.10f)
-                    lineTo(l + w * 0.12f, t + h * 0.10f)
-                    lineTo(l + w * 0.12f, t + h * 0.47f)
-                    cubicTo(l + w * 0.32f, t + h * 0.39f,
+                    moveTo(r - w * 0.08f, t + h * 0.09f)
+                    lineTo(l + w * 0.12f, t + h * 0.09f)
+                    lineTo(l + w * 0.12f, t + h * 0.46f)
+                    cubicTo(l + w * 0.34f, t + h * 0.39f,
                         l + w * 0.77f, t + h * 0.39f,
                         l + w * 0.88f, t + h * 0.59f)
-                    cubicTo(l + w * 1.02f, t + h * 0.84f,
-                        l + w * 0.74f, b + h * 0.02f,
-                        l + w * 0.48f, b - h * 0.08f)
-                    cubicTo(l + w * 0.29f, b - h * 0.08f,
-                        l + w * 0.14f, b - h * 0.14f,
-                        l + w * 0.09f, b - h * 0.21f)
+                    cubicTo(l + w * 1.01f, t + h * 0.83f,
+                        l + w * 0.75f, b - h * 0.015f,
+                        l + w * 0.49f, b - h * 0.075f)
+                    cubicTo(l + w * 0.29f, b - h * 0.075f,
+                        l + w * 0.13f, b - h * 0.13f,
+                        l + w * 0.09f, b - h * 0.20f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "6" -> {
-                val loop = Path().apply {
-                    addRoundRect(
-                        RectF(l + half, t + h * 0.39f, r - half, b - half),
-                        w * 0.42f, h * 0.16f, Path.Direction.CW
-                    )
+                val contour = Path().apply {
+                    moveTo(r - w * 0.08f, t + h * 0.10f)
+                    cubicTo(l + w * 0.55f, t + h * 0.12f,
+                        l + w * 0.13f, t + h * 0.37f,
+                        l + w * 0.13f, t + h * 0.65f)
+                    cubicTo(l + w * 0.13f, b - h * 0.12f,
+                        l + w * 0.39f, b - h * 0.015f,
+                        l + w * 0.62f, b - h * 0.07f)
+                    cubicTo(l + w * 0.91f, b - h * 0.13f,
+                        l + w * 0.96f, t + h * 0.57f,
+                        l + w * 0.69f, t + h * 0.49f)
+                    cubicTo(l + w * 0.48f, t + h * 0.42f,
+                        l + w * 0.25f, t + h * 0.51f,
+                        l + w * 0.14f, t + h * 0.67f)
                 }
-                strokeContour(loop)
-                val tail = Path().apply {
-                    moveTo(r - w * 0.10f, t + h * 0.08f)
-                    cubicTo(l + w * 0.61f, t + h * 0.12f,
-                        l + w * 0.24f, t + h * 0.34f,
-                        l + w * 0.16f, t + h * 0.59f)
-                }
-                strokeContour(tail, stroke * 0.94f)
+                addRoundStroke(contour)
             }
             "7" -> {
                 val contour = Path().apply {
-                    moveTo(l + w * 0.08f, t + h * 0.10f)
-                    lineTo(r - w * 0.06f, t + h * 0.10f)
-                    cubicTo(l + w * 0.72f, t + h * 0.36f,
-                        l + w * 0.47f, t + h * 0.64f,
-                        l + w * 0.28f, b - h * 0.08f)
+                    moveTo(l + w * 0.08f, t + h * 0.09f)
+                    lineTo(r - w * 0.07f, t + h * 0.09f)
+                    cubicTo(l + w * 0.75f, t + h * 0.37f,
+                        l + w * 0.53f, t + h * 0.65f,
+                        l + w * 0.32f, b - h * 0.075f)
                 }
-                strokeContour(contour)
+                addRoundStroke(contour)
             }
             "8" -> {
-                val upper = Path().apply {
-                    addRoundRect(
-                        RectF(l + half, t + half, r - half, t + h * 0.535f),
-                        w * 0.40f, h * 0.11f, Path.Direction.CW
-                    )
-                }
-                val lower = Path().apply {
-                    addRoundRect(
-                        RectF(l + half, t + h * 0.465f, r - half, b - half),
-                        w * 0.40f, h * 0.11f, Path.Direction.CW
-                    )
-                }
-                strokeContour(upper)
-                strokeContour(lower)
+                path.fillType = Path.FillType.EVEN_ODD
+                path.moveTo(cx, t + half)
+                path.cubicTo(l + w * 0.20f, t + half,
+                    l + half, t + h * 0.10f,
+                    l + half, t + h * 0.27f)
+                path.cubicTo(l + half, t + h * 0.43f,
+                    l + w * 0.24f, t + h * 0.47f,
+                    cx, t + h * 0.50f)
+                path.cubicTo(l + w * 0.24f, t + h * 0.53f,
+                    l + half, t + h * 0.60f,
+                    l + half, t + h * 0.76f)
+                path.cubicTo(l + half, b - half,
+                    l + w * 0.20f, b - half, cx, b - half)
+                path.cubicTo(r - w * 0.20f, b - half,
+                    r - half, b - half, r - half, t + h * 0.76f)
+                path.cubicTo(r - half, t + h * 0.60f,
+                    r - w * 0.24f, t + h * 0.53f, cx, t + h * 0.50f)
+                path.cubicTo(r - w * 0.24f, t + h * 0.47f,
+                    r - half, t + h * 0.43f, r - half, t + h * 0.27f)
+                path.cubicTo(r - half, t + half,
+                    r - w * 0.20f, t + half, cx, t + half)
+                path.close()
+                path.addRoundRect(
+                    RectF(l + w * 0.25f, t + h * 0.12f,
+                        r - w * 0.25f, t + h * 0.415f),
+                    w * 0.10f, h * 0.045f, Path.Direction.CW
+                )
+                path.addRoundRect(
+                    RectF(l + w * 0.25f, t + h * 0.585f,
+                        r - w * 0.25f, b - h * 0.115f),
+                    w * 0.10f, h * 0.045f, Path.Direction.CW
+                )
             }
             "9" -> {
-                val loop = Path().apply {
-                    addRoundRect(
-                        RectF(l + half, t + half, r - half, t + h * 0.60f),
-                        w * 0.42f, h * 0.15f, Path.Direction.CW
-                    )
+                val contour = Path().apply {
+                    moveTo(l + w * 0.86f, t + h * 0.40f)
+                    cubicTo(l + w * 0.82f, t + h * 0.11f,
+                        l + w * 0.54f, t + h * 0.035f,
+                        l + w * 0.34f, t + h * 0.10f)
+                    cubicTo(l + w * 0.04f, t + h * 0.19f,
+                        l + w * 0.04f, t + h * 0.57f,
+                        l + w * 0.35f, t + h * 0.61f)
+                    cubicTo(l + w * 0.56f, t + h * 0.64f,
+                        l + w * 0.78f, t + h * 0.53f,
+                        l + w * 0.86f, t + h * 0.38f)
+                    cubicTo(l + w * 0.86f, t + h * 0.66f,
+                        l + w * 0.68f, t + h * 0.85f,
+                        l + w * 0.39f, b - h * 0.07f)
                 }
-                strokeContour(loop)
-                val tail = Path().apply {
-                    moveTo(r - w * 0.13f, t + h * 0.40f)
-                    cubicTo(r - w * 0.04f, t + h * 0.66f,
-                        l + w * 0.63f, t + h * 0.83f,
-                        l + w * 0.39f, b - h * 0.06f)
-                }
-                strokeContour(tail, stroke * 0.94f)
+                addRoundStroke(contour)
             }
         }
-        return result
+        return path
     }
 
     /**
