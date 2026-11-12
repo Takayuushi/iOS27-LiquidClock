@@ -1,10 +1,6 @@
 name: Liquid Clock Digit Lab APK
 
 on:
-  push:
-    branches: ['feature/**']
-    paths:
-      - 'digit-lab/**'
   workflow_dispatch:
 
 permissions:
