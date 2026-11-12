@@ -64,6 +64,15 @@ object ClockDiagnostics {
             }
         }
         record("Crash diagnostics installed")
+        // Create the single rolling report on first launch after this update,
+        // then fold the old timestamped files into it immediately. The user
+        // does not need to wait for another crash to consolidate 39 old files.
+        writeReport(
+            context = appContext,
+            title = "Diagnostics initialized",
+            thread = Thread.currentThread(),
+            details = "Rolling crash report ready. Future incidents will be appended to this file."
+        )
     }
 
     fun record(message: String) {
