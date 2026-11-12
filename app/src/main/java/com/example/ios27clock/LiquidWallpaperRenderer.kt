@@ -676,95 +676,201 @@ internal class LiquidWallpaperRenderer(
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
-        // Build the mask from the real SF Pro Display Thin outlines. The
-        // previous hand-authored vector alphabet drifted from Apple's actual
-        // numeral proportions, counters and stroke rhythm.
-        val glyphPaint = Paint(
-            Paint.ANTI_ALIAS_FLAG or
-                Paint.SUBPIXEL_TEXT_FLAG or
-                Paint.FILTER_BITMAP_FLAG
-        ).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-            typeface = fallbackTypeface
-            textSize = 1000f
-        }
-
-        val textPath = Path()
-        glyphPaint.getTextPath(timeText, 0, timeText.length, 0f, 0f, textPath)
-        val textBounds = RectF()
-        textPath.computeBounds(textBounds, true)
-        val textAdvance = glyphPaint.measureText(timeText)
-
-        if (textBounds.isEmpty || textAdvance <= 0f) {
-            glyphBounds.setEmpty()
-            glyphBaseBounds.setEmpty()
-            glyphMask?.recycle()
-            glyphMask = mask
-            glyphSdf?.recycle()
-            glyphSdf = null
-            cachedTimeText = timeText
-            updateGlyphMaskInput()
-            return
-        }
-
+        val glyphs = timeText.map { it.toString() }
+        // The expansion parameter changes the optical width of each numeral
+        // independently. The clock becomes taller as the user enlarges it,
+        // while the digits gain carefully controlled width rather than being
+        // uniformly stretched into a wider line.
+        val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
+            .coerceIn(0f, 1f)
+        val fontWeight = 620
+        val font = typefaceFor(fontWeight, 28, 1f)
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
-        val measuredWidth = max(textAdvance, textBounds.width()).coerceAtLeast(1f)
-        val baseScale = min(
-            maxBaseHeight / textBounds.height().coerceAtLeast(1f),
-            maxWidth / measuredWidth
-        )
+        val trackingEm = TRACKING_EM * 0.55f
+        val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
 
+        val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.LEFT
+            style = Paint.Style.FILL
+            typeface = font
+            isSubpixelText = true
+        }
+
+        fun measureLine(size: Float): Float {
+            sizingPaint.textSize = size
+            val tracking = size * trackingEm
+            val naturalWidth = glyphs.sumOf { glyph ->
+                val advance = if (glyph == ":") {
+                    size * colonAdvanceEm
+                } else {
+                    sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+                }
+                advance.toDouble()
+            }.toFloat() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+
+            return naturalWidth * CLOCK_GLYPH_WIDTH_SCALE
+        }
+
+        // Fit the expanded per-digit advances to the usable line width. This
+        // keeps the clock centred and prevents minute digits colliding as the
+        // optical profiles transition from compact to expanded.
+        var low = 1f
+        var high = min(maxBaseHeight, width * 0.90f)
+        repeat(28) {
+            val candidate = (low + high) * 0.5f
+            if (measureLine(candidate) <= maxWidth) low = candidate else high = candidate
+        }
+        val fontSize = low
+        sizingPaint.textSize = fontSize
+
+        val metrics = sizingPaint.fontMetrics
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
-        val naturalScaleY = baseScale * CLOCK_GLYPH_HEIGHT_SCALE
-        val naturalBounds = RectF(
-            centerX + (textBounds.left - textBounds.centerX()) * baseScale,
-            centerY + (textBounds.top - textBounds.centerY()) * naturalScaleY,
-            centerX + (textBounds.right - textBounds.centerX()) * baseScale,
-            centerY + (textBounds.bottom - textBounds.centerY()) * naturalScaleY
-        )
-
-        // Preserve the existing vertical pinch control while ensuring that
-        // the committed clock cannot exceed the wallpaper's safe height.
-        val allowedScaleY = (
-            height * MAX_COMMITTED_HEIGHT_FRACTION /
-                naturalBounds.height().coerceAtLeast(1f)
-            ).coerceAtLeast(1f)
-        if (clockScale > allowedScaleY) {
-            clockScale = allowedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
+        val tracking = fontSize * trackingEm
+        val advances = glyphs.map { glyph ->
+            if (glyph == ":") {
+                fontSize * colonAdvanceEm
+            } else {
+                sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+            }
         }
-        val finalScaleY = naturalScaleY * clockScale
+        val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+        var cursorX = centerX - totalWidth * 0.5f
 
-        // Transform the font outline into the clock's saved position without
-        // stretching individual glyph strokes or inventing per-digit widths.
-        val transform = Matrix().apply {
-            setValues(
-                floatArrayOf(
-                    baseScale, 0f, centerX - textBounds.centerX() * baseScale,
-                    0f, finalScaleY, centerY - textBounds.centerY() * finalScaleY,
-                    0f, 0f, 1f
+        val composedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
+        val composedBounds = RectF()
+        val colonCenters = mutableListOf<Pair<Float, Float>>()
+        var hasBounds = false
+
+        glyphs.forEachIndexed { index, glyph ->
+            if (glyph == ":") {
+                val dotOffset = fontSize * COLON_DOT_OFFSET_EM
+                val dotX = cursorX + advances[index] * 0.5f
+                colonCenters += dotX to (centerY - dotOffset)
+                colonCenters += dotX to (centerY + dotOffset)
+            } else {
+                // Pull the real outline from the variable SF Pro font. Small
+                // per-glyph width and height corrections balance the optical
+                // rhythm without replacing the font with hand-authored paths.
+                val glyphPaint = Paint(sizingPaint).apply {
+                    typeface = typefaceFor(
+                        fontWeight + glyphWeightOffset(glyph),
+                        28,
+                        1f
+                    )
+                    textSize = fontSize
+                    style = Paint.Style.FILL
+                    strokeWidth = 0f
+                }
+                val glyphPath = Path()
+                glyphPaint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, glyphPath)
+
+                val pathBounds = RectF()
+                glyphPath.computeBounds(pathBounds, true)
+                if (!pathBounds.isEmpty) {
+                    val glyphTransform = Matrix().apply {
+                        setScale(
+                            glyphWidthProfile(glyph, expansion),
+                            glyphHeightFactor(glyph),
+                            pathBounds.centerX(),
+                            pathBounds.centerY()
+                        )
+                    }
+                    val opticalPath = Path()
+                    glyphPath.transform(glyphTransform, opticalPath)
+                    composedPath.addPath(opticalPath)
+
+                    val opticalBounds = RectF()
+                    opticalPath.computeBounds(opticalBounds, true)
+                    if (!opticalBounds.isEmpty) {
+                        if (!hasBounds) {
+                            composedBounds.set(opticalBounds)
+                            hasBounds = true
+                        } else {
+                            composedBounds.union(opticalBounds)
+                        }
+                    }
+                }
+            }
+            cursorX += advances[index] + tracking
+        }
+
+        if (hasBounds) {
+            // Apply the subtle native proportion first; the user's size gesture
+            // then expands the line vertically without a global X zoom.
+            val naturalShapeTransform = Matrix().apply {
+                setScale(
+                    CLOCK_GLYPH_WIDTH_SCALE,
+                    CLOCK_GLYPH_HEIGHT_SCALE,
+                    centerX,
+                    centerY
                 )
-            )
-        }
-        val transformedPath = Path()
-        textPath.transform(transform, transformedPath)
-        maskCanvas.drawPath(transformedPath, glyphPaint)
+            }
+            val naturalShapePath = Path()
+            composedPath.transform(naturalShapeTransform, naturalShapePath)
+            naturalShapePath.computeBounds(composedBounds, true)
 
-        val finalBounds = RectF()
-        transformedPath.computeBounds(finalBounds, true)
-        if (finalBounds.isEmpty) {
-            glyphBounds.setEmpty()
-            glyphBaseBounds.setEmpty()
-        } else {
-            val inset = max(2f, baseScale * 2f)
+            val dotRadius = fontSize * COLON_DOT_RADIUS_EM * 1.08f
+            val naturalDotOffset = fontSize * COLON_DOT_OFFSET_EM * CLOCK_GLYPH_HEIGHT_SCALE
+            colonCenters.forEach { (dotX, originalY) ->
+                val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
+                val bounds = RectF(
+                    dotX - dotRadius,
+                    naturalY - dotRadius,
+                    dotX + dotRadius,
+                    naturalY + dotRadius
+                )
+                composedBounds.union(bounds)
+            }
+
+            // Enforce the safe viewport limit against the actual expanded
+            // outlines, including the colon, before committing the scale.
+            val allowedScaleY = (
+                height * MAX_COMMITTED_HEIGHT_FRACTION /
+                    composedBounds.height().coerceAtLeast(1f)
+                ).coerceAtLeast(1f)
+            val committedScaleY = clockScale.coerceAtMost(allowedScaleY)
+            if (committedScaleY != clockScale) {
+                clockScale = committedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+            }
+
+            val verticalTransform = Matrix().apply {
+                setScale(1f, committedScaleY, centerX, centerY)
+            }
+            val finalPath = Path()
+            naturalShapePath.transform(verticalTransform, finalPath)
+
+            // Keep the two colon dots circular as the clock grows. Only their
+            // separation follows the vertical expansion.
+            colonCenters.forEach { (dotX, originalY) ->
+                val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
+                val finalY = centerY + (naturalY - centerY) * committedScaleY
+                finalPath.addCircle(dotX, finalY, dotRadius, Path.Direction.CW)
+            }
+
+            val finalBounds = RectF()
+            finalPath.computeBounds(finalBounds, true)
+            val inset = max(2f, fontSize * 0.025f)
             glyphBounds.set(
                 (finalBounds.left - inset).coerceAtLeast(0f),
                 (finalBounds.top - inset).coerceAtLeast(0f),
                 (finalBounds.right + inset).coerceAtMost(width.toFloat()),
                 (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
+
+            maskCanvas.drawPath(
+                finalPath,
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                    color = Color.WHITE
+                    style = Paint.Style.FILL
+                }
+            )
+        } else {
+            glyphBounds.setEmpty()
+            glyphBaseBounds.setEmpty()
         }
 
         glyphMask?.recycle()
@@ -1133,6 +1239,37 @@ internal class LiquidWallpaperRenderer(
      * The bundled SF Pro asset has no variable wdth axis. Apply width adaptation
      * to each extracted vector glyph instead, with a separate curve per numeral.
      */
+    private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
+        val progress = expansion.coerceIn(0f, 1f)
+        val compact = when (glyph) {
+            "1" -> 0.94f
+            "2" -> 1.08f
+            "3" -> 1.04f
+            "4" -> 1.08f
+            "5" -> 1.04f
+            "6" -> 1.04f
+            "7" -> 0.96f
+            "8" -> 1.08f
+            "9" -> 1.04f
+            "0" -> 1.07f
+            else -> 1.00f
+        }
+        val expanded = when (glyph) {
+            "1" -> 0.97f
+            "2" -> 1.13f
+            "3" -> 1.07f
+            "4" -> 1.12f
+            "5" -> 1.07f
+            "6" -> 1.08f
+            "7" -> 0.98f
+            "8" -> 1.12f
+            "9" -> 1.08f
+            "0" -> 1.11f
+            else -> 1.00f
+        }
+        return compact + (expanded - compact) * progress
+    }
+
     private fun glyphHeightFactor(glyph: String): Float = when (glyph) {
         "1" -> 1.015f
         "4", "7" -> 0.985f
