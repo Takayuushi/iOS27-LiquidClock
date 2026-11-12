@@ -718,8 +718,8 @@ class ClockAppearanceActivity : Activity() {
             if (visibility == View.VISIBLE) postInvalidateDelayed(40L)
         }
 
-        fun reloadAppearance() {
-            renderer.reloadAppearance()
+        fun reloadAppearance(rebuildDistanceField: Boolean = true) {
+            renderer.reloadAppearance(rebuildDistanceField)
             invalidate()
         }
 
