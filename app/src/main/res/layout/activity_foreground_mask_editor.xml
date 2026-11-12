@@ -2,131 +2,237 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#101820"
+    android:background="#0B111C"
     android:orientation="vertical"
-    android:paddingTop="36dp"
-    android:paddingBottom="12dp">
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:text="@string/mask_editor_title"
-        android:textColor="#FFFFFFFF"
-        android:textSize="22sp"
-        android:fontFamily="sans-serif-medium" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp"
-        android:text="@string/mask_editor_hint"
-        android:textColor="#D2DCE8"
-        android:textSize="12sp" />
+    android:paddingTop="14dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="8dp">
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="14dp">
 
-        <Button
-            android:id="@+id/mask_add_mode_button"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:text="@string/mask_mode_add_selected"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DEPTH EFFECT"
+            android:textColor="#92B9E5"
+            android:textSize="10sp"
+            android:letterSpacing="0.16"
+            android:fontFamily="sans-serif-medium" />
 
-        <Button
-            android:id="@+id/mask_erase_mode_button"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
-            android:text="@string/mask_mode_erase"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/mask_editor_title"
+            android:textColor="#F4F7FC"
+            android:textSize="25sp"
+            android:fontFamily="sans-serif-medium" />
 
-        <Button
-            android:id="@+id/mask_magnetic_button"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="@string/mask_magnetic_on"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="@string/mask_editor_hint"
+            android:textColor="#AAB8CC"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
     </LinearLayout>
 
-    <com.example.ios27clock.MaskDrawingView
-        android:id="@+id/foreground_mask_drawing_view"
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="14dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_studio_card"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SELECTION TOOLS"
+            android:textColor="#91A8C5"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="3dp"
+            android:paddingBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/mask_add_mode_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_mask_tool_selected"
+                android:text="@string/mask_mode_add_selected"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:paddingHorizontal="4dp" />
+
+            <Button
+                android:id="@+id/mask_erase_mode_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="4dp"
+                android:background="@drawable/bg_mask_tool_idle"
+                android:text="@string/mask_mode_erase"
+                android:textColor="#D9E3F0"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:paddingHorizontal="4dp" />
+
+            <Button
+                android:id="@+id/mask_magnetic_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/bg_mask_tool_selected"
+                android:text="@string/mask_magnetic_on"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:paddingHorizontal="3dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="7dp"
+        android:text="PREVIEW"
+        android:textColor="#91A8C5"
+        android:textSize="10sp"
+        android:letterSpacing="0.14"
+        android:fontFamily="sans-serif-medium" />
+
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:contentDescription="@string/mask_editor_canvas_description"
-        android:background="#24313E" />
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/bg_mask_image_frame"
+        android:padding="1dp"
+        android:clipToPadding="true">
+
+        <com.example.ios27clock.MaskDrawingView
+            android:id="@+id/foreground_mask_drawing_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/mask_editor_canvas_description"
+            android:background="#080D16" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="8dp">
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="14dp"
+        android:background="@drawable/bg_studio_card"
+        android:orientation="vertical"
+        android:padding="10dp">
 
-        <Button
-            android:id="@+id/mask_undo_button"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="@string/mask_undo"
-            android:textAllCaps="false" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
 
-        <Button
-            android:id="@+id/mask_clear_button"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="@string/mask_clear"
-            android:textAllCaps="false" />
-    </LinearLayout>
+            <Button
+                android:id="@+id/mask_undo_button"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp"
+                android:background="@drawable/bg_mask_tool_idle"
+                android:text="@string/mask_undo"
+                android:textColor="#E3EBF6"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="4dp">
+            <Button
+                android:id="@+id/mask_clear_button"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_mask_tool_idle"
+                android:text="@string/mask_clear"
+                android:textColor="#E3EBF6"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null" />
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/mask_cancel_button"
-            android:layout_width="0dp"
-            android:layout_height="54dp"
-            android:layout_weight="1"
-            android:text="@string/cancel"
-            android:textAllCaps="false" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="8dp">
 
-        <Button
-            android:id="@+id/mask_save_button"
-            android:layout_width="0dp"
-            android:layout_height="54dp"
-            android:layout_weight="1"
-            android:backgroundTint="#DAECFF"
-            android:text="@string/mask_save"
-            android:textColor="#101A2A"
-            android:textAllCaps="false" />
+            <Button
+                android:id="@+id/mask_cancel_button"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp"
+                android:background="@drawable/bg_mask_tool_idle"
+                android:text="@string/cancel"
+                android:textColor="#DDE7F5"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/mask_save_button"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_mask_save"
+                android:text="@string/mask_save"
+                android:textColor="#10213A"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
