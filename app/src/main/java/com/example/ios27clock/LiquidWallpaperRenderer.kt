@@ -91,6 +91,7 @@ internal class LiquidWallpaperRenderer(
         uniform float uFrosted;
         uniform float uTime;
         uniform float3 uAccentColor;
+        uniform float3 uClockTint;
 
         half4 main(float2 p) {
             float coverage = uGlyphMask.eval(p).a;
@@ -122,7 +123,7 @@ internal class LiquidWallpaperRenderer(
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
             float waveA = sin(p.y * 0.0038 + uTime * 0.13);
             float waveB = cos(p.x * 0.0028 - uTime * 0.11);
-            float frosted = clamp(uFrosted, 0.0, 1.0);
+            float solidMode = clamp(uFrosted, 0.0, 1.0);
             float displacement = (1.8 + edgeBand * 8.6 + innerBevel * 2.4) *
                 mix(1.0, 0.48, frosted);
             float2 warp = normal * displacement +
@@ -158,7 +159,7 @@ internal class LiquidWallpaperRenderer(
             float3 transmitted = mix(
                 refracted,
                 diffuseTransmission,
-                mix(0.10, 0.76, frosted)
+                mix(0.10, 0.04, solidMode)
             );
 
             float luminance = dot(transmitted, float3(0.2126, 0.7152, 0.0722));
@@ -186,8 +187,21 @@ internal class LiquidWallpaperRenderer(
                 mix(transmitted, float3(0.90, 0.92, 0.98), 0.26),
                 monochrome * 0.28
             );
-            float3 frostedFace = mix(transmitted, pearlTint, 0.34);
-            body = mix(body, frostedFace, frosted * 0.62);
+            // Glass receives a visible but translucent wash of the selected
+            // swatch. Solid uses that same swatch as its actual face colour,
+            // preserving just a trace of wallpaper light beneath the paint.
+            float glassTintStrength = 0.38;
+            float solidWallpaperBleed = 0.055;
+            float3 glassTintedFace = mix(transmitted, uClockTint, glassTintStrength);
+            float3 solidTintedFace = mix(uClockTint, transmitted, solidWallpaperBleed);
+            float3 solidLight = mix(
+                float3(0.91, 0.88, 1.04),
+                float3(1.05, 1.02, 0.98),
+                interiorVolume
+            );
+            solidTintedFace *= solidLight;
+            body = mix(body, glassTintedFace, 0.42);
+            body = mix(body, solidTintedFace, solidMode);
             body *= mix(0.86, 1.025, interiorVolume) * mix(0.97, 1.02, face);
 
             // Highlights react to device orientation instead of sliding across
@@ -215,20 +229,20 @@ internal class LiquidWallpaperRenderer(
             float3 colour = body;
             colour += uAccentColor * fresnel * 0.19;
             colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.19;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.62, 0.28, frosted);
-            colour += float3(0.68, 0.82, 1.0) * fillSpecular * mix(0.20, 0.10, frosted);
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.62, 0.22, solidMode);
+            colour += float3(0.68, 0.82, 1.0) * fillSpecular * mix(0.20, 0.08, solidMode);
             colour -= float3(0.09, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
             colour += float3(0.95, 0.78, 0.92) * outerLip * 0.045;
 
             float clearOpacity = mix(0.56, 0.67, brightSurface);
             clearOpacity = mix(clearOpacity, clearOpacity + 0.035, monochrome);
-            // Keep a translucent veil so the wallpaper still bleeds through.
-            // Solid is a high-diffusion material, not a flat opaque colour.
-            float frostedOpacity = mix(0.70, 0.79, brightSurface);
-            float bodyOpacity = mix(clearOpacity, frostedOpacity, frosted);
+            // Solid is Apple's painted-colour treatment: substantially opaque,
+            // tinted with the chosen swatch and shaded softly at its edges.
+            float solidOpacity = 0.965;
+            float bodyOpacity = mix(clearOpacity, solidOpacity, solidMode);
             float alpha = coverage * (
-                bodyOpacity + edgeBand * mix(0.25, 0.14, frosted) + outerLip * 0.08
+                bodyOpacity + edgeBand * mix(0.25, 0.12, solidMode) + outerLip * 0.08
             );
             return half4(clamp(colour, 0.0, 1.0), alpha);
         }
@@ -391,9 +405,15 @@ internal class LiquidWallpaperRenderer(
         try {
             shader.setFloatUniform(
                 "uAccentColor",
-                Color.red(materialTint) / 255f,
-                Color.green(materialTint) / 255f,
-                Color.blue(materialTint) / 255f
+                Color.red(adaptiveAccentColor) / 255f,
+                Color.green(adaptiveAccentColor) / 255f,
+                Color.blue(adaptiveAccentColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uClockTint",
+                Color.red(clockColor) / 255f,
+                Color.green(clockColor) / 255f,
+                Color.blue(clockColor) / 255f
             )
             shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
         } catch (exception: RuntimeException) {
@@ -765,7 +785,17 @@ internal class LiquidWallpaperRenderer(
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
 
-        val mask = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        glyphSdf?.let { if (!it.isRecycled) it.recycle() }
+        glyphSdf = null
+        glyphMask?.let { if (!it.isRecycled) it.recycle() }
+        glyphMask = null
+
+        val mask = try {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        } catch (memoryError: OutOfMemoryError) {
+            Log.e(TAG, "Unable to allocate the clock glyph mask at ${width}x${height}.", memoryError)
+            return
+        }
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
@@ -967,9 +997,7 @@ internal class LiquidWallpaperRenderer(
             glyphBaseBounds.setEmpty()
         }
 
-        glyphMask?.recycle()
         glyphMask = mask
-        glyphSdf?.recycle()
         glyphSdfOriginX = 0f
         glyphSdfOriginY = 0f
         glyphSdf = if (!glyphBounds.isEmpty) createGlyphSdf(mask, glyphBounds) else null
@@ -1141,7 +1169,7 @@ internal class LiquidWallpaperRenderer(
         val sdfWidth = right - left
         val sdfHeight = bottom - top
         val pixelCountLong = sdfWidth.toLong() * sdfHeight.toLong()
-        if (pixelCountLong <= 0L || pixelCountLong > 2_500_000L) return null
+        if (pixelCountLong <= 0L || pixelCountLong > 1_500_000L) return null
 
         val pixelCount = pixelCountLong.toInt()
         val sourcePixels = IntArray(pixelCount)
@@ -1554,16 +1582,17 @@ internal class LiquidWallpaperRenderer(
                 surfaceWidth.toFloat(),
                 surfaceHeight.toFloat()
             )
-            val materialTint = if (clockColor == Color.WHITE) {
-                adaptiveAccentColor
-            } else {
-                clockColor
-            }
             shader.setFloatUniform(
                 "uAccentColor",
-                Color.red(materialTint) / 255f,
-                Color.green(materialTint) / 255f,
-                Color.blue(materialTint) / 255f
+                Color.red(adaptiveAccentColor) / 255f,
+                Color.green(adaptiveAccentColor) / 255f,
+                Color.blue(adaptiveAccentColor) / 255f
+            )
+            shader.setFloatUniform(
+                "uClockTint",
+                Color.red(clockColor) / 255f,
+                Color.green(clockColor) / 255f,
+                Color.blue(clockColor) / 255f
             )
             shader.setFloatUniform("uFrosted", if (glassMode) 0f else 1f)
             shader.setFloatUniform(
