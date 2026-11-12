@@ -214,7 +214,7 @@ class ClockAppearanceActivity : Activity() {
 
         panel.addView(sectionLabel("WEIGHT"))
         weightLabel = TextView(this).apply {
-            text = "Weight  ·  $selectedWeight"
+            text = selectedWeight.toString()
             textSize = 13f
             setTextColor(Color.rgb(47, 57, 70))
             layoutParams = LinearLayout.LayoutParams(
