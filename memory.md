@@ -8,6 +8,7 @@
 - **Active development branch:** `feature/live-wallpaper-big-clock`
 - **Do not switch to or commit to `main` unless explicitly asked.** The active feature branch contains the current advanced live-wallpaper work; `main` is substantially behind it.
 - **Platform:** Android 17 / API 37, Kotlin, JDK 17, package `com.example.ios27clock`.
+- **CRITICAL FONT SOURCE:** the production app uses **official Apple SF Pro**, downloaded during CI from Apple's `https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg`. Do not describe it as a GitHub font or use the old GitHub mirror. See the dated source-switch/build-log record below. The separate Digit Lab also downloads the official Apple DMG and subsets that same official variable font to digits/colon.
 - **Visual goal:** an iOS-inspired oversized lock-screen clock rendered as convincing liquid glass over the user's own wallpaper, including depth/object occlusion.
 - **Release naming agreed with the user:** first release is **Release 1**; the next iteration is **I++** (1++ = 2). The app icon direction is a liquid-glass Android logo with “27”.
 - The user expects real repository inspection, commit inspection, and actual GitHub Actions/build-log checks before reporting status. Never describe a build as successful until its workflow run says `completed / success`.
@@ -61,7 +62,7 @@ Changes:
 - **GitHub Actions run:** [Build #264](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43281319087)
 - **Commit SHA built:** `844bbb2d6689d3f1e94cd285a078c3819416a51c`
 - **Workflow result:** completed successfully.
-- **Successful steps included:** Android 17 SDK setup, JDK 17, Gradle setup, official SF Pro font extraction, debug APK build, and artifact upload.
+- **Successful steps included:** Android 17 SDK setup, JDK 17, Gradle setup, extraction of official Apple SF Pro assets from Apple's DMG, debug APK build, and artifact upload.
 - **Artifact name:** `iOS27-LiquidClock-Android17-debug`
 - **Artifact ID:** `13973440777`
 - **Artifact created:** 12 Nov 2026; expiry reported as 26 Nov 2026.
@@ -363,7 +364,7 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Uses a copied snapshot of `LiquidWallpaperRenderer`, its SDF glyph mask and AGSL shader. Only the copied renderer has a test-only fixed-time override.
 - Own app package/files/preferences. No wallpaper service and no calls to `WallpaperManager`; it renders only inside its own full-screen preview.
 - Features: choose image, enter any 1–10 character digit/colon sample, presets for all digits and repeated digits, switch Liquid Glass/Frosted Glass, change font width and weight, drag/pinch clock.
-- Dedicated workflow `.github/workflows/digit-lab.yml` builds and uploads a separate `liquid-clock-digit-lab-debug` APK. SF Pro fonts are downloaded and subset at build time, not committed.
+- Dedicated workflow `.github/workflows/digit-lab.yml` builds and uploads a separate `liquid-clock-digit-lab-debug` APK. It downloads **the official Apple SF-Pro.dmg directly from Apple's CDN**, then subsets Apple's variable SF Pro font to digits/colon at build time while retaining its real `wght` and `wdth` axes. It does not use the GitHub font mirror.
 - Production app source, manifest, Gradle settings and runtime behaviour are unchanged.
 
 ### Build and verification
@@ -387,3 +388,31 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Latest standalone lab source SHA: `3437c376d0963a6a7924568e892f32bb14e0b639`.
 - Latest verified Digit Lab APK build: run #2 — success; artifact ID `13985425247`.
 - On-device installation and visual quality checks remain pending.
+
+
+## CRITICAL — Official Apple SF Pro source and exact switch build (verified from Actions logs)
+
+This is a must-preserve project fact. Do not call the font a GitHub font, a community SF font, or a generic SF Pro download.
+
+### Exact production switch
+- **Source-switch commit:** `19f727982706117a6c62622e948da67f8296b0ff` — **“Use Apple's official SF Pro variable font and display faces”**.
+- **Commit timestamp:** 12 Nov 2026, 12:18:15 UTC.
+- **First production CI run using the official Apple package:** [Build #190](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43216671589), commit `19f7279`.
+- Build #190's log explicitly downloads `https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg`, reports the DMG as **218,830,848 bytes**, extracts the Apple package, verifies the variable font, and reports successful installation of official Apple SF Pro assets into build assets. The font-install workflow step passed. The APK compile later failed for an unrelated Kotlin error: `ClockAppearanceActivity.kt:109:13 Unresolved reference 'shadowLayer'`. Do not mistake that compile failure for a font extraction failure.
+- **First successful production APK after the switch:** [Build #192](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43216821202), commit `8b6725015fec28fef0d40acde0f47edd4d2d0bd4`. Its log repeats the official Apple DMG download/extraction, validates the real axes (`wdth: 30–150`, default 100; `wght: 1–1000`, default 400), then reports `BUILD SUCCESSFUL` and uploads artifact `iOS27-LiquidClock-Android17-debug`, ID `13943323945`.
+- Source switch diff: `19f7279` removes the pinned `raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-Fonts` URLs and replaces them with Apple's official DMG download and extraction. The former GitHub mirror was used only before this commit.
+
+### What the production build consumes
+- Official Apple variable font: `SF-Pro.ttf`, copied into `app/src/main/assets/fonts/SF-Pro.ttf`.
+- Official Apple Display faces extracted from the same DMG: `SF-Pro-Display-Thin.otf`, `SF-Pro-Display-Light.otf`, and `SF-Pro-Display-Bold.otf`, copied into app font resources/assets as needed by the renderer and UI.
+- The active renderer uses Apple's genuine variable-font `wght` and `wdth` axes. CI validates those axes. Subsequent CI commits may subset the official font to clock glyphs, but the source remains Apple's official DMG.
+- Current production workflow: `.github/workflows/build.yml`; its “Install official Apple SF Pro variable font and display faces” step downloads directly from Apple's CDN.
+
+### Digit Lab font provenance
+- Digit Lab is a separate application/Gradle root, but it uses the **same official Apple source**, not a substitute font.
+- `.github/scripts/prepare-digit-lab-fonts.sh` downloads Apple's `SF-Pro.dmg` from `devimages-cdn.apple.com`, extracts `SF-Pro.ttf` and `SF-Pro-Display-Thin.otf`, and subsets the official variable font to `0123456789:` while preserving Apple's `wght` and `wdth` axes.
+- GitHub stores the workflow/script and builds the APK; it is not the font source. Never conflate GitHub-hosted CI with GitHub-hosted font assets.
+
+### Required wording for future handovers
+- Say **“official Apple SF Pro variable font and Display faces, extracted from Apple's SF-Pro.dmg”**.
+- Never say or imply “GitHub font” when referring to the current production or Digit Lab font.
