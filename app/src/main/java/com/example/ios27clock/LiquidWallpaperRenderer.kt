@@ -683,8 +683,10 @@ internal class LiquidWallpaperRenderer(
         // uniformly stretched into a wider line.
         val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
             .coerceIn(0f, 1f)
-        val fontWeight = 620
-        val font = typefaceFor(fontWeight, 28, 1f)
+        // Match the SF Pro reference more closely: keep the normal/default
+        // width coordinate for now, and explicitly vary weight per digit.
+        // A wdth axis is only enabled after CI confirms it exists in this font.
+        val fontWeight = 640
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         val trackingEm = TRACKING_EM * 0.55f
@@ -752,15 +754,12 @@ internal class LiquidWallpaperRenderer(
                 colonCenters += dotX to (centerY - dotOffset)
                 colonCenters += dotX to (centerY + dotOffset)
             } else {
-                // Pull the real outline from the variable SF Pro font. Small
-                // per-glyph width and height corrections balance the optical
-                // rhythm without replacing the font with hand-authored paths.
+                // Generate the character's real SF Pro outline once. A
+                // progressively condensed horizontal transform adapts the
+                // *shape* of each digit as vertical expansion increases;
+                // the vertical expansion below then makes the tall iOS form.
                 val glyphPaint = Paint(sizingPaint).apply {
-                    typeface = typefaceFor(
-                        fontWeight + glyphWeightOffset(glyph),
-                        28,
-                        1f
-                    )
+                    typeface = typefaceFor(fontWeight, 28, 1f)
                     textSize = fontSize
                     style = Paint.Style.FILL
                     strokeWidth = 0f
@@ -771,16 +770,17 @@ internal class LiquidWallpaperRenderer(
                 val pathBounds = RectF()
                 glyphPath.computeBounds(pathBounds, true)
                 if (!pathBounds.isEmpty) {
-                    val glyphTransform = Matrix().apply {
+                    val compactWidth = glyphWidthProfile(glyph, expansion)
+                    val condensedTransform = Matrix().apply {
                         setScale(
-                            glyphWidthProfile(glyph, expansion),
+                            compactWidth,
                             glyphHeightFactor(glyph),
                             pathBounds.centerX(),
                             pathBounds.centerY()
                         )
                     }
                     val opticalPath = Path()
-                    glyphPath.transform(glyphTransform, opticalPath)
+                    glyphPath.transform(condensedTransform, opticalPath)
                     composedPath.addPath(opticalPath)
 
                     val opticalBounds = RectF()
