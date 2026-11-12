@@ -102,8 +102,9 @@ internal class LiquidWallpaperRenderer(
                 return half4(0.0);
             }
 
-            // Stable signed-distance normals drive the refractive rim and
-            // shallow inner bevel. Keep the face broad and soft, not metallic.
+            // The liquid-glass surface is a lens, not a raised text bevel.
+            // A wider distance profile lets refraction travel through the
+            // translucent face while its narrow Fresnel rim catches light.
             float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
             float sdf = uGlyphSdf.eval(sdfPoint).a;
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
@@ -115,27 +116,63 @@ internal class LiquidWallpaperRenderer(
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
             float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 3.4);
-            float innerBevel = 1.0 - smoothstep(0.8, 13.0, max(signedDistance, 0.0));
-            float outerLip = 1.0 - smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
-            float interiorVolume = smoothstep(0.8, 13.0, signedDistance);
+            float solidMode = clamp(uFrosted, 0.0, 1.0);
+            float insideDistance = max(signedDistance, 0.0);
+
+            // Glass has a gently curved optical face and a broader, softer
+            // Fresnel transition. Solid keeps its already-approved tighter edge.
+            float glassEdge = exp(-abs(signedDistance) / 8.5);
+            float solidEdge = exp(-abs(signedDistance) / 3.4);
+            float edgeBand = mix(glassEdge, solidEdge, solidMode);
+            float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
+                (1.0 - smoothstep(54.0, 118.0, signedDistance));
+            float glassRim = exp(-abs(signedDistance - 2.0) / 7.5);
+            float solidBevel = 1.0 -
+                smoothstep(0.8, 13.0, insideDistance);
+            float glassBevel = 1.0 -
+                smoothstep(2.0, 34.0, insideDistance);
+            float innerBevel = mix(glassBevel, solidBevel, solidMode);
+            float outerLip = 1.0 -
+                smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
+            float interiorVolume = smoothstep(
+                1.0,
+                mix(42.0, 13.0, solidMode),
+                signedDistance
+            );
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
             float waveA = sin(p.y * 0.0038 + uTime * 0.10);
             float waveB = cos(p.x * 0.0028 - uTime * 0.09);
 
-            // Glass bends the wallpaper around each contour. Frosted mode
-            // reduces the sharp refraction and uses a separate wide blur.
-            float solidMode = clamp(uFrosted, 0.0, 1.0);
-            float displacement = (1.5 + edgeBand * 6.0 + innerBevel * 1.1) *
-                mix(1.0, 0.68, solidMode);
+            // Stronger displacement follows the local contour and then eases
+            // into the face. This bends the actual wallpaper underneath each
+            // numeral instead of painting a uniform highlight around text.
+            float glassDisplacement =
+                2.8 + glassRim * 11.0 + glassLens * 8.0;
+            float solidDisplacement =
+                1.5 + solidEdge * 6.0 + solidBevel * 1.1;
+            float displacement = mix(
+                glassDisplacement,
+                solidDisplacement,
+                solidMode
+            );
             float2 warp = normal * displacement +
-                tilt * 1.0 +
-                float2(waveA * 0.32, waveB * 0.26);
-            float2 samplePoint = clamp(p + warp, float2(0.0), uResolution);
+                tilt * mix(1.8, 0.68, solidMode) +
+                float2(waveA * 0.38, waveB * 0.30) * (1.0 - solidMode);
+            float2 samplePoint = clamp(
+                p + warp,
+                float2(0.0),
+                uResolution
+            );
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
-            float2 dispersion = normal * (0.4 + edgeBand * 2.4);
+
+            // Split the refracted light by wavelength. The shift is strongest
+            // at the curved perimeter, where real glass bends light most.
+            float dispersionAmount =
+                0.75 + glassRim * 6.0 + glassLens * 1.8;
+            float2 dispersion = normal * dispersionAmount *
+                mix(1.0, 0.68, solidMode);
             float red = uWallpaper.eval(
                 clamp(samplePoint + dispersion, float2(0.0), uResolution)
             ).r;
@@ -144,21 +181,46 @@ internal class LiquidWallpaperRenderer(
             ).b;
             float3 refracted = float3(red, center.g, blue);
 
-            // Eight-tap, wide-radius sampling gives Solid a genuine frosted
-            // appearance: the wallpaper remains recognizable, but details
-            // diffuse instead of showing through as a sharp second image.
+            // Solid retains its approved frosted-glass diffusion.
             float blurRadius = 38.0;
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
-            float2 blurDiagonal = float2(blurRadius * 0.7071, blurRadius * 0.7071);
-            float3 blurA = uWallpaper.eval(clamp(samplePoint + blurX, float2(0.0), uResolution)).rgb;
-            float3 blurB = uWallpaper.eval(clamp(samplePoint - blurX, float2(0.0), uResolution)).rgb;
-            float3 blurC = uWallpaper.eval(clamp(samplePoint + blurY, float2(0.0), uResolution)).rgb;
-            float3 blurD = uWallpaper.eval(clamp(samplePoint - blurY, float2(0.0), uResolution)).rgb;
-            float3 blurE = uWallpaper.eval(clamp(samplePoint + blurDiagonal, float2(0.0), uResolution)).rgb;
-            float3 blurF = uWallpaper.eval(clamp(samplePoint - blurDiagonal, float2(0.0), uResolution)).rgb;
-            float3 blurG = uWallpaper.eval(clamp(samplePoint + float2(blurDiagonal.x, -blurDiagonal.y), float2(0.0), uResolution)).rgb;
-            float3 blurH = uWallpaper.eval(clamp(samplePoint + float2(-blurDiagonal.x, blurDiagonal.y), float2(0.0), uResolution)).rgb;
+            float2 blurDiagonal = float2(
+                blurRadius * 0.7071,
+                blurRadius * 0.7071
+            );
+            float3 blurA = uWallpaper.eval(
+                clamp(samplePoint + blurX, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurB = uWallpaper.eval(
+                clamp(samplePoint - blurX, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurC = uWallpaper.eval(
+                clamp(samplePoint + blurY, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurD = uWallpaper.eval(
+                clamp(samplePoint - blurY, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurE = uWallpaper.eval(
+                clamp(samplePoint + blurDiagonal, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurF = uWallpaper.eval(
+                clamp(samplePoint - blurDiagonal, float2(0.0), uResolution)
+            ).rgb;
+            float3 blurG = uWallpaper.eval(
+                clamp(
+                    samplePoint + float2(blurDiagonal.x, -blurDiagonal.y),
+                    float2(0.0),
+                    uResolution
+                )
+            ).rgb;
+            float3 blurH = uWallpaper.eval(
+                clamp(
+                    samplePoint + float2(-blurDiagonal.x, blurDiagonal.y),
+                    float2(0.0),
+                    uResolution
+                )
+            ).rgb;
             float3 frostedWallpaper = (
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
@@ -170,73 +232,76 @@ internal class LiquidWallpaperRenderer(
             );
             milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
 
-            // The wallpaper itself supplies the material colour. Glass uses
-            // the local sharp sample; Solid uses its locally blurred counterpart.
-            // The extracted wallpaper accent is reserved for a restrained rim
-            // reflection. A manually chosen swatch is only a small optional wash.
-            float3 wallpaperGlassColour = mix(refracted, center, 0.08);
-            float3 wallpaperFrostColour = milkyFrost;
-            float3 glassFace = mix(
-                mix(wallpaperGlassColour, uAccentColor, 0.06),
-                uClockTint,
-                uTintStrength
-            );
+            // Glass borrows its colour from the refracted wallpaper. The
+            // accent is also wallpaper-derived and only colours the glancing
+            // reflection; no permanent lavender or white overlay is applied.
+            float3 glassFace = mix(refracted, center, 0.025);
+            glassFace = mix(glassFace, uAccentColor, 0.025);
+            glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
-                wallpaperFrostColour,
+                milkyFrost,
                 uClockTint,
                 uTintStrength * 0.78
             );
             float3 body = mix(glassFace, frostedFace, solidMode);
 
-            // A restrained inner volume and a bright, thin contour create the
-            // liquid-glass depth without turning the whole glyph into chrome.
             float2 keyLight = normalize(float2(-0.58, -0.78) + tilt * 0.62);
             float2 fillLight = normalize(float2(0.70, 0.64) - tilt * 0.24);
             float facing = max(dot(normal, keyLight), 0.0);
             float oppositeFacing = max(dot(normal, fillLight), 0.0);
+
             float fresnel = pow(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
-                2.2
+                2.6
             ) * edgeBand;
-            float keySpecular = pow(facing, 4.0) * edgeBand;
-            float fillSpecular = pow(oppositeFacing, 3.5) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.11;
+            float glassSpecular = pow(facing, 11.0) * glassRim;
+            float solidSpecular = pow(facing, 4.0) * solidEdge;
+            float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
+            float fillSpecular = pow(oppositeFacing, 4.5) * edgeBand;
+            float bevelShade = innerBevel * (1.0 - facing) *
+                mix(0.075, 0.11, solidMode);
 
             float3 colour = body;
-            colour *= mix(0.94, 1.035, interiorVolume);
-            colour += uAccentColor * fresnel * 0.15;
-            colour += float3(0.98, 0.99, 1.0) * innerBevel * 0.14;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.60, 0.42, solidMode);
-            colour += uAccentColor * fillSpecular * mix(0.22, 0.15, solidMode);
+            colour *= mix(0.985, 1.025, glassLens);
+            colour += uAccentColor * fresnel * mix(0.25, 0.15, solidMode);
+            colour += float3(0.98, 0.99, 1.0) *
+                innerBevel * mix(0.025, 0.14, solidMode);
+            colour += float3(1.0, 1.0, 1.0) *
+                keySpecular * mix(0.92, 0.42, solidMode);
+            colour += uAccentColor *
+                fillSpecular * mix(0.30, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
-            colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.07;
-            colour += float3(1.0, 1.0, 1.0) * outerLip * 0.07;
-            float rimReflection = exp(-abs(signedDistance - 2.5) / 3.2) *
-                pow(max(dot(normal, keyLight), 0.0), 1.8);
-            colour += float3(1.0, 1.0, 1.0) * rimReflection * mix(0.25, 0.17, solidMode);
-            float broadReflection = pow(max(dot(normal, keyLight), 0.0), 1.35) *
-                smoothstep(0.0, 6.0, signedDistance) *
-                (1.0 - smoothstep(18.0, 36.0, signedDistance));
-            colour += float3(1.0, 1.0, 1.0) * broadReflection * mix(0.035, 0.025, solidMode);
+            colour -= float3(0.08, 0.09, 0.14) *
+                edgeBand * (1.0 - facing) * 0.055;
+            colour += float3(1.0, 1.0, 1.0) *
+                outerLip * mix(0.025, 0.07, solidMode);
 
-            // Glass stays highly transmissive. Frosted mode has a denser veil
-            // so it visibly diffuses the wallpaper, but never becomes opaque paint.
-            float glassOpacity = mix(0.31, 0.38, interiorVolume);
+            // A thin high-energy caustic sits just inside the contour.
+            // Avoid a broad white bevel that would make the glyph look embossed.
+            float glassCaustic = exp(-abs(signedDistance - 1.6) / 2.6) *
+                pow(max(dot(normal, keyLight), 0.0), 1.65);
+            float solidRim = exp(-abs(signedDistance - 2.5) / 3.2) *
+                pow(max(dot(normal, keyLight), 0.0), 1.8);
+            colour += float3(1.0, 1.0, 1.0) *
+                mix(glassCaustic, solidRim, solidMode) *
+                mix(0.40, 0.17, solidMode);
+
+            // Glass stays transparent through the face; refractive contours
+            // and the wallpaper's own highlights provide most of its presence.
+            float glassOpacity = mix(0.12, 0.18, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.14, 0.10, solidMode) +
-                    outerLip * 0.07
+                    edgeBand * mix(0.25, 0.10, solidMode) +
+                    outerLip * mix(0.045, 0.07, solidMode)
                 ),
                 0.0,
                 1.0
             );
 
-            // RuntimeShader outputs use premultiplied alpha. Returning an
-            // unassociated RGB value makes a translucent surface look like
-            // opaque metallic paint when source-over composited on the wallpaper.
+            // RuntimeShader outputs use premultiplied alpha.
             float3 premultipliedColour = clamp(colour, 0.0, 1.0) * alpha;
             return half4(premultipliedColour, alpha);
         }
