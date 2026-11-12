@@ -167,6 +167,14 @@ class LiquidWallpaperService : WallpaperService() {
 
                 MotionEvent.ACTION_POINTER_UP -> {
                     if (event.pointerCount - 1 < 2) {
+                        // Commit the final two-finger scale as soon as the
+                        // pinch ends. Do not leave it as a transient canvas
+                        // transform that can be discarded by preview redraws.
+                        if (pinchActive) {
+                            renderer.finishGesture()
+                            renderer.persistComposition()
+                            drawFrame()
+                        }
                         pinchActive = false
                         val remainingIndex = if (event.actionIndex == 0) 1 else 0
                         if (remainingIndex < event.pointerCount) {
