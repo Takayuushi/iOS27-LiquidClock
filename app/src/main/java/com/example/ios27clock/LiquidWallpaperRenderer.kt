@@ -45,7 +45,7 @@ internal class LiquidWallpaperRenderer(
         private const val SOURCE_FILE_NAME = "liquid_clock_wallpaper_source.img"
         private const val FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_foreground.png"
         private const val MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
-        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_light.otf"
+        private const val FONT_ASSET_PATH = "fonts/sf_pro_display_thin.otf"
         private const val VARIABLE_FONT_ASSET_PATH = "fonts/SF-Pro.ttf"
 
         private const val DEFAULT_CLOCK_X = 0.50f
@@ -199,16 +199,16 @@ internal class LiquidWallpaperRenderer(
 
             float3 colour = body;
             colour += uAccentColor * fresnel * 0.19;
-            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.14;
+            colour += float3(0.90, 0.94, 1.0) * innerBevel * 0.19;
             colour += float3(1.0, 1.0, 1.0) * keySpecular * 0.62;
             colour += float3(0.68, 0.82, 1.0) * fillSpecular * 0.20;
             colour -= float3(0.09, 0.11, 0.16) * bevelShade;
             colour += float3(1.0, 1.0, 1.0) * (broadReflection + movingSpecular);
             colour += float3(0.95, 0.78, 0.92) * outerLip * 0.045;
 
-            float bodyOpacity = mix(0.46, 0.59, brightSurface);
+            float bodyOpacity = mix(0.56, 0.67, brightSurface);
             bodyOpacity = mix(bodyOpacity, bodyOpacity + 0.035, monochrome);
-            float alpha = coverage * (bodyOpacity + edgeBand * 0.22 + outerLip * 0.06);
+            float alpha = coverage * (bodyOpacity + edgeBand * 0.25 + outerLip * 0.08);
             return half4(clamp(colour, 0.0, 1.0), alpha);
         }
     """.trimIndent()
@@ -256,7 +256,7 @@ internal class LiquidWallpaperRenderer(
         Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
     ).apply {
         colorFilter = PorterDuffColorFilter(
-            Color.argb(58, 3, 9, 22),
+            Color.argb(38, 3, 9, 22),
             PorterDuff.Mode.SRC_IN
         )
     }
@@ -667,6 +667,7 @@ internal class LiquidWallpaperRenderer(
     private fun rebuildGlyphMask(force: Boolean) {
         val timeText = currentTimeText()
         if (!force && timeText == cachedTimeText && glyphMask != null) return
+
         val width = surfaceWidth
         val height = surfaceHeight
         if (width <= 0 || height <= 0) return
@@ -675,167 +676,95 @@ internal class LiquidWallpaperRenderer(
         val maskCanvas = Canvas(mask)
         maskCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
-        val glyphs = timeText.map { it.toString() }
+        // Build the mask from the real SF Pro Display Thin outlines. The
+        // previous hand-authored vector alphabet drifted from Apple's actual
+        // numeral proportions, counters and stroke rhythm.
+        val glyphPaint = Paint(
+            Paint.ANTI_ALIAS_FLAG or
+                Paint.SUBPIXEL_TEXT_FLAG or
+                Paint.FILTER_BITMAP_FLAG
+        ).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+            typeface = fallbackTypeface
+            textSize = 1000f
+        }
+
+        val textPath = Path()
+        glyphPaint.getTextPath(timeText, 0, timeText.length, 0f, 0f, textPath)
+        val textBounds = RectF()
+        textPath.computeBounds(textBounds, true)
+        val textAdvance = glyphPaint.measureText(timeText)
+
+        if (textBounds.isEmpty || textAdvance <= 0f) {
+            glyphBounds.setEmpty()
+            glyphBaseBounds.setEmpty()
+            glyphMask?.recycle()
+            glyphMask = mask
+            glyphSdf?.recycle()
+            glyphSdf = null
+            cachedTimeText = timeText
+            updateGlyphMaskInput()
+            return
+        }
+
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
-        val trackingEm = 0.032f
-        val colonAdvanceEm = 0.13f
-        val colonExtraGapEm = 0.035f
-        val totalAdvanceEm = glyphs.sumOf {
-            (if (it == ":") colonAdvanceEm else vectorDigitAdvanceEm(it)).toDouble()
-        }.toFloat() + trackingEm * (glyphs.size - 1).coerceAtLeast(0) +
-            colonExtraGapEm * glyphs.count { it == ":" }
+        val measuredWidth = max(textAdvance, textBounds.width()).coerceAtLeast(1f)
+        val baseScale = min(
+            maxBaseHeight / textBounds.height().coerceAtLeast(1f),
+            maxWidth / measuredWidth
+        )
 
-        // One common cap height is fitted to the available line width. The
-        // individual advances are part of this vector family, not estimates
-        // taken from a system font or independent per-glyph stretch factors.
-        val capHeight = min(maxBaseHeight, maxWidth / totalAdvanceEm.coerceAtLeast(0.1f))
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
-        val tracking = capHeight * trackingEm
-        val colonExtraGap = capHeight * colonExtraGapEm
-        val advances = glyphs.map { glyph ->
-            capHeight * if (glyph == ":") colonAdvanceEm else vectorDigitAdvanceEm(glyph)
+        val naturalScaleY = baseScale * CLOCK_GLYPH_HEIGHT_SCALE
+        val naturalBounds = RectF(
+            centerX + (textBounds.left - textBounds.centerX()) * baseScale,
+            centerY + (textBounds.top - textBounds.centerY()) * naturalScaleY,
+            centerX + (textBounds.right - textBounds.centerX()) * baseScale,
+            centerY + (textBounds.bottom - textBounds.centerY()) * naturalScaleY
+        )
+
+        // Preserve the existing vertical pinch control while ensuring that
+        // the committed clock cannot exceed the wallpaper's safe height.
+        val allowedScaleY = (
+            height * MAX_COMMITTED_HEIGHT_FRACTION /
+                naturalBounds.height().coerceAtLeast(1f)
+            ).coerceAtLeast(1f)
+        if (clockScale > allowedScaleY) {
+            clockScale = allowedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
         }
-        val totalWidth = advances.sum() +
-            tracking * (glyphs.size - 1).coerceAtLeast(0) +
-            colonExtraGap * glyphs.count { it == ":" }
-        var cursorX = centerX - totalWidth * 0.5f
-        val top = centerY - capHeight * 0.5f
-        val glyphStrokeWidth = capHeight * 0.092f
+        val finalScaleY = naturalScaleY * clockScale
 
-        data class GlyphShape(val path: Path, val filled: Boolean)
-        val shapes = mutableListOf<GlyphShape>()
-        val baseBounds = RectF()
-        var hasBounds = false
-        val colonCenters = mutableListOf<Pair<Float, Float>>()
-
-        glyphs.forEachIndexed { index, glyph ->
-            if (glyph == ":") {
-                val dotOffset = capHeight * COLON_DOT_OFFSET_EM
-                val dotX = cursorX + advances[index] * 0.5f
-                colonCenters += dotX to (centerY - dotOffset)
-                colonCenters += dotX to (centerY + dotOffset)
-            } else {
-                val digitBounds = RectF(
-                    cursorX,
-                    top,
-                    cursorX + advances[index],
-                    top + capHeight
+        // Transform the font outline into the clock's saved position without
+        // stretching individual glyph strokes or inventing per-digit widths.
+        val transform = Matrix().apply {
+            setValues(
+                floatArrayOf(
+                    baseScale, 0f, centerX - textBounds.centerX() * baseScale,
+                    0f, finalScaleY, centerY - textBounds.centerY() * finalScaleY,
+                    0f, 0f, 1f
                 )
-                val isFilled = glyph == "0" || glyph == "8"
-                val digitPath = buildVectorDigitPath(glyph, digitBounds)
-                shapes += GlyphShape(digitPath, isFilled)
-                val pathBounds = RectF()
-                digitPath.computeBounds(pathBounds, true)
-                if (!pathBounds.isEmpty) {
-                    if (!hasBounds) {
-                        baseBounds.set(pathBounds)
-                        hasBounds = true
-                    } else baseBounds.union(pathBounds)
-                }
-            }
-            cursorX += advances[index] + tracking +
-                if (glyph == ":") colonExtraGap else 0f
-        }
-
-        if (hasBounds) {
-            // Measure the rendered outlines, including the common stroke,
-            // before committing the vertical expansion. This retains the
-            // established hard viewport ceiling and never scales X.
-            val totalShapeHeightScale = CLOCK_GLYPH_HEIGHT_SCALE
-            val naturalBounds = RectF(
-                centerX + (baseBounds.left - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
-                centerY + (baseBounds.top - centerY) * totalShapeHeightScale -
-                    glyphStrokeWidth * 0.5f,
-                centerX + (baseBounds.right - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
-                centerY + (baseBounds.bottom - centerY) * totalShapeHeightScale +
-                    glyphStrokeWidth * 0.5f
             )
-            val allowedScaleY = (
-                height * MAX_COMMITTED_HEIGHT_FRACTION /
-                    naturalBounds.height().coerceAtLeast(1f)
-                ).coerceAtLeast(1f)
-            val committedScaleY = clockScale.coerceAtMost(allowedScaleY)
-            if (committedScaleY != clockScale) {
-                clockScale = committedScaleY.coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
-            }
-            val finalScaleY = totalShapeHeightScale * committedScaleY
+        }
+        val transformedPath = Path()
+        textPath.transform(transform, transformedPath)
+        maskCanvas.drawPath(transformedPath, glyphPaint)
 
-            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                color = Color.WHITE
-                style = Paint.Style.STROKE
-                strokeWidth = glyphStrokeWidth
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                strokeMiter = 1f
-            }
-            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                color = Color.WHITE
-                style = Paint.Style.FILL
-            }
-
-            // Transform glyph geometry first, then render it with an identity
-            // canvas. Applying anisotropic canvas scaling to a STROKE paint
-            // stretched horizontal strokes vertically and made weights uneven.
-            val finalShapeTransform = Matrix().apply {
-                setScale(CLOCK_GLYPH_WIDTH_SCALE, finalScaleY, centerX, centerY)
-            }
-            val finalShapeBounds = RectF()
-            shapes.forEach { shape ->
-                val transformedPath = Path()
-                shape.path.transform(finalShapeTransform, transformedPath)
-                maskCanvas.drawPath(
-                    transformedPath,
-                    if (shape.filled) fillPaint else strokePaint
-                )
-                val pathBounds = RectF()
-                transformedPath.computeBounds(pathBounds, true)
-                if (!shape.filled && !pathBounds.isEmpty) {
-                    pathBounds.inset(
-                        -glyphStrokeWidth * 0.5f,
-                        -glyphStrokeWidth * 0.5f
-                    )
-                }
-                if (!pathBounds.isEmpty) {
-                    if (finalShapeBounds.isEmpty) finalShapeBounds.set(pathBounds)
-                    else finalShapeBounds.union(pathBounds)
-                }
-            }
-
-            // Keep the colon dots circular while moving them with the
-            // vertical expansion. The dots must not turn into tall ovals.
-            val dotRadius = capHeight * COLON_DOT_RADIUS_EM * 1.08f
-            colonCenters.forEach { (dotX, originalY) ->
-                val finalY = centerY + (originalY - centerY) * finalScaleY
-                maskCanvas.drawCircle(
-                    centerX + (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE,
-                    finalY,
-                    dotRadius,
-                    fillPaint
-                )
-            }
-
-            val finalBounds = RectF(finalShapeBounds)
-            colonCenters.forEach { (dotX, originalY) ->
-                val finalX = centerX + (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE
-                val finalY = centerY + (originalY - centerY) * finalScaleY
-                finalBounds.union(
-                    RectF(finalX - dotRadius, finalY - dotRadius,
-                        finalX + dotRadius, finalY + dotRadius)
-                )
-            }
-            // The colon circles are filled shapes and add to the actual mask bounds.
-            val inset = max(2f, capHeight * 0.018f)
+        val finalBounds = RectF()
+        transformedPath.computeBounds(finalBounds, true)
+        if (finalBounds.isEmpty) {
+            glyphBounds.setEmpty()
+            glyphBaseBounds.setEmpty()
+        } else {
+            val inset = max(2f, baseScale * 2f)
             glyphBounds.set(
                 (finalBounds.left - inset).coerceAtLeast(0f),
                 (finalBounds.top - inset).coerceAtLeast(0f),
                 (finalBounds.right + inset).coerceAtMost(width.toFloat()),
                 (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
-        } else {
-            glyphBounds.setEmpty()
-            glyphBaseBounds.setEmpty()
         }
 
         glyphMask?.recycle()
@@ -843,7 +772,7 @@ internal class LiquidWallpaperRenderer(
         glyphSdf?.recycle()
         glyphSdfOriginX = 0f
         glyphSdfOriginY = 0f
-        glyphSdf = if (hasBounds) createGlyphSdf(mask, glyphBounds) else null
+        glyphSdf = if (!glyphBounds.isEmpty) createGlyphSdf(mask, glyphBounds) else null
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
         gestureOffsetX = 0f
@@ -1418,7 +1347,7 @@ internal class LiquidWallpaperRenderer(
         return try {
             Typeface.createFromAsset(context.assets, FONT_ASSET_PATH)
         } catch (exception: Exception) {
-            Log.w(TAG, "SF Pro fallback font unavailable; using system light font.", exception)
+            Log.w(TAG, "SF Pro Display Thin unavailable; using system light font.", exception)
             Typeface.create("sans-serif-light", Typeface.NORMAL)
         }
     }
