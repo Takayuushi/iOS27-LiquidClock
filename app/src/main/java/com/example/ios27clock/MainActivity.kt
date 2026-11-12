@@ -34,7 +34,7 @@ class MainActivity : Activity() {
         }
 
         findViewById<Button>(R.id.clock_appearance_button).setOnClickListener {
-            ClockAppearanceDialog(this).show()
+            startActivity(Intent(this, ClockAppearanceActivity::class.java))
         }
 
         findViewById<Button>(R.id.edit_foreground_button).setOnClickListener {
