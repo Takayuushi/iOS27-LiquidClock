@@ -183,11 +183,18 @@ jobs:
           done < <(find "$WORK_DIR" -type f -name '*.pkg' -print0)
 
           while IFS= read -r -d '' PAYLOAD; do
-            echo "Payload archive: $PAYLOAD"
+            echo "Unpacking package Payload: $PAYLOAD"
             file "$PAYLOAD"
-            7z l "$PAYLOAD" | tail -35
+            7z x -y "$PAYLOAD" -o"$WORK_DIR" | tail -40
+          done < <(find "$WORK_DIR" -type f -name 'Payload' -print0)
+
+          # Apple's package nests a Payload~ CPIO archive inside the gzip Payload.
+          while IFS= read -r -d '' PAYLOAD; do
+            echo "Unpacking font Payload~: $PAYLOAD"
+            file "$PAYLOAD"
+            7z l "$PAYLOAD" | tail -30
             7z x -y "$PAYLOAD" -o"$WORK_DIR" | tail -60
-          done < <(find "$WORK_DIR" -type f \( -name 'Payload~' -o -name 'Payload' \) -print0)
+          done < <(find "$WORK_DIR" -type f -name 'Payload~' -print0)
 
           echo "Files extracted from Apple's package:"
           find "$WORK_DIR" -type f \( -iname '*.otf' -o -iname '*.ttf' -o -iname '*.ttc' \) -print | head -200
