@@ -13,15 +13,14 @@ import android.os.Looper
 import android.os.SystemClock
 import android.text.Editable
 import android.text.InputFilter
+import android.text.InputType
 import android.text.TextWatcher
-import android.text.method.DigitsKeyListener
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -168,8 +167,14 @@ class DigitLabActivity : Activity() {
             hint = "00:00 or 0123456789"
             setPadding(dp(12), 0, dp(12), 0)
             background = roundedBackground(0xFF182438.toInt(), dp(12))
-            keyListener = DigitsKeyListener.getInstance("0123456789:")
-            filters = arrayOf(InputFilter.LengthFilter(MAX_SAMPLE_LENGTH))
+            // Use a full text keyboard so the colon key is directly accessible.
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            filters = arrayOf(
+                InputFilter.LengthFilter(MAX_SAMPLE_LENGTH),
+                InputFilter { source, _, _, _, _, _ ->
+                    if (source.all { it in '0'..'9' || it == ':' }) null else ""
+                }
+            )
             setText(DEFAULT_SAMPLE)
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -186,27 +191,6 @@ class DigitLabActivity : Activity() {
             override fun afterTextChanged(s: Editable?) = Unit
         })
 
-        val presetScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            setPadding(0, dp(8), 0, dp(8))
-        }
-        val presetRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf(
-            "0123456789", "00:00", "11:11", "22:22", "33:33", "44:44",
-            "55:55", "66:66", "77:77", "88:88", "99:99"
-        ).forEach { value ->
-            presetRow.addView(
-                makeChip(value, value == DEFAULT_SAMPLE) {
-                    sampleInput.setText(value)
-                    sampleInput.setSelection(sampleInput.text.length)
-                    renderer.setTestTimeOverride(value)
-                    preview.invalidate()
-                },
-                LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(7) }
-            )
-        }
-        presetScroll.addView(presetRow)
-        content.addView(presetScroll)
 
         content.addView(sectionLabel("MATERIAL"))
         val materialRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -268,19 +252,13 @@ class DigitLabActivity : Activity() {
         })
 
         content.addView(TextView(this).apply {
-            text = "Type any digits. Drag the clock to reposition; pinch vertically for height and horizontally for width."
+            text = "Drag to reposition · Pinch vertically for height · Pinch horizontally for width"
             textSize = 11f
             setTextColor(0xFFB4C3D5.toInt())
             setPadding(0, dp(4), 0, dp(6))
         })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(makeButton("Hide controls") { collapseControls() })
-        actions.addView(TextView(this).apply {
-            text = "  Separate test app • does not apply wallpaper"
-            textSize = 10f
-            setTextColor(0xFF9EADC0.toInt())
-            gravity = Gravity.CENTER_VERTICAL
-        })
         content.addView(actions)
 
         scroll.addView(content)
