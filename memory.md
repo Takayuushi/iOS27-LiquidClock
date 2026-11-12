@@ -159,3 +159,33 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 3. Change font, weight, colour, material, clock position or pinch dimensions in Clock Studio, then exit without Apply. The installed wallpaper must retain its previous composition.
 4. Tap Apply current. Confirm the system preview shows the candidate; set it and verify the applied wallpaper and foreground occlusion update.
 5. Reopen Clock Studio. It should initialize from the last applied composition while still showing the currently selected candidate wallpaper.
+
+
+## Visual refinement pass: contour polish and numeral 2 (13 Nov 2026)
+
+### User feedback from the latest side-by-side screenshots
+- The wallpaper source isolation is working on-device: selecting/previewing the new image no longer replaced the installed wallpaper.
+- The clock is close to the target, but the glossy glass still shows rough/chromatic-looking edge fragments and needs more refinement.
+- The frosted/Solid treatment needs a little more visible shine.
+- The lower terminal/base of the numeral **2** looks too sharp/blocky and needs a small optical correction.
+- Keep the current clock layout, overall proportions, date and wallpaper/depth composition unchanged. Other digits are acceptable for now; user will continue checking them.
+
+### Implemented in this refinement commit
+- Reduced the Glass mode's red/blue chromatic dispersion substantially, especially at the glyph boundary, to stop the edge from reading as cracked/rainbow-fringed.
+- Reduced the refraction displacement slightly so the contour remains a single coherent lens instead of splitting the background into harsh edge fragments.
+- Increased the SDF normal sampling baseline from 1.9px to 2.55px to smooth small distance-field stair-steps before they feed lighting/refraction.
+- Broadened the sharp studio highlight ribbon and softened the high-energy caustic profile, while retaining brighter broad/narrow reflections for a polished-glass appearance.
+- Increased Solid/Frosted mode specular response and added a broad, low-intensity satin sheen so the frosted glass catches more light without borrowing the sharp Glass-only reflection bands.
+- Isolated the SF Pro numeral `2` outline during mask generation and applied a very small `CornerPathEffect` fillet only to that glyph. Other digits and their flatter terminals remain unchanged. The adjusted `2` is included in the combined glyph/SDF bounds.
+
+### Build and device verification
+- Previous wallpaper-isolation commit: `10f0b1bbc88b80f47ea0db56011df5386890995d`; GitHub Actions build #266 completed successfully.
+- Current visual refinement commit/build: pending.
+- The user has not yet tested the current refinement on-device. Compare both Glass and Solid screenshots after installing the next successful build.
+
+### Outstanding visual work
+1. Check whether the glass edge is now smooth and continuous on both dark and high-contrast wallpapers; avoid restoring strong rainbow dispersion.
+2. Check the 2's lower foot. If it is still too square, adjust only that glyph's small terminal treatment rather than changing the full font.
+3. Confirm frosted/Solid mode has a gentle satin shine without becoming glossy chrome or losing its translucent frosted look.
+4. Continue inspecting other digits during real use and make only glyph-specific changes when an actual defect is visible.
+5. Preserve wallpaper preview/applied separation and horizontal pinch behaviour.

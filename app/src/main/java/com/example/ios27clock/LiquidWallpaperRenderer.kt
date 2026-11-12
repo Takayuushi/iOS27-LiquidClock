@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.CornerPathEffect
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -109,7 +110,9 @@ internal class LiquidWallpaperRenderer(
             float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
             float sdf = uGlyphSdf.eval(sdfPoint).a;
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
-            float2 sampleStep = float2(1.9, 1.9) * uSdfScale;
+            // A slightly wider finite-difference baseline filters single-pixel
+            // SDF stair-steps before they become visible as fractured refraction.
+            float2 sampleStep = float2(2.55, 2.55) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -149,7 +152,7 @@ internal class LiquidWallpaperRenderer(
             // into the face. This bends the actual wallpaper underneath each
             // numeral instead of painting a uniform highlight around text.
             float glassDisplacement =
-                4.2 + glassRim * 15.0 + glassLens * 14.0;
+                3.0 + glassRim * 11.0 + glassLens * 9.0;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -176,7 +179,7 @@ internal class LiquidWallpaperRenderer(
             // produced rainbow fringes that looked like digital chromatic
             // aberration instead of a coherent glass lens.
             float glassDispersionAmount =
-                0.40 + glassRim * 3.8 + glassLens * 1.1;
+                0.16 + glassRim * 1.65 + glassLens * 0.42;
             // Preserve the previously approved Solid dispersion response.
             float solidDispersionAmount =
                 0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
@@ -271,9 +274,9 @@ internal class LiquidWallpaperRenderer(
                 2.6
             ) * edgeBand;
             float glassSpecular = pow(facing, 10.0) * glassRim;
-            float glassHighlight = pow(facing, 18.0) *
-                exp(-abs(signedDistance - 1.2) / 3.2);
-            float solidSpecular = pow(facing, 4.0) * solidEdge;
+            float glassHighlight = pow(facing, 15.0) *
+                exp(-abs(signedDistance - 1.2) / 4.8);
+            float solidSpecular = pow(facing, 3.5) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
             float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
             float bevelShade = innerBevel * (1.0 - facing) *
@@ -285,9 +288,9 @@ internal class LiquidWallpaperRenderer(
             colour += float3(0.98, 0.99, 1.0) *
                 innerBevel * mix(0.055, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(1.32, 0.42, solidMode);
+                keySpecular * mix(1.36, 0.58, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                glassHighlight * (1.0 - solidMode) * 0.86;
+                glassHighlight * (1.0 - solidMode) * 0.90;
             colour += uAccentColor *
                 fillSpecular * mix(0.50, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
@@ -298,13 +301,13 @@ internal class LiquidWallpaperRenderer(
 
             // A thin high-energy caustic sits just inside the contour.
             // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.6) / 3.6) *
-                pow(max(dot(normal, keyLight), 0.0), 1.45);
-            float solidRim = exp(-abs(signedDistance - 2.5) / 3.2) *
-                pow(max(dot(normal, keyLight), 0.0), 1.8);
+            float glassCaustic = exp(-abs(signedDistance - 1.6) / 5.0) *
+                pow(max(dot(normal, keyLight), 0.0), 1.35);
+            float solidRim = exp(-abs(signedDistance - 2.5) / 4.2) *
+                pow(max(dot(normal, keyLight), 0.0), 1.55);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
-                mix(0.76, 0.17, solidMode);
+                mix(0.76, 0.25, solidMode);
 
             // A moving, soft studio reflection makes the lens readable on
             // low-detail wallpapers without creating a raised all-around bevel.
@@ -321,7 +324,7 @@ internal class LiquidWallpaperRenderer(
                 -pow((reflectionAxis - 48.0) / 34.0, 2.0)
             ) * glassLens;
             float brightRibbon = exp(
-                -pow((reflectionAxis + 22.0) / 10.0, 2.0)
+                -pow((reflectionAxis + 22.0) / 16.0, 2.0)
             ) * glassLens;
             float secondaryRibbon = exp(
                 -pow((reflectionAxis - 78.0) / 18.0, 2.0)
@@ -345,15 +348,23 @@ internal class LiquidWallpaperRenderer(
                 0.46
             );
             colour += reflectionColour * broadReflection *
-                (1.0 - solidMode) * 0.40;
+                (1.0 - solidMode) * 0.43;
             colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.34;
+                (1.0 - solidMode) * 0.39;
             colour += float3(1.0, 1.0, 1.0) * brightRibbon *
-                (1.0 - solidMode) * 0.78;
+                (1.0 - solidMode) * 0.66;
             colour += coolReflection * secondaryRibbon *
                 (1.0 - solidMode) * 0.27;
             colour += warmReflection * warmBounce *
                 (1.0 - solidMode) * 0.19;
+
+            // The frosted material gets a broad satin highlight rather than
+            // the sharp glass caustic, so it reads as polished rather than flat.
+            float solidSheen = exp(
+                -pow((reflectionAxis - 18.0) / 66.0, 2.0)
+            ) * glassLens;
+            colour += float3(1.0, 1.0, 1.0) *
+                solidSheen * solidMode * 0.16;
 
             // Increase the transparent face contribution modestly. The
             // wallpaper is still visible through it, but it no longer vanishes
@@ -1064,6 +1075,7 @@ internal class LiquidWallpaperRenderer(
         var cursorX = centerX - totalWidth * 0.5f
 
         val composedPath = Path().apply { fillType = Path.FillType.WINDING }
+        var digitTwoPath: Path? = null
         val composedBounds = RectF()
         val colonCenters = mutableListOf<Pair<Float, Float>>()
         var hasBounds = false
@@ -1102,7 +1114,11 @@ internal class LiquidWallpaperRenderer(
                     }
                     val opticalPath = Path()
                     glyphPath.transform(condensedTransform, opticalPath)
-                    composedPath.addPath(opticalPath)
+                    if (glyph == "2") {
+                        digitTwoPath = Path(opticalPath)
+                    } else {
+                        composedPath.addPath(opticalPath)
+                    }
 
                     val opticalBounds = RectF()
                     opticalPath.computeBounds(opticalBounds, true)
@@ -1142,6 +1158,15 @@ internal class LiquidWallpaperRenderer(
             composedPath.transform(naturalShapeTransform, naturalShapePath)
             naturalShapePath.computeBounds(composedBounds, true)
 
+            val naturalDigitTwoPath = digitTwoPath?.let { sourcePath ->
+                Path().also { sourcePath.transform(naturalShapeTransform, it) }
+            }
+            naturalDigitTwoPath?.let { twoPath ->
+                val twoBounds = RectF()
+                twoPath.computeBounds(twoBounds, true)
+                composedBounds.union(twoBounds)
+            }
+
             val dotRadius = fontSize * COLON_DOT_RADIUS_EM * 1.08f
             val naturalDotOffset = fontSize * COLON_DOT_OFFSET_EM * CLOCK_GLYPH_HEIGHT_SCALE
             colonCenters.forEach { (dotX, originalY) ->
@@ -1174,6 +1199,9 @@ internal class LiquidWallpaperRenderer(
             }
             val finalPath = Path()
             naturalShapePath.transform(verticalTransform, finalPath)
+            val finalDigitTwoPath = naturalDigitTwoPath?.let { sourcePath ->
+                Path().also { sourcePath.transform(verticalTransform, it) }
+            }
 
             // Keep the two colon dots circular as the clock grows. Only their
             // separation follows the vertical expansion.
@@ -1187,6 +1215,11 @@ internal class LiquidWallpaperRenderer(
 
             val finalBounds = RectF()
             finalPath.computeBounds(finalBounds, true)
+            finalDigitTwoPath?.let { twoPath ->
+                val twoBounds = RectF()
+                twoPath.computeBounds(twoBounds, true)
+                finalBounds.union(twoBounds)
+            }
             val inset = max(2f, fontSize * 0.025f)
             glyphBounds.set(
                 (finalBounds.left - inset).coerceAtLeast(0f),
@@ -1198,13 +1231,22 @@ internal class LiquidWallpaperRenderer(
             // Preserve Apple's flatter SF Pro terminals. Edge softness is
             // supplied by antialiasing and the optical bevel shader, not by
             // rounding the outline path itself.
-            maskCanvas.drawPath(
-                finalPath,
-                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.FILL
+            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            maskCanvas.drawPath(finalPath, maskPaint)
+
+            // Only the "2" has a subtly softened corner treatment. The small
+            // radius rounds its lower foot and terminal transitions without
+            // changing the flatter SF Pro ends of 1, 4, 5 or 7.
+            finalDigitTwoPath?.let { twoPath ->
+                val terminalFillet = (fontSize * 0.012f).coerceAtLeast(1f)
+                val digitTwoPaint = Paint(maskPaint).apply {
+                    pathEffect = CornerPathEffect(terminalFillet)
                 }
-            )
+                maskCanvas.drawPath(twoPath, digitTwoPaint)
+            }
         } else {
             glyphBounds.setEmpty()
             glyphBaseBounds.setEmpty()
