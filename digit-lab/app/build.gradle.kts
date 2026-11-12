@@ -21,3 +21,7 @@ android {
         release { isMinifyEnabled = false }
     }
 }
+
+dependencies {
+    implementation("com.google.android.material:material:1.13.0")
+}
