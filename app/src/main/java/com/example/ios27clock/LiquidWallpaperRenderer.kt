@@ -121,12 +121,12 @@ internal class LiquidWallpaperRenderer(
 
             // Glass has a gently curved optical face and a broader, softer
             // Fresnel transition. Solid keeps its already-approved tighter edge.
-            float glassEdge = exp(-abs(signedDistance) / 8.5);
+            float glassEdge = exp(-abs(signedDistance) / 10.5);
             float solidEdge = exp(-abs(signedDistance) / 3.4);
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 2.0) / 7.5);
+            float glassRim = exp(-abs(signedDistance - 2.0) / 10.0);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             float glassBevel = 1.0 -
@@ -148,7 +148,7 @@ internal class LiquidWallpaperRenderer(
             // into the face. This bends the actual wallpaper underneath each
             // numeral instead of painting a uniform highlight around text.
             float glassDisplacement =
-                2.8 + glassRim * 11.0 + glassLens * 8.0;
+                4.2 + glassRim * 15.0 + glassLens * 14.0;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -170,7 +170,7 @@ internal class LiquidWallpaperRenderer(
             // Split the refracted light by wavelength. The shift is strongest
             // at the curved perimeter, where real glass bends light most.
             float dispersionAmount =
-                0.75 + glassRim * 6.0 + glassLens * 1.8;
+                0.95 + glassRim * 9.0 + glassLens * 2.8;
             float2 dispersion = normal * dispersionAmount *
                 mix(1.0, 0.68, solidMode);
             float red = uWallpaper.eval(
@@ -254,12 +254,12 @@ internal class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
             ) * edgeBand;
-            float glassSpecular = pow(facing, 11.0) * glassRim;
+            float glassSpecular = pow(facing, 8.0) * glassRim;
             float solidSpecular = pow(facing, 4.0) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
             float fillSpecular = pow(oppositeFacing, 4.5) * edgeBand;
             float bevelShade = innerBevel * (1.0 - facing) *
-                mix(0.075, 0.11, solidMode);
+                mix(0.018, 0.11, solidMode);
 
             float3 colour = body;
             colour *= mix(0.985, 1.025, glassLens);
@@ -278,23 +278,34 @@ internal class LiquidWallpaperRenderer(
 
             // A thin high-energy caustic sits just inside the contour.
             // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.6) / 2.6) *
-                pow(max(dot(normal, keyLight), 0.0), 1.65);
+            float glassCaustic = exp(-abs(signedDistance - 1.6) / 3.6) *
+                pow(max(dot(normal, keyLight), 0.0), 1.45);
             float solidRim = exp(-abs(signedDistance - 2.5) / 3.2) *
                 pow(max(dot(normal, keyLight), 0.0), 1.8);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
                 mix(0.40, 0.17, solidMode);
 
-            // Glass stays transparent through the face; refractive contours
-            // and the wallpaper's own highlights provide most of its presence.
-            float glassOpacity = mix(0.12, 0.18, glassLens);
+            // A moving, soft studio reflection makes the lens readable on
+            // low-detail wallpapers without creating a raised all-around bevel.
+            float2 clockRelative = p - uClockCenter * uResolution;
+            float reflectionAxis = clockRelative.x * -0.42 +
+                clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
+            float softReflection = exp(
+                -pow(reflectionAxis / 52.0, 2.0)
+            ) * glassLens;
+            colour += float3(0.96, 0.98, 1.0) *
+                softReflection * (1.0 - solidMode) * 0.13;
+
+            // Glass remains transparent, but has enough optical body to be
+            // visible on flat colour fields. Solid's proven opacity is unchanged.
+            float glassOpacity = mix(0.24, 0.33, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.25, 0.10, solidMode) +
+                    edgeBand * mix(0.34, 0.10, solidMode) +
                     outerLip * mix(0.045, 0.07, solidMode)
                 ),
                 0.0,
