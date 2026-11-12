@@ -169,10 +169,19 @@ internal class LiquidWallpaperRenderer(
 
             // Split the refracted light by wavelength. The shift is strongest
             // at the curved perimeter, where real glass bends light most.
-            float dispersionAmount =
+            float solidDispersionEdge =
+                exp(-abs(signedDistance - 2.0) / 7.5);
+            float glassDispersionAmount =
                 0.95 + glassRim * 9.0 + glassLens * 2.8;
-            float2 dispersion = normal * dispersionAmount *
-                mix(1.0, 0.68, solidMode);
+            // Preserve the previously approved Solid dispersion response.
+            float solidDispersionAmount =
+                0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
+            float dispersionAmount = mix(
+                glassDispersionAmount,
+                solidDispersionAmount,
+                solidMode
+            );
+            float2 dispersion = normal * dispersionAmount;
             float red = uWallpaper.eval(
                 clamp(samplePoint + dispersion, float2(0.0), uResolution)
             ).r;
