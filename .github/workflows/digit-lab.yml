@@ -1,16 +1,6 @@
 name: Liquid Clock Digit Lab APK
 
 on:
-  push:
-    branches: ['feature/**']
-    paths:
-      - 'digit-lab/**'
-      - '.github/scripts/prepare-digit-lab-fonts.sh'
-  pull_request:
-    paths:
-      - 'digit-lab/**'
-      - '.github/workflows/digit-lab.yml'
-      - '.github/scripts/prepare-digit-lab-fonts.sh'
   workflow_dispatch:
 
 permissions:
