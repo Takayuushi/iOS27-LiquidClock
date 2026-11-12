@@ -54,6 +54,10 @@ internal class LiquidWallpaperRenderer(
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
         private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
+        private const val SF_PRO_WIDTH_COMPRESSED = 30
+        private const val SF_PRO_WIDTH_CONDENSED = 75
+        private const val SF_PRO_WIDTH_REGULAR = 100
+        private const val SF_PRO_WIDTH_EXPANDED = 150
         private const val CLOCK_GLYPH_WIDTH_SCALE = 1.00f
         private const val CLOCK_GLYPH_HEIGHT_SCALE = 1.04f
 
@@ -354,8 +358,8 @@ internal class LiquidWallpaperRenderer(
 
     private fun readAppearancePreferences() {
         clockFontStyle = clockPreferences.getInt("clock_font_style", 0).coerceIn(0, 3)
-        clockFontWeight = clockPreferences.getInt("clock_font_weight", 640)
-            .coerceIn(100, 900)
+        clockFontWeight = clockPreferences.getInt("clock_font_weight", 400)
+            .coerceIn(1, 1000)
         clockColor = clockPreferences.getInt("clock_color", Color.WHITE)
         glassMode = clockPreferences.getBoolean("clock_glass_mode", true)
     }
@@ -726,10 +730,11 @@ internal class LiquidWallpaperRenderer(
         // uniformly stretched into a wider line.
         val expansion = ((clockScale - 1f) / (MAX_CLOCK_SCALE - 1f))
             .coerceIn(0f, 1f)
-        // Match the SF Pro reference more closely: keep the normal/default
-        // width coordinate for now, and explicitly vary weight per digit.
-        // A wdth axis is only enabled after CI confirms it exists in this font.
+        // The official Apple SF Pro variable font supplies real wght and wdth
+        // axes. User-selected weight and width are applied before the adaptive
+        // per-glyph optical shaping below.
         val fontWeight = clockFontWeight
+        val fontWidth = clockFontWidthCoordinate()
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         val trackingEm = TRACKING_EM * 0.55f
@@ -739,7 +744,7 @@ internal class LiquidWallpaperRenderer(
             color = Color.WHITE
             textAlign = Paint.Align.LEFT
             style = Paint.Style.FILL
-            typeface = typefaceFor(fontWeight, 28, 1f)
+            typeface = typefaceFor(fontWeight, 28, fontWidth)
             isSubpixelText = true
         }
 
@@ -802,7 +807,7 @@ internal class LiquidWallpaperRenderer(
                 // *shape* of each digit as vertical expansion increases;
                 // the vertical expansion below then makes the tall iOS form.
                 val glyphPaint = Paint(sizingPaint).apply {
-                    typeface = typefaceFor(fontWeight, 28, 1f)
+                    typeface = typefaceFor(fontWeight, 28, fontWidth)
                     textSize = fontSize
                     style = Paint.Style.FILL
                     strokeWidth = 0f
@@ -1279,8 +1284,8 @@ internal class LiquidWallpaperRenderer(
     }
 
     /**
-     * The bundled SF Pro asset has no variable wdth axis. Apply width adaptation
-     * to each extracted vector glyph instead, with a separate curve per numeral.
+     * Small per-digit optical advances remain on top of Apple's true wdth axis.
+     * The smooth per-glyph curve preserves the tall lock-screen proportions.
      */
     private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
         val progress = expansion.coerceIn(0f, 1f)
@@ -1310,13 +1315,7 @@ internal class LiquidWallpaperRenderer(
             "0" -> 1.11f
             else -> 1.00f
         }
-        val styleWidth = when (clockFontStyle) {
-            1 -> 0.96f // Tall: narrower side bearings with a longer vertical rhythm.
-            2 -> 1.00f // Rounded: let the rounded face define its own width.
-            3 -> 0.86f // Condensed: a visibly tighter display cut.
-            else -> 1.00f
-        }
-        return (compact + (expanded - compact) * progress) * styleWidth
+        return compact + (expanded - compact) * progress
     }
 
     private fun glyphHeightFactor(glyph: String): Float {
@@ -1326,15 +1325,7 @@ internal class LiquidWallpaperRenderer(
             "3", "5" -> 1.01f
             else -> 1.0f
         }
-        return optical * if (clockFontStyle == 1) 1.075f else 1.0f
-    }
-
-    private fun glyphWeightOffset(glyph: String): Int = when (glyph) {
-        "1", "7" -> 18
-        "2", "4" -> 24
-        "3", "5" -> 30
-        "0", "6", "8", "9" -> 38
-        else -> 0
+        return optical
     }
 
     private fun wallpaperWeightAdjustment(
@@ -1374,41 +1365,39 @@ internal class LiquidWallpaperRenderer(
         }
     }
 
+    private fun clockFontWidthCoordinate(): Int = when (clockFontStyle) {
+        1 -> SF_PRO_WIDTH_CONDENSED
+        2 -> SF_PRO_WIDTH_COMPRESSED
+        3 -> SF_PRO_WIDTH_EXPANDED
+        else -> SF_PRO_WIDTH_REGULAR
+    }
+
     private fun typefaceFor(
         weight: Int,
         opticalSize: Int,
-        widthProfile: Float
+        widthProfile: Int
     ): Typeface {
-        val safeWeight = weight.coerceIn(100, 900)
-        val cacheKey = clockFontStyle * 1000 + safeWeight
+        val safeWeight = weight.coerceIn(1, 1000)
+        val safeWidth = widthProfile.coerceIn(SF_PRO_WIDTH_COMPRESSED, SF_PRO_WIDTH_EXPANDED)
+        val cacheKey = safeWeight * 1000 + safeWidth
         typefaceCache[cacheKey]?.let { return it }
 
         val variableFace = try {
-            if (clockFontStyle == 2) {
-                val roundedStyle = when {
-                    safeWeight >= 700 -> Typeface.BOLD
-                    safeWeight < 350 -> Typeface.NORMAL
-                    else -> Typeface.NORMAL
-                }
-                Typeface.create("sans-serif-rounded", roundedStyle)
-            } else {
-                // SF Pro's wght axis supplies real weight variation. The
-                // condensed and tall presets are optical path treatments
-                // applied after extracting these native glyph outlines.
-                Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
-                    .setFontVariationSettings("'wght' $safeWeight")
-                    .build()
-            }
+            Typeface.Builder(context.assets, VARIABLE_FONT_ASSET_PATH)
+                .setFontVariationSettings(
+                    "'wght' $safeWeight, 'wdth' $safeWidth"
+                )
+                .build()
         } catch (fontException: Exception) {
             Log.w(
                 TAG,
-                "Requested clock face unavailable; falling back to SF Pro Display Thin.",
+                "Official Apple SF Pro variable font unavailable; using its Display Thin face.",
                 fontException
             )
             fallbackTypeface
         }
 
-        if (typefaceCache.size >= 64) {
+        if (typefaceCache.size >= 256) {
             typefaceCache.clear()
         }
         typefaceCache[cacheKey] = variableFace
