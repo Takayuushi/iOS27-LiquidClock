@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.CornerPathEffect
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
@@ -1006,11 +1007,19 @@ internal class LiquidWallpaperRenderer(
                 (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
 
+            // Gently round sharp SF Pro path terminals before making the SDF.
+            // This softens the visible geometry itself (not only the highlights),
+            // while keeping the original digit width and cap height intact.
+            val edgeRadius = max(
+                1f,
+                context.resources.displayMetrics.density * 1.15f
+            )
             maskCanvas.drawPath(
                 finalPath,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.FILL
+                    pathEffect = CornerPathEffect(edgeRadius)
                 }
             )
         } else {
