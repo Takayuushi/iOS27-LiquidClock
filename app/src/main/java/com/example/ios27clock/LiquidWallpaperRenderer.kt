@@ -157,7 +157,7 @@ internal class LiquidWallpaperRenderer(
             // into the face. This bends the actual wallpaper underneath each
             // numeral instead of painting a uniform highlight around text.
             float glassDisplacement =
-                2.6 + glassRim * 8.0 + glassLens * 5.5;
+                1.6 + glassRim * 4.2 + glassLens * 2.8;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -184,7 +184,7 @@ internal class LiquidWallpaperRenderer(
             // produced rainbow fringes that looked like digital chromatic
             // aberration instead of a coherent glass lens.
             float glassDispersionAmount =
-                0.08 + glassRim * 0.78 + glassLens * 0.20;
+                0.025 + glassRim * 0.28 + glassLens * 0.08;
             // Preserve the previously approved Solid dispersion response.
             float solidDispersionAmount =
                 0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
@@ -205,7 +205,7 @@ internal class LiquidWallpaperRenderer(
             float3 refracted = mix(
                 center,
                 float3(red, center.g, blue),
-                0.35
+                0.18
             );
 
             // Solid retains its approved frosted-glass diffusion.
@@ -359,11 +359,11 @@ internal class LiquidWallpaperRenderer(
                 0.46
             );
             colour += reflectionColour * broadReflection *
-                (1.0 - solidMode) * 0.52;
+                (1.0 - solidMode) * 0.58;
             colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.46;
+                (1.0 - solidMode) * 0.50;
             colour += float3(1.0, 1.0, 1.0) * brightRibbon *
-                (1.0 - solidMode) * 0.74;
+                (1.0 - solidMode) * 0.80;
             colour += coolReflection * secondaryRibbon *
                 (1.0 - solidMode) * 0.27;
             colour += warmReflection * warmBounce *
@@ -1123,8 +1123,13 @@ internal class LiquidWallpaperRenderer(
                             pathBounds.centerY()
                         )
                     }
+                    val sourceGlyphPath = if (glyph == "1") {
+                        buildReferenceOnePath(pathBounds)
+                    } else {
+                        glyphPath
+                    }
                     val opticalPath = Path()
-                    glyphPath.transform(condensedTransform, opticalPath)
+                    sourceGlyphPath.transform(condensedTransform, opticalPath)
                     if (glyph == "2") {
                         digitTwoPath = Path(opticalPath)
                     } else {
@@ -1479,6 +1484,44 @@ internal class LiquidWallpaperRenderer(
         return path
     }
     /**
+     * The lock-screen "1" uses a dedicated display silhouette instead of
+     * SF Pro's narrow text numeral: a short angled flag, straight stem and
+     * small baseline foot. It is fitted to the measured glyph box, so tracking
+     * and line layout remain unchanged.
+     */
+    private fun buildReferenceOnePath(bounds: RectF): Path {
+        val left = bounds.left
+        val top = bounds.top
+        val width = bounds.width().coerceAtLeast(1f)
+        val height = bounds.height().coerceAtLeast(1f)
+        fun x(value: Float) = left + width * value
+        fun y(value: Float) = top + height * value
+
+        return Path().apply {
+            moveTo(x(0.12f), y(0.235f))
+            cubicTo(
+                x(0.25f), y(0.195f),
+                x(0.42f), y(0.075f),
+                x(0.55f), y(0.055f)
+            )
+            lineTo(x(0.67f), y(0.055f))
+            lineTo(x(0.67f), y(0.875f))
+            lineTo(x(0.84f), y(0.875f))
+            lineTo(x(0.84f), y(0.975f))
+            lineTo(x(0.16f), y(0.975f))
+            lineTo(x(0.16f), y(0.875f))
+            lineTo(x(0.48f), y(0.875f))
+            lineTo(x(0.48f), y(0.245f))
+            cubicTo(
+                x(0.39f), y(0.285f),
+                x(0.25f), y(0.345f),
+                x(0.15f), y(0.375f)
+            )
+            close()
+        }
+    }
+
+    /**
      * Builds a compact signed-distance field around the current glyph bounds.
      * A two-pass 5/7 chamfer transform closely approximates Euclidean
      * distance and keeps contour normals directionally consistent.
@@ -1552,14 +1595,23 @@ internal class LiquidWallpaperRenderer(
 
         val sdfPixels = IntArray(pixelCount)
         for (index in 0 until pixelCount) {
-            val inside = Color.alpha(sourcePixels[index]) >= 128
+            val alpha = Color.alpha(sourcePixels[index])
+            val inside = alpha >= 128
             val signedUnits = if (inside) {
                 distanceToOutside[index].toInt()
             } else {
                 -distanceToInside[index].toInt()
             }
-            // Convert 5:7 chamfer units back into output-pixel units.
-            val signedOutputPixels = signedUnits / SDF_CARDINAL_COST.toFloat() / sdfScale
+            // Preserve fractional coverage from the original antialiased edge
+            // rather than snapping every contour pixel to fully inside/outside.
+            val coverageCorrection = if (alpha in 1..254) {
+                (alpha / 255f - 0.5f) / sdfScale
+            } else {
+                0f
+            }
+            val signedOutputPixels =
+                signedUnits / SDF_CARDINAL_COST.toFloat() / sdfScale +
+                    coverageCorrection
             val encoded = (
                 0.5f + signedOutputPixels / (2f * SDF_RANGE_PX)
             ).coerceIn(0f, 1f)

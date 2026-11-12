@@ -240,8 +240,34 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 
 ### Build and device verification
 - Previous controller tap-to-dismiss build: #269 passed; user hasn't yet given a device test result for that touch interaction.
-- Current inner-contour code commit and CI build: pending.
+- Previous inner-contour pass: commit `71051865c8bf11dc26ebf2037137212b29deba68`; build #270 passed and uploaded artifact `iOS27-LiquidClock-Android17-debug` (ID `13981836170`): [run #270](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43300061790).
+- The user tested build #270 and reported that the contour artifacts were reduced but still visible. The user also pointed out that the displayed `1` silhouette does not match the reference.
 - Do not report the visual fix as verified until the new APK is installed and checked on-device.
 - Priority test digits: `0` (inner and outer edges), `5` (inner curve), `1` (narrow stem/flag), then other digits as encountered.
 - Confirm shine is stronger but the inner counters remain clean, with no obvious channel-split shards, bright seams, or halo leakage.
 - Existing wallpaper-source isolation, tap-anywhere-to-collapse controls, clock drag, and horizontal/vertical pinch must remain intact.
+
+
+## Refine inner contours and correct the number 1 silhouette (13 Nov 2026)
+
+### User's new screenshot feedback
+- Build #270 reduced but did not eliminate visible cracks/light leakage inside the digits.
+- The `1` glyph itself was overlooked: its silhouette differs from the iOS reference. In particular, its top flag and base need to match the reference lock-screen numeral rather than simply using the condensed SF Pro text `1`.
+- Keep the clock's current scale, positioning, time/date hierarchy, wallpaper, and depth composition unchanged.
+
+### Root implementation detail discovered
+- The renderer's `buildVectorDigitPath` and adaptive numeral helpers are currently unused. The active glyph path produces each digit through `glyphPaint.getTextPath(...)` from the condensed SF Pro font.
+- The visible `1` therefore did not use the old custom numeral path. It now needs to be routed through a dedicated closed silhouette in the active glyph composition path.
+
+### Implemented in current pass
+- Added a dedicated filled `1` silhouette fitted to the existing measured glyph bounds: short angled top flag, straight stem, and small flat baseline foot. Tracking, digit advance and overall clock layout remain unchanged.
+- Added sub-pixel edge-coverage correction when encoding the SDF. The distance field retains partial alpha coverage from antialiased mask pixels instead of snapping all edge pixels to fully inside/outside.
+- Reduced Glass background displacement and red/blue channel splitting to prevent high-contrast wallpaper lines from appearing as cracks or light leaks inside the digits.
+- Increased broad and narrow white face reflections slightly, so additional shine comes from a coherent reflective surface instead of stronger chromatic refraction.
+- Kept the 5:7 chamfer metric introduced in build #270.
+
+### Verification state
+- Code commit and CI build for this pass: pending.
+- Device comparison pending. Inspect the `1` silhouette against the first reference screenshot, and check inner edges on `0`, `5`, and the narrow strokes.
+- Confirm inner wallpaper lines bend smoothly and do not split into bright shards; the glass should remain visibly reflective.
+- Preserve preview/applied wallpaper isolation, tap-anywhere controller dismissal, clock dragging, horizontal and vertical pinch, and Solid/Frosted mode.
