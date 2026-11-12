@@ -28,7 +28,7 @@
 - The second supplied screenshot shows the installed lock-screen/home wallpaper context on the Spider-Man image. Preserve the user's wallpaper and depth/object layering; do not replace or repaint the wallpaper.
 - The clock should remain large, centred and readable. Keep the existing overall composition and typography while refining the material and gestures.
 
-## Latest code change
+## Earlier code change (before wallpaper-source isolation)
 
 ### Commit `844bbb2d6689d3f1e94cd285a078c3819416a51c`
 
@@ -112,10 +112,12 @@ Changes:
 ## Status snapshot
 
 - **Last known active branch:** `feature/live-wallpaper-big-clock`
-- **Last code commit:** `844bbb2d6689d3f1e94cd285a078c3819416a51c`
-- **Last verified CI build:** #264 — success
-- **On-device verification of build #264:** not yet reported
-- **Top next priorities:** verify shine against the reference; test horizontal/vertical pinch independence and persistence; investigate the known Typeface/SDF memory failures.
+- **Last code commit:** `8006b624b4839dc102eea3941f90827ae2ac0bf4`
+- **Last verified CI build:** #267 — success
+- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13978905024`
+- **Build run:** [GitHub Actions #267](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43292170383)
+- **On-device verification of visual refinement build #267:** pending
+- **Top next priorities:** compare refined glass edges and Solid sheen on-device; assess the softened numeral 2 base; continue checking other digits; preserve wallpaper preview/applied isolation and horizontal/vertical pinch; investigate known Typeface/SDF memory failures.
 
 
 ## New issue reported and root cause (13 Nov 2026)
@@ -148,8 +150,9 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 
 ### Verification state
 
-- Code commit and GitHub Actions build status: pending at time of writing.
-- Device behaviour is not yet verified. Test that importing and previewing another image never changes the installed wallpaper; then tap Apply current and confirm the Android wallpaper preview/apply flow changes it only at that point.
+- Wallpaper-isolation code commit: `10f0b1bbc88b80f47ea0db56011df5386890995d`.
+- GitHub Actions build #266 completed successfully: [run #266](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43286817709).
+- Device behaviour after the fix was verified by the user: previewing/importing the candidate wallpaper no longer automatically changed the installed lock screen. The explicit Apply flow still needs a full regression test.
 - On first upgrade, the app can only migrate the currently stored legacy source into the applied snapshot. If the previous shared-source bug already replaced Spider-Man, the original image cannot be reconstructed from the overwritten app-private file; re-import Spider-Man as the candidate and use Apply current once to restore it.
 
 ### Next regression checks
@@ -180,8 +183,10 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 
 ### Build and device verification
 - Previous wallpaper-isolation commit: `10f0b1bbc88b80f47ea0db56011df5386890995d`; GitHub Actions build #266 completed successfully.
-- Current visual refinement commit/build: pending.
-- The user has not yet tested the current refinement on-device. Compare both Glass and Solid screenshots after installing the next successful build.
+- **Visual refinement commit:** `8006b624b4839dc102eea3941f90827ae2ac0bf4` ([commit](https://github.com/Takayuushi/iOS27-LiquidClock/commit/8006b624b4839dc102eea3941f90827ae2ac0bf4)).
+- **GitHub Actions build #267:** completed successfully; debug APK build and artifact upload both passed ([run #267](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43292170383)).
+- **Artifact:** `iOS27-LiquidClock-Android17-debug`, ID `13978905024`; expires 26 Nov 2026.
+- The user has not yet tested visual refinement build #267 on-device. Compare both Glass and Solid screenshots after installation.
 
 ### Outstanding visual work
 1. Check whether the glass edge is now smooth and continuous on both dark and high-contrast wallpapers; avoid restoring strong rainbow dispersion.
