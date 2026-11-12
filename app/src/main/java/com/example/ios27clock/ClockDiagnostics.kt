@@ -185,8 +185,7 @@ object ClockDiagnostics {
                 }
                 val file = File(folder, REPORT_FILE_NAME)
                 if (file.length() > MAX_REPORT_BYTES) {
-                    file.writeText("Older diagnostics were trimmed at ${timestamp()}.
-")
+                    file.writeText("Older diagnostics were trimmed at ${timestamp()}.\n")
                 }
                 file.appendText(report)
                 Log.e(TAG, "Diagnostic appended to fallback report: ${file.absolutePath}", throwable)
@@ -226,8 +225,7 @@ object ClockDiagnostics {
         if (existingSize > MAX_REPORT_BYTES) {
             resolver.delete(reportUri, null, null)
             legacyReportsImported.set(false)
-            appendToPublicReport(context, "Older diagnostics were trimmed at ${timestamp()}.
-$report")
+            appendToPublicReport(context, "Older diagnostics were trimmed at ${timestamp()}.\n$report")
             return
         }
 
@@ -299,10 +297,7 @@ $report")
                 val content = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                     ?: return@forEach
                 resolver.openOutputStream(target, "wa")?.bufferedWriter()?.use {
-                    it.write("
-
----------------- Imported legacy report: $name ----------------
-")
+                    it.write("\n\n---------------- Imported legacy report: $name ----------------\n")
                     it.write(content)
                     it.flush()
                 } ?: return@forEach
