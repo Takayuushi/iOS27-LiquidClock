@@ -1,6 +1,8 @@
 package com.example.ios27clock
 
 import android.app.Activity
+import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -16,11 +18,13 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,6 +77,7 @@ class ClockAppearanceActivity : Activity() {
     private val previewHandler = Handler(Looper.getMainLooper())
     private var weightPreviewQueued = false
     private var pendingWallpaperCommit = false
+    private var previewRendererReleased = false
     private val weightPreviewRunnable = Runnable {
         weightPreviewQueued = false
         if (::preview.isInitialized) {
@@ -155,20 +160,6 @@ class ClockAppearanceActivity : Activity() {
         }
         root.addView(backButton)
 
-        val previewLabel = TextView(this).apply {
-            text = "□  Preview"
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
-            gravity = Gravity.CENTER
-            setShadowLayer(dp(4).toFloat(), 0f, dp(1).toFloat(), 0x66000000)
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                dp(54),
-                Gravity.TOP or Gravity.END
-            ).apply { topMargin = dp(25); marginEnd = dp(18) }
-        }
-        root.addView(previewLabel)
 
         root.addView(
             buildAppearancePanel(),
@@ -298,6 +289,27 @@ class ClockAppearanceActivity : Activity() {
         panel.addView(buildColorRow())
         panel.addView(sectionLabel("MATERIAL"))
         panel.addView(buildMaterialSwitch())
+
+        val applyButton = Button(this).apply {
+            text = "Apply current"
+            textSize = 15f
+            isAllCaps = false
+            setTextColor(Color.rgb(16, 32, 56))
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+            background = resources.getDrawable(R.drawable.bg_primary_action, theme)
+            stateListAnimator = null
+            minHeight = dp(52)
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(54)
+            ).apply {
+                topMargin = dp(14)
+                bottomMargin = dp(4)
+            }
+            setOnClickListener { applyCurrentWallpaper() }
+        }
+        panel.addView(applyButton)
 
         return panel
     }
@@ -457,6 +469,42 @@ class ClockAppearanceActivity : Activity() {
         outer.addView(solidOption)
         refreshMaterialSwitch()
         return outer
+    }
+
+    private fun applyCurrentWallpaper() {
+        saveAppearancePreferences()
+        previewHandler.removeCallbacks(weightPreviewRunnable)
+        weightPreviewQueued = false
+
+        // The editor preview owns the only in-app renderer. Release all its
+        // buffers before Android creates the wallpaper preview surface.
+        releasePreviewRenderer()
+        pendingWallpaperCommit = false
+        sendBroadcast(
+            Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
+                .setPackage(packageName)
+        )
+
+        val component = ComponentName(this, LiquidWallpaperService::class.java)
+        val previewIntent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+            .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
+
+        try {
+            startActivity(previewIntent)
+            finish()
+        } catch (exception: Exception) {
+            try {
+                startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                finish()
+            } catch (fallbackException: Exception) {
+                Toast.makeText(
+                    this,
+                    "Android could not open the wallpaper preview.",
+                    Toast.LENGTH_LONG
+                ).show()
+                recreate()
+            }
+        }
     }
 
     private fun saveAppearancePreferences() {
@@ -666,13 +714,15 @@ class ClockAppearanceActivity : Activity() {
         if (stroke != Color.TRANSPARENT) setStroke(dp(1), stroke)
     }
 
+    private fun releasePreviewRenderer() {
+        if (previewRendererReleased || !::preview.isInitialized) return
+        preview.releaseRenderer()
+        previewRendererReleased = true
+    }
+
     override fun onDestroy() {
         previewHandler.removeCallbacks(weightPreviewRunnable)
-
-        // Release the editor's mask, SDF, wallpaper bitmap and shader before
-        // asking the live wallpaper engine to allocate its full-resolution set.
-        // This keeps the two renderers from overlapping their peak allocations.
-        if (::preview.isInitialized) preview.releaseRenderer()
+        releasePreviewRenderer()
         if (pendingWallpaperCommit) {
             sendBroadcast(
                 Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
@@ -696,10 +746,10 @@ class ClockAppearanceActivity : Activity() {
             super.onSizeChanged(w, h, oldw, oldh)
             if (w > 0 && h > 0) {
                 // The live wallpaper uses native screen resolution. This
-                // secondary editor preview uses 55% resolution for smoother edges; the SDF
-                // budget and mask-only slider updates keep memory bounded.
-                renderWidth = max(1, (w * 0.55f).toInt())
-                renderHeight = max(1, (h * 0.55f).toInt())
+                // single editor preview runs at 70% resolution; old mask
+                // generations are retired safely after shader input replacement.
+                renderWidth = max(1, (w * 0.70f).toInt())
+                renderHeight = max(1, (h * 0.70f).toInt())
                 renderer.setViewport(renderWidth, renderHeight)
             }
         }
