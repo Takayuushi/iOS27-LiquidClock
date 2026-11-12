@@ -2,7 +2,6 @@ package com.example.ios27clock
 
 import android.content.ContentValues
 import android.content.Context
-import android.media.MediaScannerConnection
 import android.os.Environment
 import android.os.Process
 import android.provider.MediaStore
