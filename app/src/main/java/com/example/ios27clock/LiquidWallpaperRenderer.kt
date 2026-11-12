@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.CornerPathEffect
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
@@ -108,7 +107,7 @@ internal class LiquidWallpaperRenderer(
             float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
             float sdf = uGlyphSdf.eval(sdfPoint).a;
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
-            float2 sampleStep = float2(2.8, 2.8) * uSdfScale;
+            float2 sampleStep = float2(1.9, 1.9) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -116,10 +115,10 @@ internal class LiquidWallpaperRenderer(
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
             float2 normal = -gradient / max(length(gradient), 0.0005);
 
-            float edgeBand = exp(-abs(signedDistance) / 5.2);
-            float innerBevel = 1.0 - smoothstep(1.2, 20.0, max(signedDistance, 0.0));
-            float outerLip = 1.0 - smoothstep(0.8, 8.0, max(-signedDistance, 0.0));
-            float interiorVolume = smoothstep(1.0, 18.0, signedDistance);
+            float edgeBand = exp(-abs(signedDistance) / 3.4);
+            float innerBevel = 1.0 - smoothstep(0.8, 13.0, max(signedDistance, 0.0));
+            float outerLip = 1.0 - smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
+            float interiorVolume = smoothstep(0.8, 13.0, signedDistance);
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
             float waveA = sin(p.y * 0.0038 + uTime * 0.10);
@@ -128,7 +127,7 @@ internal class LiquidWallpaperRenderer(
             // Glass bends the wallpaper around each contour. Frosted mode
             // reduces the sharp refraction and uses a separate wide blur.
             float solidMode = clamp(uFrosted, 0.0, 1.0);
-            float displacement = (2.0 + edgeBand * 8.5 + innerBevel * 1.8) *
+            float displacement = (1.5 + edgeBand * 6.0 + innerBevel * 1.1) *
                 mix(1.0, 0.68, solidMode);
             float2 warp = normal * displacement +
                 tilt * 1.0 +
@@ -136,7 +135,7 @@ internal class LiquidWallpaperRenderer(
             float2 samplePoint = clamp(p + warp, float2(0.0), uResolution);
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
-            float2 dispersion = normal * (0.65 + edgeBand * 3.2);
+            float2 dispersion = normal * (0.4 + edgeBand * 2.4);
             float red = uWallpaper.eval(
                 clamp(samplePoint + dispersion, float2(0.0), uResolution)
             ).r;
@@ -201,28 +200,28 @@ internal class LiquidWallpaperRenderer(
             ) * edgeBand;
             float keySpecular = pow(facing, 4.0) * edgeBand;
             float fillSpecular = pow(oppositeFacing, 3.5) * edgeBand;
-            float bevelShade = innerBevel * (1.0 - facing) * 0.15;
+            float bevelShade = innerBevel * (1.0 - facing) * 0.11;
 
             float3 colour = body;
             colour *= mix(0.94, 1.035, interiorVolume);
             colour += uAccentColor * fresnel * 0.15;
-            colour += float3(0.98, 0.99, 1.0) * innerBevel * 0.19;
-            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.72, 0.48, solidMode);
+            colour += float3(0.98, 0.99, 1.0) * innerBevel * 0.14;
+            colour += float3(1.0, 1.0, 1.0) * keySpecular * mix(0.60, 0.42, solidMode);
             colour += uAccentColor * fillSpecular * mix(0.22, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             colour -= float3(0.08, 0.09, 0.14) * edgeBand * (1.0 - facing) * 0.07;
             colour += float3(1.0, 1.0, 1.0) * outerLip * 0.07;
-            float rimReflection = exp(-abs(signedDistance - 4.0) / 5.5) *
+            float rimReflection = exp(-abs(signedDistance - 2.5) / 3.2) *
                 pow(max(dot(normal, keyLight), 0.0), 1.8);
-            colour += float3(1.0, 1.0, 1.0) * rimReflection * mix(0.34, 0.22, solidMode);
+            colour += float3(1.0, 1.0, 1.0) * rimReflection * mix(0.25, 0.17, solidMode);
             float broadReflection = pow(max(dot(normal, keyLight), 0.0), 1.35) *
                 smoothstep(0.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(18.0, 36.0, signedDistance));
-            colour += float3(1.0, 1.0, 1.0) * broadReflection * mix(0.10, 0.07, solidMode);
+            colour += float3(1.0, 1.0, 1.0) * broadReflection * mix(0.035, 0.025, solidMode);
 
             // Glass stays highly transmissive. Frosted mode has a denser veil
             // so it visibly diffuses the wallpaper, but never becomes opaque paint.
-            float glassOpacity = mix(0.34, 0.42, interiorVolume);
+            float glassOpacity = mix(0.31, 0.38, interiorVolume);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
@@ -1007,19 +1006,14 @@ internal class LiquidWallpaperRenderer(
                 (finalBounds.bottom + inset).coerceAtMost(height.toFloat())
             )
 
-            // Gently round sharp SF Pro path terminals before making the SDF.
-            // This softens the visible geometry itself (not only the highlights),
-            // while keeping the original digit width and cap height intact.
-            val edgeRadius = max(
-                1f,
-                context.resources.displayMetrics.density * 1.15f
-            )
+            // Preserve Apple's flatter SF Pro terminals. Edge softness is
+            // supplied by antialiasing and the optical bevel shader, not by
+            // rounding the outline path itself.
             maskCanvas.drawPath(
                 finalPath,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                     color = Color.WHITE
                     style = Paint.Style.FILL
-                    pathEffect = CornerPathEffect(edgeRadius)
                 }
             )
         } else {
@@ -1603,7 +1597,7 @@ internal class LiquidWallpaperRenderer(
             fallbackTypeface
         }
 
-        if (typefaceCache.size >= 256) {
+        if (typefaceCache.size >= 4) {
             typefaceCache.clear()
         }
         typefaceCache[cacheKey] = variableFace
