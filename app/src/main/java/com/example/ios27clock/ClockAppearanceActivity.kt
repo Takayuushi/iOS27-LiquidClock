@@ -592,7 +592,7 @@ class ClockAppearanceActivity : Activity() {
             }
             frame.getChildAt(1).background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(SWATCHES[index])
+                setColor(swatches[index])
             }
         }
     }
