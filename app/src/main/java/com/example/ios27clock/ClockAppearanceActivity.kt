@@ -12,10 +12,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -31,6 +30,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.hypot
 
 /**
  * Full-screen Font & Color editor. The current selected wallpaper and the real
@@ -60,7 +60,7 @@ class ClockAppearanceActivity : Activity() {
 
         private const val WALLPAPER_SOURCE_FILE = "liquid_clock_wallpaper_source.img"
         private val FONT_NAMES = arrayOf("Regular", "Condensed", "Compressed", "Expanded")
-        private val WIDTH_COORDINATES = intArrayOf(100, 60, 47, 132)
+        private val WIDTH_COORDINATES = intArrayOf(100, 60, 50, 132)
         private const val PANEL_COLOR = 0xFFE5F0FD.toInt()
     }
 
@@ -74,20 +74,8 @@ class ClockAppearanceActivity : Activity() {
     private lateinit var colorTiles: List<FrameLayout>
     private var swatches: IntArray = FALLBACK_SWATCHES.copyOf()
     private val previewTypefaceCache = LinkedHashMap<Int, Typeface>()
-    private val previewHandler = Handler(Looper.getMainLooper())
-    private var weightPreviewQueued = false
     private var pendingWallpaperCommit = false
     private var previewRendererReleased = false
-    private val weightPreviewRunnable = Runnable {
-        weightPreviewQueued = false
-        if (::preview.isInitialized) {
-            saveAppearancePreferences()
-            // Update the clock's actual SF Pro outlines while retaining the
-            // last good bevel SDF. A fresh SDF is calculated once on release.
-            preview.reloadAppearance(rebuildDistanceField = false)
-            pendingWallpaperCommit = true
-        }
-    }
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
     private lateinit var solidOption: TextView
@@ -106,7 +94,7 @@ class ClockAppearanceActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         selectedStyle = preferences.getInt(KEY_FONT_STYLE, 0).coerceIn(0, 3)
-        selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(1, 1000)
+        selectedWeight = preferences.getInt(KEY_FONT_WEIGHT, 400).coerceIn(100, 900)
         selectedColor = preferences.getInt(KEY_COLOR, Color.WHITE)
         swatches = buildWallpaperSwatches(selectedColor)
         glassMode = preferences.getBoolean(KEY_GLASS_MODE, true)
@@ -243,8 +231,8 @@ class ClockAppearanceActivity : Activity() {
         panel.addView(weightLabel)
 
         val weightSeek = SeekBar(this).apply {
-            max = 999
-            progress = selectedWeight - 1
+            max = 800
+            progress = selectedWeight - 100
             progressTintList = android.content.res.ColorStateList.valueOf(Color.rgb(70, 70, 70))
             thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             progressBackgroundTintList =
@@ -259,27 +247,18 @@ class ClockAppearanceActivity : Activity() {
             }
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    selectedWeight = progress + 1
+                    selectedWeight = progress + 100
                     weightLabel.text = selectedWeight.toString()
-
-                    // Rebuild only the reduced-resolution editor preview at a
-                    // controlled rate while dragging. The full-resolution live
-                    // wallpaper is refreshed once after the editor closes.
-                    if (fromUser && !weightPreviewQueued) {
-                        weightPreviewQueued = true
-                        previewHandler.postDelayed(weightPreviewRunnable, 180L)
-                    }
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
 
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                    previewHandler.removeCallbacks(weightPreviewRunnable)
-                    weightPreviewQueued = false
                     refreshFontTiles()
-                    // Keep the live preview responsive, but leave the expensive
-                    // final SDF for the full-resolution wallpaper after close.
-                    persistAppearance(rebuildDistanceField = false)
+                    // Build the final glyph mask and bevel exactly once per drag.
+                    // Rebuilding a full-screen path every 180ms caused excessive
+                    // bitmap churn and could destabilize the hardware preview.
+                    persistAppearance(rebuildDistanceField = true)
                 }
             })
         }
@@ -473,9 +452,6 @@ class ClockAppearanceActivity : Activity() {
 
     private fun applyCurrentWallpaper() {
         saveAppearancePreferences()
-        previewHandler.removeCallbacks(weightPreviewRunnable)
-        weightPreviewQueued = false
-
         // The editor preview owns the only in-app renderer. Release all its
         // buffers before Android creates the wallpaper preview surface.
         releasePreviewRenderer()
@@ -554,7 +530,7 @@ class ClockAppearanceActivity : Activity() {
         val face = try {
             Typeface.Builder(assets, "fonts/SF-Pro.ttf")
                 .setFontVariationSettings(
-                    "'wght' ${weight.coerceIn(1, 1000)}, 'wdth' $width"
+                    "'wght' ${weight.coerceIn(100, 900)}, 'wdth' ${width.coerceIn(50, 132)}"
                 )
                 .build()
         } catch (exception: Exception) {
@@ -721,7 +697,6 @@ class ClockAppearanceActivity : Activity() {
     }
 
     override fun onDestroy() {
-        previewHandler.removeCallbacks(weightPreviewRunnable)
         releasePreviewRenderer()
         if (pendingWallpaperCommit) {
             sendBroadcast(
@@ -739,20 +714,27 @@ class ClockAppearanceActivity : Activity() {
 
         init {
             setBackgroundColor(Color.BLACK)
-            isClickable = false
+            isClickable = true
+            isFocusable = true
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             super.onSizeChanged(w, h, oldw, oldh)
             if (w > 0 && h > 0) {
-                // The live wallpaper uses native screen resolution. This
-                // single editor preview runs at 70% resolution; old mask
-                // generations are retired safely after shader input replacement.
-                renderWidth = max(1, (w * 0.70f).toInt())
-                renderHeight = max(1, (h * 0.70f).toInt())
+                // The editor is now the sole preview surface. Render at native
+                // view resolution instead of scaling a soft, reduced bitmap.
+                renderWidth = w
+                renderHeight = h
                 renderer.setViewport(renderWidth, renderHeight)
             }
         }
+
+        private var activePointerId = MotionEvent.INVALID_POINTER_ID
+        private var draggingClock = false
+        private var pinchingClock = false
+        private var lastTouchX = 0f
+        private var lastTouchY = 0f
+        private var pinchStartDistance = 0f
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
@@ -766,6 +748,103 @@ class ClockAppearanceActivity : Activity() {
             renderer.draw(canvas, seconds)
             canvas.restoreToCount(save)
             if (visibility == View.VISIBLE) postInvalidateDelayed(40L)
+        }
+
+        private fun renderX(viewX: Float): Float =
+            viewX * renderWidth / width.coerceAtLeast(1)
+
+        private fun renderY(viewY: Float): Float =
+            viewY * renderHeight / height.coerceAtLeast(1)
+
+        private fun pointerDistance(event: MotionEvent): Float {
+            if (event.pointerCount < 2) return 0f
+            val dx = renderX(event.getX(0)) - renderX(event.getX(1))
+            val dy = renderY(event.getY(0)) - renderY(event.getY(1))
+            return hypot(dx, dy)
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (renderWidth <= 0 || renderHeight <= 0) return false
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    val x = renderX(event.x)
+                    val y = renderY(event.y)
+                    if (!renderer.isClockHit(x, y)) return false
+
+                    activePointerId = event.getPointerId(0)
+                    lastTouchX = x
+                    lastTouchY = y
+                    draggingClock = true
+                    pinchingClock = false
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (event.pointerCount >= 2 && draggingClock) {
+                        pinchStartDistance = pointerDistance(event)
+                        if (pinchStartDistance > 8f) {
+                            renderer.beginScaleGesture()
+                            draggingClock = false
+                            pinchingClock = true
+                        }
+                    }
+                    return true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    if (pinchingClock && event.pointerCount >= 2) {
+                        val distance = pointerDistance(event)
+                        if (pinchStartDistance > 8f && distance > 8f) {
+                            renderer.scaleClock(distance / pinchStartDistance)
+                            invalidate()
+                        }
+                        return true
+                    }
+
+                    if (draggingClock) {
+                        val pointerIndex = event.findPointerIndex(activePointerId)
+                        if (pointerIndex >= 0) {
+                            val x = renderX(event.getX(pointerIndex))
+                            val y = renderY(event.getY(pointerIndex))
+                            renderer.moveClockBy(x - lastTouchX, y - lastTouchY)
+                            lastTouchX = x
+                            lastTouchY = y
+                            invalidate()
+                        }
+                        return true
+                    }
+                }
+
+                MotionEvent.ACTION_POINTER_UP -> {
+                    if (pinchingClock) {
+                        renderer.finishGesture()
+                        renderer.persistComposition()
+                        pinchingClock = false
+                        draggingClock = false
+                        pinchStartDistance = 0f
+                        invalidate()
+                    }
+                    return true
+                }
+
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    if (pinchingClock) renderer.finishGesture()
+                    if (draggingClock || pinchingClock) {
+                        renderer.persistComposition()
+                        invalidate()
+                    }
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
+                    draggingClock = false
+                    pinchingClock = false
+                    pinchStartDistance = 0f
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                    return true
+                }
+            }
+            return draggingClock || pinchingClock
         }
 
         fun reloadAppearance(rebuildDistanceField: Boolean = true) {
