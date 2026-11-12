@@ -77,7 +77,9 @@ class ClockAppearanceActivity : Activity() {
         weightPreviewQueued = false
         if (::preview.isInitialized) {
             saveAppearancePreferences()
-            preview.reloadAppearance()
+            // Update the clock's actual SF Pro outlines while retaining the
+            // last good bevel SDF. A fresh SDF is calculated once on release.
+            preview.reloadAppearance(rebuildDistanceField = false)
             pendingWallpaperCommit = true
         }
     }
@@ -665,16 +667,16 @@ class ClockAppearanceActivity : Activity() {
     override fun onDestroy() {
         previewHandler.removeCallbacks(weightPreviewRunnable)
 
-        // Apply one full-resolution update only after the editor has released
-        // its downsampled renderer. This avoids holding two large glyph/SDF
-        // allocations while the wallpaper engine rebuilds the clock.
+        // Release the editor's mask, SDF, wallpaper bitmap and shader before
+        // asking the live wallpaper engine to allocate its full-resolution set.
+        // This keeps the two renderers from overlapping their peak allocations.
+        if (::preview.isInitialized) preview.releaseRenderer()
         if (pendingWallpaperCommit) {
             sendBroadcast(
                 Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
                     .setPackage(packageName)
             )
         }
-        if (::preview.isInitialized) preview.releaseRenderer()
         super.onDestroy()
     }
 
