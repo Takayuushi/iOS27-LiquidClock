@@ -58,6 +58,7 @@ class ClockAppearanceActivity : Activity() {
 
     private lateinit var preview: WallpaperClockPreview
     private lateinit var fontTiles: List<TextView>
+    private lateinit var fontCards: List<LinearLayout>
     private lateinit var colorTiles: List<FrameLayout>
     private lateinit var weightLabel: TextView
     private lateinit var glassOption: TextView
@@ -160,7 +161,7 @@ class ClockAppearanceActivity : Activity() {
     private fun buildAppearancePanel(): View {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(15), dp(18), dp(22))
+            setPadding(dp(18), dp(14), dp(18), dp(20))
             background = panelBackground()
             elevation = dp(18).toFloat()
         }
@@ -173,11 +174,11 @@ class ClockAppearanceActivity : Activity() {
         }
 
         val globe = TextView(this).apply {
-            text = "◎"
-            textSize = 27f
+            text = "Aa"
+            textSize = 20f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(27, 42, 61))
-            background = circleBackground(0xFFC9D8EA.toInt())
+            background = circleBackground(0xFFD6E6F7.toInt())
             layoutParams = FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL)
         }
 
@@ -208,8 +209,10 @@ class ClockAppearanceActivity : Activity() {
         header.addView(close)
         panel.addView(header)
 
+        panel.addView(sectionLabel("TYPEFACE"))
         panel.addView(buildFontRow())
 
+        panel.addView(sectionLabel("WEIGHT"))
         weightLabel = TextView(this).apply {
             text = "Weight  ·  $selectedWeight"
             textSize = 13f
@@ -242,21 +245,22 @@ class ClockAppearanceActivity : Activity() {
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     selectedWeight = progress + 1
-                    weightLabel.text = "Weight  ·  $selectedWeight"
-                    refreshFontTiles()
-                    if (fromUser) persistAppearance(notifyWallpaper = false)
+                    weightLabel.text = selectedWeight.toString()
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
 
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    refreshFontTiles()
                     persistAppearance()
                 }
             })
         }
         panel.addView(weightSeek)
 
+        panel.addView(sectionLabel("COLOR"))
         panel.addView(buildColorRow())
+        panel.addView(sectionLabel("MATERIAL"))
         panel.addView(buildMaterialSwitch())
 
         return panel
@@ -269,33 +273,61 @@ class ClockAppearanceActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(88)
-            ).apply { topMargin = dp(10) }
+            ).apply { topMargin = dp(6) }
         }
 
-        fontTiles = FONT_NAMES.mapIndexed { index, _ ->
-            TextView(this).apply {
-                text = "12"
-                textSize = 36f
+        val samples = mutableListOf<TextView>()
+        val cards = mutableListOf<LinearLayout>()
+
+        FONT_NAMES.forEachIndexed { index, name ->
+            val sample = TextView(this).apply {
+                text = "10:47"
+                textSize = 22f
                 gravity = Gravity.CENTER
-                setTextColor(Color.BLACK)
-                typeface = officialSfProTypeface(
-                    selectedWeight,
-                    WIDTH_COORDINATES[index]
+                setTextColor(Color.rgb(16, 25, 39))
+                typeface = officialSfProTypeface(selectedWeight, WIDTH_COORDINATES[index])
+                includeFontPadding = false
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
                 )
+            }
+            val caption = TextView(this).apply {
+                text = name
+                textSize = 10.5f
+                gravity = Gravity.CENTER
+                setTextColor(Color.rgb(67, 82, 101))
+                includeFontPadding = false
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(18)
+                )
+            }
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(4), dp(6), dp(4), dp(5))
                 background = fontTileBackground(index == selectedStyle)
-                layoutParams = LinearLayout.LayoutParams(0, dp(76), 1f).apply {
+                layoutParams = LinearLayout.LayoutParams(0, dp(84), 1f).apply {
                     marginStart = dp(3)
                     marginEnd = dp(3)
                 }
+                addView(sample)
+                addView(caption)
                 setOnClickListener {
                     selectedStyle = index
                     refreshFontTiles()
                     persistAppearance()
                 }
             }
+            samples += sample
+            cards += card
         }
 
-        fontTiles.forEach { tile -> row.addView(tile) }
+        fontTiles = samples
+        fontCards = cards
+        fontCards.forEach { card -> row.addView(card) }
         return row
     }
 
@@ -330,6 +362,8 @@ class ClockAppearanceActivity : Activity() {
                 }
             }
         }
+
+        colorTiles.forEach { swatch -> row.addView(swatch) }
 
         val scroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -389,7 +423,7 @@ class ClockAppearanceActivity : Activity() {
         return outer
     }
 
-    private fun persistAppearance(notifyWallpaper: Boolean = true) {
+    private fun persistAppearance() {
         preferences.edit()
             .putInt(KEY_FONT_STYLE, selectedStyle)
             .putInt(KEY_FONT_WEIGHT, selectedWeight)
@@ -398,21 +432,35 @@ class ClockAppearanceActivity : Activity() {
             .apply()
 
         preview.reloadAppearance()
-        if (notifyWallpaper) {
-            sendBroadcast(
-                Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
-                    .setPackage(packageName)
-            )
-        }
+        sendBroadcast(
+            Intent(LiquidWallpaperService.ACTION_APPEARANCE_CHANGED)
+                .setPackage(packageName)
+        )
     }
 
     private fun refreshFontTiles() {
         fontTiles.forEachIndexed { index, tile ->
-            tile.background = fontTileBackground(index == selectedStyle)
             tile.typeface = officialSfProTypeface(
                 selectedWeight,
                 WIDTH_COORDINATES[index]
             )
+            tile.setTextColor(Color.rgb(16, 25, 39))
+            fontCards[index].background = fontTileBackground(index == selectedStyle)
+        }
+    }
+
+    private fun sectionLabel(label: String): TextView = TextView(this).apply {
+        text = label
+        textSize = 10f
+        letterSpacing = 0.12f
+        setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+        setTextColor(Color.rgb(94, 111, 132))
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(16)
+        ).apply {
+            topMargin = dp(7)
+            marginStart = dp(8)
         }
     }
 
@@ -463,14 +511,17 @@ class ClockAppearanceActivity : Activity() {
         else setStroke(dp(1), 0x22465D75)
     }
 
-    private fun panelBackground() = GradientDrawable().apply {
-        setColor(PANEL_COLOR)
+    private fun panelBackground() = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(0xEAF5FAFF.toInt(), 0xE1E5EEFC.toInt())
+    ).apply {
         cornerRadii = floatArrayOf(
-            dp(34).toFloat(), dp(34).toFloat(),
-            dp(34).toFloat(), dp(34).toFloat(),
+            dp(32).toFloat(), dp(32).toFloat(),
+            dp(32).toFloat(), dp(32).toFloat(),
             dp(0).toFloat(), dp(0).toFloat(),
             dp(0).toFloat(), dp(0).toFloat()
         )
+        setStroke(dp(1), 0xAAFFFFFF.toInt())
     }
 
     private fun circleBackground(color: Int) = GradientDrawable().apply {
