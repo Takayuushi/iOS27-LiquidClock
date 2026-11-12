@@ -59,7 +59,7 @@ class MaskDrawingView @JvmOverloads constructor(
         private set
 
     private val imageRect = RectF()
-    private val coverRect = RectF()
+    private val imageClipPath = Path()
     private var zoomScale = 1f
     private var panX = 0f
     private var panY = 0f
@@ -68,6 +68,14 @@ class MaskDrawingView @JvmOverloads constructor(
     private var lastCentroidY = -1f
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+    private val imageFramePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1f * resources.displayMetrics.density
+        color = Color.argb(76, 210, 228, 255)
+    }
+
+    private val imageCornerRadius = 14f * resources.displayMetrics.density
 
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = PorterDuffColorFilter(
@@ -228,14 +236,19 @@ class MaskDrawingView @JvmOverloads constructor(
             return
         }
 
-        // Keep both the sharp complete image and its surrounding fill sharp.
-        // The cropped copy only fills unused canvas space; it is never blurred.
+        // Use one clean, fit-to-view image over a restrained dark matte.
+        // Avoid repeating enlarged slices of the wallpaper around the preview.
+        canvas.drawColor(Color.rgb(8, 13, 22))
         updateImageRect(source)
-        updateCoverRect(source)
-        canvas.drawBitmap(source, null, coverRect, imagePaint)
-        canvas.drawBitmap(source, null, imageRect, imagePaint)
+        updateImageClipPath()
 
+        val imageSave = canvas.save()
+        canvas.clipPath(imageClipPath)
+        canvas.drawBitmap(source, null, imageRect, imagePaint)
         maskBitmap?.let { canvas.drawBitmap(it, null, imageRect, overlayPaint) }
+        canvas.restoreToCount(imageSave)
+
+        canvas.drawPath(imageClipPath, imageFramePaint)
         currentPath?.let { drawLassoPreview(canvas, it, source, currentOperationErase) }
     }
 
@@ -256,20 +269,14 @@ class MaskDrawingView @JvmOverloads constructor(
         imageRect.set(left, top, left + renderedWidth, top + renderedHeight)
     }
 
-    private fun updateCoverRect(bitmap: Bitmap) {
-        val viewWidth = width.toFloat()
-        val viewHeight = height.toFloat()
-        if (viewWidth <= 0f || viewHeight <= 0f) return
-
-        val scale = max(
-            viewWidth / bitmap.width,
-            viewHeight / bitmap.height
+    private fun updateImageClipPath() {
+        imageClipPath.rewind()
+        imageClipPath.addRoundRect(
+            imageRect,
+            imageCornerRadius,
+            imageCornerRadius,
+            Path.Direction.CW
         )
-        val renderedWidth = bitmap.width * scale
-        val renderedHeight = bitmap.height * scale
-        val left = (viewWidth - renderedWidth) / 2f
-        val top = (viewHeight - renderedHeight) / 2f
-        coverRect.set(left, top, left + renderedWidth, top + renderedHeight)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -513,7 +520,8 @@ class MaskDrawingView @JvmOverloads constructor(
     ) {
         updateImageRect(source)
         val saveCount = canvas.save()
-        canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
+        updateImageClipPath()
+        canvas.clipPath(imageClipPath)
         canvas.translate(imageRect.left, imageRect.top)
         canvas.scale(
             imageRect.width() / source.width,
