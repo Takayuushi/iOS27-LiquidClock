@@ -844,9 +844,9 @@ internal class LiquidWallpaperRenderer(
     }
 
     private fun buildLockScreenDigitPath(glyph: String, bounds: RectF): Path {
-        // Extract the actual SF Pro outline instead of approximating each
-        // numeral with a hand-drawn centerline. Fit every glyph to the same
-        // cap-height box while preserving its font contour and optical shape.
+        // Keep the font's native horizontal proportions. The previous pass
+        // independently scaled every glyph into its advance box, which made
+        // the 1 too broad, distorted the 3 and gave the 2 a false base width.
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = typefaceFor(650, 1000, 1f)
             textSize = 1000f
@@ -859,15 +859,22 @@ internal class LiquidWallpaperRenderer(
         if (sourceBounds.isEmpty || sourceBounds.width() <= 0f || sourceBounds.height() <= 0f) {
             return Path()
         }
+
+        // Use the zero's cap-height as the common vertical reference and
+        // align every glyph to the same baseline. Preserve tiny font-native
+        // overshoots rather than stretching each numeral independently.
+        val zeroPath = Path()
+        paint.getTextPath("0", 0, 1, 0f, 0f, zeroPath)
+        val zeroBounds = RectF()
+        zeroPath.computeBounds(zeroBounds, true)
+        val referenceHeight = zeroBounds.height().takeIf { it > 0f } ?: sourceBounds.height()
+        val scale = bounds.height() / referenceHeight
         val fitted = Path()
         val transform = Matrix().apply {
-            setScale(
-                bounds.width() / sourceBounds.width(),
-                bounds.height() / sourceBounds.height()
-            )
+            setScale(scale, scale)
             postTranslate(
-                bounds.left - sourceBounds.left * bounds.width() / sourceBounds.width(),
-                bounds.top - sourceBounds.top * bounds.height() / sourceBounds.height()
+                bounds.centerX() - sourceBounds.centerX() * scale,
+                bounds.bottom
             )
         }
         source.transform(transform, fitted)
