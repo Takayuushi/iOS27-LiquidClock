@@ -23,6 +23,8 @@ class LiquidWallpaperService : WallpaperService() {
     companion object {
         const val ACTION_WALLPAPER_SOURCE_CHANGED =
             "com.example.ios27clock.action.WALLPAPER_SOURCE_CHANGED"
+        const val ACTION_APPEARANCE_CHANGED =
+            "com.example.ios27clock.action.APPEARANCE_CHANGED"
 
         private const val TAG = "LiquidWallpaperService"
         private const val FRAME_INTERVAL_MS = 33L
@@ -67,7 +69,11 @@ class LiquidWallpaperService : WallpaperService() {
 
         private val wallpaperUpdatedReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                renderer.reloadWallpaper()
+                if (intent?.action == ACTION_APPEARANCE_CHANGED) {
+                    renderer.reloadAppearance()
+                } else {
+                    renderer.reloadWallpaper()
+                }
                 drawFrame()
             }
         }
@@ -85,9 +91,13 @@ class LiquidWallpaperService : WallpaperService() {
             super.onCreate(surfaceHolder)
             setTouchEventsEnabled(true)
 
+            val updateFilter = IntentFilter().apply {
+                addAction(ACTION_WALLPAPER_SOURCE_CHANGED)
+                addAction(ACTION_APPEARANCE_CHANGED)
+            }
             registerReceiver(
                 wallpaperUpdatedReceiver,
-                IntentFilter(ACTION_WALLPAPER_SOURCE_CHANGED),
+                updateFilter,
                 Context.RECEIVER_NOT_EXPORTED
             )
         }
