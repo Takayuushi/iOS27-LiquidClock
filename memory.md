@@ -213,5 +213,35 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - A visible control-panel overlay still receives its own child-control touches; this change applies to the exposed wallpaper preview area.
 
 ### Verification
-- Static source change committed; Android build and device behaviour pending.
+- Commit: `942b3e1eb16ead07f5efd0a7c0aa7c46abea3001`.
+- GitHub Actions build #269 completed successfully: [run #269](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43298209777).
+- Artifact: `iOS27-LiquidClock-Android17-debug`, ID `13980262070`; expires 26 Nov 2026.
+- The user has not yet reported testing the tap-anywhere controller behaviour on-device.
 - Test: tap empty preview space; the panel should slide down. Tap the clock; the panel should slide down and dragging should still move it. With the clock placed underneath the panel, tap a different exposed preview area to dismiss the panel. Tap the floating arrow to show the panel again.
+
+
+## Inner-contour cleanup and brighter glass pass (13 Nov 2026)
+
+### Latest on-device feedback
+- The user reports remaining roughness/light leakage inside the lower clock digits, particularly the inside of `5`, the counter/inner wall of `0`, and the narrow `1`.
+- The material should be shinier overall, but the highlights must remain coherent. Do not increase rainbow/chromatic splitting to create shine.
+- The new screenshot is from the blue diagonal-light wallpaper. Preserve the overall layout, current glyph proportions, wallpaper and depth composition.
+
+### Root cause investigated
+- The SDF uses a two-pass 3:4 chamfer metric. Its diagonal distance ratio (4/3) is noticeably lower than the Euclidean diagonal ratio (sqrt(2)); this introduces directional error into the distance gradient used for refraction and lighting. The error can be most visible around inner counters and narrow curved strokes.
+- The shader also still had multi-pixel red/blue separation and strong contour displacement, which can turn high-contrast wallpaper lines into apparent cracks and light leaks inside the glyphs.
+
+### Implemented in current pass
+- Upgrade SDF chamfer distances from 3:4 to 5:7 cardinal/diagonal costs; update encoding, decoding and maximum distance units consistently.
+- Increase finite-difference normal sampling baseline to 3.15 output pixels and fade unstable low-gradient normals only for refraction, preserving unit surface normals for lighting.
+- Reduce glass displacement and channel dispersion; blend the remaining refracted channel split back toward the original colour image so the lens stays coherent.
+- Broaden and strengthen the main specular highlight and face reflections to add shine without relying on edge colour fringing.
+- Increase Glass body opacity slightly for more readable reflective material while keeping wallpaper visible through the face.
+
+### Build and device verification
+- Previous controller tap-to-dismiss build: #269 passed; user hasn't yet given a device test result for that touch interaction.
+- Current inner-contour code commit and CI build: pending.
+- Do not report the visual fix as verified until the new APK is installed and checked on-device.
+- Priority test digits: `0` (inner and outer edges), `5` (inner curve), `1` (narrow stem/flag), then other digits as encountered.
+- Confirm shine is stronger but the inner counters remain clean, with no obvious channel-split shards, bright seams, or halo leakage.
+- Existing wallpaper-source isolation, tap-anywhere-to-collapse controls, clock drag, and horizontal/vertical pinch must remain intact.

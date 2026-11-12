@@ -81,6 +81,8 @@ internal class LiquidWallpaperRenderer(
         private const val MAX_COMMITTED_WIDTH_FRACTION = 0.94f
         private const val SDF_RANGE_PX = 24f
         private const val SDF_PADDING_PX = 28
+        private const val SDF_CARDINAL_COST = 5
+        private const val SDF_DIAGONAL_COST = 7
 
         private val AGSL = """
         uniform shader uWallpaper;
@@ -112,13 +114,16 @@ internal class LiquidWallpaperRenderer(
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
             // A slightly wider finite-difference baseline filters single-pixel
             // SDF stair-steps before they become visible as fractured refraction.
-            float2 sampleStep = float2(2.55, 2.55) * uSdfScale;
+            float2 sampleStep = float2(3.15, 3.15) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
             float sdfBottom = uGlyphSdf.eval(sdfPoint + float2(0.0, sampleStep.y)).a;
             float2 gradient = float2(sdfRight - sdfLeft, sdfBottom - sdfTop);
-            float2 normal = -gradient / max(length(gradient), 0.0005);
+            float gradientLength = length(gradient);
+            float normalConfidence = smoothstep(0.006, 0.055, gradientLength);
+            float2 normal = -gradient / max(gradientLength, 0.0005);
+            float2 refractionNormal = normal * normalConfidence;
 
             float solidMode = clamp(uFrosted, 0.0, 1.0);
             float insideDistance = max(signedDistance, 0.0);
@@ -152,7 +157,7 @@ internal class LiquidWallpaperRenderer(
             // into the face. This bends the actual wallpaper underneath each
             // numeral instead of painting a uniform highlight around text.
             float glassDisplacement =
-                3.0 + glassRim * 11.0 + glassLens * 9.0;
+                2.6 + glassRim * 8.0 + glassLens * 5.5;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -160,7 +165,7 @@ internal class LiquidWallpaperRenderer(
                 solidDisplacement,
                 solidMode
             );
-            float2 warp = normal * displacement +
+            float2 warp = refractionNormal * displacement +
                 tilt * mix(1.8, 0.68, solidMode) +
                 float2(waveA * 0.38, waveB * 0.30) * (1.0 - solidMode);
             float2 samplePoint = clamp(
@@ -179,7 +184,7 @@ internal class LiquidWallpaperRenderer(
             // produced rainbow fringes that looked like digital chromatic
             // aberration instead of a coherent glass lens.
             float glassDispersionAmount =
-                0.16 + glassRim * 1.65 + glassLens * 0.42;
+                0.08 + glassRim * 0.78 + glassLens * 0.20;
             // Preserve the previously approved Solid dispersion response.
             float solidDispersionAmount =
                 0.75 + solidDispersionEdge * 6.0 + glassLens * 1.8;
@@ -188,14 +193,20 @@ internal class LiquidWallpaperRenderer(
                 solidDispersionAmount,
                 solidMode
             );
-            float2 dispersion = normal * dispersionAmount;
+            float2 dispersion = refractionNormal * dispersionAmount;
             float red = uWallpaper.eval(
                 clamp(samplePoint + dispersion, float2(0.0), uResolution)
             ).r;
             float blue = uWallpaper.eval(
                 clamp(samplePoint - dispersion, float2(0.0), uResolution)
             ).b;
-            float3 refracted = float3(red, center.g, blue);
+            // Keep the refracted colour together as one optical image; only
+            // a restrained fraction of channel separation survives at edges.
+            float3 refracted = mix(
+                center,
+                float3(red, center.g, blue),
+                0.35
+            );
 
             // Solid retains its approved frosted-glass diffusion.
             float blurRadius = 38.0;
@@ -273,9 +284,9 @@ internal class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
             ) * edgeBand;
-            float glassSpecular = pow(facing, 10.0) * glassRim;
-            float glassHighlight = pow(facing, 15.0) *
-                exp(-abs(signedDistance - 1.2) / 4.8);
+            float glassSpecular = pow(facing, 8.5) * glassRim;
+            float glassHighlight = pow(facing, 12.5) *
+                exp(-abs(signedDistance - 1.2) / 6.0);
             float solidSpecular = pow(facing, 3.5) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
             float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
@@ -288,9 +299,9 @@ internal class LiquidWallpaperRenderer(
             colour += float3(0.98, 0.99, 1.0) *
                 innerBevel * mix(0.055, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(1.36, 0.58, solidMode);
+                keySpecular * mix(1.48, 0.62, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                glassHighlight * (1.0 - solidMode) * 0.90;
+                glassHighlight * (1.0 - solidMode) * 1.02;
             colour += uAccentColor *
                 fillSpecular * mix(0.50, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
@@ -301,10 +312,10 @@ internal class LiquidWallpaperRenderer(
 
             // A thin high-energy caustic sits just inside the contour.
             // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.6) / 5.0) *
-                pow(max(dot(normal, keyLight), 0.0), 1.35);
-            float solidRim = exp(-abs(signedDistance - 2.5) / 4.2) *
-                pow(max(dot(normal, keyLight), 0.0), 1.55);
+            float glassCaustic = exp(-abs(signedDistance - 1.6) / 6.2) *
+                pow(max(dot(normal, keyLight), 0.0), 1.25);
+            float solidRim = exp(-abs(signedDistance - 2.5) / 4.6) *
+                pow(max(dot(normal, keyLight), 0.0), 1.45);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
                 mix(0.76, 0.25, solidMode);
@@ -348,11 +359,11 @@ internal class LiquidWallpaperRenderer(
                 0.46
             );
             colour += reflectionColour * broadReflection *
-                (1.0 - solidMode) * 0.43;
+                (1.0 - solidMode) * 0.52;
             colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.39;
+                (1.0 - solidMode) * 0.46;
             colour += float3(1.0, 1.0, 1.0) * brightRibbon *
-                (1.0 - solidMode) * 0.66;
+                (1.0 - solidMode) * 0.74;
             colour += coolReflection * secondaryRibbon *
                 (1.0 - solidMode) * 0.27;
             colour += warmReflection * warmBounce *
@@ -369,7 +380,7 @@ internal class LiquidWallpaperRenderer(
             // Increase the transparent face contribution modestly. The
             // wallpaper is still visible through it, but it no longer vanishes
             // on dark sections of a high-contrast wallpaper.
-            float glassOpacity = mix(0.40, 0.50, glassLens);
+            float glassOpacity = mix(0.43, 0.54, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
@@ -1469,8 +1480,8 @@ internal class LiquidWallpaperRenderer(
     }
     /**
      * Builds a compact signed-distance field around the current glyph bounds.
-     * A two-pass 3/4 chamfer transform gives stable normals for the shallow
-     * glass bevel without doing distance work in the per-frame shader.
+     * A two-pass 5/7 chamfer transform closely approximates Euclidean
+     * distance and keeps contour normals directionally consistent.
      */
     private fun createGlyphSdf(source: Bitmap, bounds: RectF): Bitmap? {
         if (source.isRecycled || bounds.isEmpty) return null
@@ -1526,7 +1537,7 @@ internal class LiquidWallpaperRenderer(
             }
         }
 
-        val maxUnits = (SDF_RANGE_PX * 3f).roundToInt()
+        val maxUnits = (SDF_RANGE_PX * SDF_CARDINAL_COST.toFloat()).roundToInt()
         val infinity = (maxUnits + 1).toShort()
         val distanceToOutside = ShortArray(pixelCount)
         val distanceToInside = ShortArray(pixelCount)
@@ -1547,8 +1558,8 @@ internal class LiquidWallpaperRenderer(
             } else {
                 -distanceToInside[index].toInt()
             }
-            // Convert chamfer distance back into output-pixel units.
-            val signedOutputPixels = signedUnits / 3f / sdfScale
+            // Convert 5:7 chamfer units back into output-pixel units.
+            val signedOutputPixels = signedUnits / SDF_CARDINAL_COST.toFloat() / sdfScale
             val encoded = (
                 0.5f + signedOutputPixels / (2f * SDF_RANGE_PX)
             ).coerceIn(0f, 1f)
@@ -1584,11 +1595,29 @@ internal class LiquidWallpaperRenderer(
             for (x in 0 until width) {
                 val index = row + x
                 var best = distances[index].toInt()
-                if (x > 0) best = min(best, distances[index - 1].toInt() + 3)
+                if (x > 0) {
+                    best = min(
+                        best,
+                        distances[index - 1].toInt() + SDF_CARDINAL_COST
+                    )
+                }
                 if (y > 0) {
-                    best = min(best, distances[index - width].toInt() + 3)
-                    if (x > 0) best = min(best, distances[index - width - 1].toInt() + 4)
-                    if (x + 1 < width) best = min(best, distances[index - width + 1].toInt() + 4)
+                    best = min(
+                        best,
+                        distances[index - width].toInt() + SDF_CARDINAL_COST
+                    )
+                    if (x > 0) {
+                        best = min(
+                            best,
+                            distances[index - width - 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                    if (x + 1 < width) {
+                        best = min(
+                            best,
+                            distances[index - width + 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
                 }
                 distances[index] = min(best, maxUnits).toShort()
             }
@@ -1598,11 +1627,29 @@ internal class LiquidWallpaperRenderer(
             for (x in width - 1 downTo 0) {
                 val index = row + x
                 var best = distances[index].toInt()
-                if (x + 1 < width) best = min(best, distances[index + 1].toInt() + 3)
+                if (x + 1 < width) {
+                    best = min(
+                        best,
+                        distances[index + 1].toInt() + SDF_CARDINAL_COST
+                    )
+                }
                 if (y + 1 < height) {
-                    best = min(best, distances[index + width].toInt() + 3)
-                    if (x > 0) best = min(best, distances[index + width - 1].toInt() + 4)
-                    if (x + 1 < width) best = min(best, distances[index + width + 1].toInt() + 4)
+                    best = min(
+                        best,
+                        distances[index + width].toInt() + SDF_CARDINAL_COST
+                    )
+                    if (x > 0) {
+                        best = min(
+                            best,
+                            distances[index + width - 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
+                    if (x + 1 < width) {
+                        best = min(
+                            best,
+                            distances[index + width + 1].toInt() + SDF_DIAGONAL_COST
+                        )
+                    }
                 }
                 distances[index] = min(best, maxUnits).toShort()
             }
