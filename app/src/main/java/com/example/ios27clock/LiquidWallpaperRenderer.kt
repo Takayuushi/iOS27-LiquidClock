@@ -145,7 +145,7 @@ internal class LiquidWallpaperRenderer(
             // Eight-tap, wide-radius sampling gives Solid a genuine frosted
             // appearance: the wallpaper remains recognizable, but details
             // diffuse instead of showing through as a sharp second image.
-            float blurRadius = 7.5;
+            float blurRadius = 11.5;
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(blurRadius * 0.7071, blurRadius * 0.7071);
@@ -205,12 +205,21 @@ internal class LiquidWallpaperRenderer(
             float glassOpacity = mix(0.28, 0.36, interiorVolume);
             float solidOpacity = 0.70;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
-            float alpha = coverage * (
-                bodyOpacity +
-                edgeBand * mix(0.16, 0.09, solidMode) +
-                outerLip * 0.06
+            float alpha = clamp(
+                coverage * (
+                    bodyOpacity +
+                    edgeBand * mix(0.16, 0.09, solidMode) +
+                    outerLip * 0.06
+                ),
+                0.0,
+                1.0
             );
-            return half4(clamp(colour, 0.0, 1.0), alpha);
+
+            // RuntimeShader outputs use premultiplied alpha. Returning an
+            // unassociated RGB value makes a translucent surface look like
+            // opaque metallic paint when source-over composited on the wallpaper.
+            float3 premultipliedColour = clamp(colour, 0.0, 1.0) * alpha;
+            return half4(premultipliedColour, alpha);
         }
     """.trimIndent()
     }
