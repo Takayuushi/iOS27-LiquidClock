@@ -54,7 +54,7 @@ internal class LiquidWallpaperRenderer(
         private const val MAX_GLYPH_HEIGHT_FRACTION = 0.38f
         private const val MAX_COMMITTED_HEIGHT_FRACTION = 0.74f
         private const val MAX_GLYPH_WIDTH_FRACTION = 0.94f
-        private const val CLOCK_GLYPH_WIDTH_SCALE = 0.89f
+        private const val CLOCK_GLYPH_WIDTH_SCALE = 1.00f
         private const val CLOCK_GLYPH_HEIGHT_SCALE = 1.04f
 
         // Keep the natural horizontal layout while the adaptive clock grows
@@ -881,21 +881,19 @@ internal class LiquidWallpaperRenderer(
                 centerline.lineTo(left + w * 0.38f, bottom - h * 0.045f)
             }
             "8" -> {
-                centerline.addRoundRect(
-                    RectF(left + w * 0.17f, top + h * 0.035f, right - w * 0.17f, cy + h * 0.035f),
-                    w * 0.25f, h * 0.15f, Path.Direction.CW
-                )
-                centerline.addRoundRect(
-                    RectF(left + w * 0.13f, cy - h * 0.035f, right - w * 0.13f, bottom - h * 0.035f),
-                    w * 0.26f, h * 0.16f, Path.Direction.CW
-                )
+                // A single continuous figure-eight path avoids overlapping
+                // bowl contours and keeps the waist optically narrow.
+                centerline.moveTo(cx, cy)
+                centerline.cubicTo(left + w * 0.10f, cy - h * 0.10f, left + w * 0.10f, top + h * 0.035f, cx, top + h * 0.035f)
+                centerline.cubicTo(right - w * 0.10f, top + h * 0.035f, right - w * 0.10f, cy - h * 0.10f, cx, cy)
+                centerline.cubicTo(left + w * 0.10f, cy + h * 0.10f, left + w * 0.10f, bottom - h * 0.035f, cx, bottom - h * 0.035f)
+                centerline.cubicTo(right - w * 0.10f, bottom - h * 0.035f, right - w * 0.10f, cy + h * 0.10f, cx, cy)
             }
             "9" -> {
-                centerline.addRoundRect(
-                    RectF(left + w * 0.13f, top + h * 0.035f, right - w * 0.13f, top + h * 0.58f),
-                    w * 0.27f, h * 0.25f, Path.Direction.CW
-                )
-                centerline.moveTo(right - w * 0.18f, top + h * 0.42f)
+                centerline.moveTo(right - w * 0.20f, top + h * 0.43f)
+                centerline.cubicTo(right - w * 0.035f, top + h * 0.24f, right - w * 0.22f, top + h * 0.035f, cx, top + h * 0.035f)
+                centerline.cubicTo(left + w * 0.22f, top + h * 0.035f, left + w * 0.09f, top + h * 0.26f, left + w * 0.20f, top + h * 0.43f)
+                centerline.cubicTo(left + w * 0.31f, top + h * 0.61f, right - w * 0.07f, top + h * 0.60f, right - w * 0.20f, top + h * 0.43f)
                 centerline.lineTo(right - w * 0.20f, bottom - h * 0.045f)
             }
             else -> return Path()
