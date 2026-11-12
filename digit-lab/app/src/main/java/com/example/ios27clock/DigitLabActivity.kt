@@ -211,7 +211,7 @@ class DigitLabActivity : Activity() {
 
         content.addView(sectionLabel("FONT WIDTH"))
         val styleRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val styleList = mutableListOf<TextView>()
+        val styleList = mutableListOf<MaterialButton>()
         listOf("Regular", "Condensed", "Compressed", "Expanded").forEachIndexed { index, name ->
             val chip = makeChip(name, fontStyle == index) {
                 fontStyle = index
