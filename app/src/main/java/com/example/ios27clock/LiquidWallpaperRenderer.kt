@@ -1087,8 +1087,12 @@ internal class LiquidWallpaperRenderer(
                 val pathBounds = RectF()
                 glyphPath.computeBounds(pathBounds, true)
                 if (!pathBounds.isEmpty) {
+                    // Every numeral, including "1", uses the actual outline from
+                    // Apple's official SF Pro variable font. Optical transforms
+                    // adjust layout only; they do not replace glyph artwork.
                     val compactWidth = glyphWidthProfile(glyph, expansion)
-                    val condensedTransform = Matrix().apply {
+                    val opticalPath = Path()
+                    val shapeTransform = Matrix().apply {
                         setScale(
                             compactWidth,
                             glyphHeightFactor(glyph),
@@ -1096,37 +1100,7 @@ internal class LiquidWallpaperRenderer(
                             pathBounds.centerY()
                         )
                     }
-                    val oneCenterX = cursorX + advances[index] * 0.5f
-                    val oneBounds = if (glyph == "1") {
-                        val oneWidth = max(
-                            fontSize * 0.24f,
-                            pathBounds.width() * 2f
-                        ).coerceAtMost(advances[index] * 0.92f)
-                        RectF(
-                            oneCenterX - oneWidth * 0.5f,
-                            pathBounds.top,
-                            oneCenterX + oneWidth * 0.5f,
-                            pathBounds.bottom
-                        )
-                    } else {
-                        pathBounds
-                    }
-                    val sourceGlyphPath = if (glyph == "1") {
-                        buildReferenceOnePath(oneBounds)
-                    } else {
-                        glyphPath
-                    }
-                    val opticalPath = Path()
-                    val shapeCenterX = if (glyph == "1") oneCenterX else pathBounds.centerX()
-                    val shapeTransform = Matrix().apply {
-                        setScale(
-                            compactWidth,
-                            glyphHeightFactor(glyph),
-                            shapeCenterX,
-                            pathBounds.centerY()
-                        )
-                    }
-                    sourceGlyphPath.transform(shapeTransform, opticalPath)
+                    glyphPath.transform(shapeTransform, opticalPath)
                     if (glyph == "2") {
                         digitTwoPaths += Path(opticalPath)
                     } else {
@@ -1356,166 +1330,6 @@ internal class LiquidWallpaperRenderer(
         "8" -> 0.43f
         "9" -> 0.41f
         else -> 0.39f
-    }
-
-    /**
-     * Custom iOS-inspired display numerals. Each digit is built on the same
-     * cap-height grid and uses the same stroke weight, round caps and joins.
-     * 0 and 8 are filled silhouettes with real counters; other digits are
-     * continuous centerline contours rendered with the shared stroke paint.
-     */
-    private fun buildVectorDigitPath(glyph: String, bounds: RectF): Path {
-        val l = bounds.left
-        val t = bounds.top
-        val w = bounds.width()
-        val h = bounds.height()
-        val r = bounds.right
-        val b = bounds.bottom
-        fun x(fraction: Float) = l + w * fraction
-        fun y(fraction: Float) = t + h * fraction
-        val path = Path()
-
-        when (glyph) {
-            "0" -> {
-                // Broad, softly squared outer bowl with a tall rounded
-                // rectangular counter. Side, top and bottom walls stay near
-                // the same optical thickness.
-                path.fillType = Path.FillType.EVEN_ODD
-                path.addRoundRect(
-                    RectF(x(0.04f), y(0.012f), x(0.96f), y(0.988f)),
-                    h * 0.145f, h * 0.145f, Path.Direction.CW
-                )
-                path.addRoundRect(
-                    RectF(x(0.27f), y(0.115f), x(0.73f), y(0.885f)),
-                    h * 0.075f, h * 0.075f, Path.Direction.CCW
-                )
-            }
-            "1" -> {
-                // A narrower angled flag flows into a straight stem. The
-                // short foot is optically centred rather than spanning the
-                // entire advance box.
-                path.moveTo(x(0.18f), y(0.235f))
-                path.cubicTo(x(0.29f), y(0.19f), x(0.43f), y(0.085f), x(0.55f), y(0.065f))
-                path.lineTo(x(0.55f), y(0.925f))
-                path.moveTo(x(0.30f), y(0.925f))
-                path.lineTo(x(0.79f), y(0.925f))
-            }
-            "2" -> {
-                path.moveTo(x(0.12f), y(0.235f))
-                path.cubicTo(x(0.14f), y(0.075f), x(0.75f), y(0.025f), x(0.87f), y(0.205f))
-                path.cubicTo(x(0.99f), y(0.385f), x(0.78f), y(0.565f), x(0.54f), y(0.735f))
-                path.lineTo(x(0.16f), y(0.925f))
-                path.lineTo(x(0.87f), y(0.925f))
-            }
-            "3" -> {
-                // Two balanced lobes share a smooth right-hand spine. Avoid
-                // reversing the tangent at the waist: that created the
-                // swollen, pinched joint in the previous version.
-                path.moveTo(x(0.13f), y(0.16f))
-                path.cubicTo(x(0.32f), y(0.035f), x(0.73f), y(0.035f), x(0.86f), y(0.19f))
-                path.cubicTo(x(0.93f), y(0.27f), x(0.89f), y(0.41f), x(0.89f), y(0.50f))
-                // Matching vertical handles make the waist tangent continuous.
-                path.cubicTo(x(0.89f), y(0.59f), x(0.95f), y(0.71f), x(0.85f), y(0.82f))
-                path.cubicTo(x(0.71f), y(0.98f), x(0.32f), y(0.98f), x(0.12f), y(0.84f))
-            }
-            "4" -> {
-                path.moveTo(x(0.70f), y(0.925f))
-                path.lineTo(x(0.70f), y(0.075f))
-                path.moveTo(x(0.10f), y(0.60f))
-                path.lineTo(x(0.91f), y(0.60f))
-                path.moveTo(x(0.12f), y(0.60f))
-                path.lineTo(x(0.66f), y(0.075f))
-            }
-            "5" -> {
-                path.moveTo(x(0.87f), y(0.075f))
-                path.lineTo(x(0.14f), y(0.075f))
-                path.lineTo(x(0.14f), y(0.455f))
-                path.cubicTo(x(0.36f), y(0.385f), x(0.77f), y(0.40f), x(0.86f), y(0.595f))
-                path.cubicTo(x(0.87f), y(0.81f), x(0.74f), y(0.975f), x(0.49f), y(0.935f))
-                path.cubicTo(x(0.31f), y(0.925f), x(0.18f), y(0.875f), x(0.14f), y(0.80f))
-            }
-            "6" -> {
-                path.moveTo(x(0.82f), y(0.095f))
-                path.cubicTo(x(0.49f), y(0.09f), x(0.14f), y(0.34f), x(0.14f), y(0.65f))
-                path.cubicTo(x(0.14f), y(0.89f), x(0.36f), y(0.965f), x(0.60f), y(0.93f))
-                path.cubicTo(x(0.86f), y(0.89f), x(0.87f), y(0.66f), x(0.76f), y(0.545f))
-                path.cubicTo(x(0.60f), y(0.43f), x(0.31f), y(0.49f), x(0.14f), y(0.67f))
-            }
-            "7" -> {
-                path.moveTo(x(0.14f), y(0.075f))
-                path.lineTo(x(0.86f), y(0.075f))
-                path.cubicTo(x(0.70f), y(0.36f), x(0.51f), y(0.65f), x(0.31f), y(0.925f))
-            }
-            "8" -> {
-                path.fillType = Path.FillType.EVEN_ODD
-                // A broader upper bowl and slightly fuller lower bowl, with
-                // tall rounded-square counters and a controlled waist.
-                path.moveTo(x(0.50f), y(0.012f))
-                path.cubicTo(x(0.22f), y(0.012f), x(0.055f), y(0.115f), x(0.055f), y(0.265f))
-                path.cubicTo(x(0.055f), y(0.405f), x(0.235f), y(0.465f), x(0.50f), y(0.50f))
-                path.cubicTo(x(0.235f), y(0.535f), x(0.055f), y(0.605f), x(0.055f), y(0.755f))
-                path.cubicTo(x(0.055f), y(0.905f), x(0.22f), y(0.988f), x(0.50f), y(0.988f))
-                path.cubicTo(x(0.78f), y(0.988f), x(0.945f), y(0.905f), x(0.945f), y(0.755f))
-                path.cubicTo(x(0.945f), y(0.605f), x(0.765f), y(0.535f), x(0.50f), y(0.50f))
-                path.cubicTo(x(0.765f), y(0.465f), x(0.945f), y(0.405f), x(0.945f), y(0.265f))
-                path.cubicTo(x(0.945f), y(0.115f), x(0.78f), y(0.012f), x(0.50f), y(0.012f))
-                path.close()
-                path.addRoundRect(
-                    RectF(x(0.265f), y(0.115f), x(0.735f), y(0.415f)),
-                    h * 0.055f, h * 0.055f, Path.Direction.CW
-                )
-                path.addRoundRect(
-                    RectF(x(0.265f), y(0.585f), x(0.735f), y(0.885f)),
-                    h * 0.055f, h * 0.055f, Path.Direction.CW
-                )
-            }
-            "9" -> {
-                path.addRoundRect(
-                    RectF(x(0.13f), y(0.035f), x(0.87f), y(0.59f)),
-                    h * 0.17f, h * 0.17f, Path.Direction.CW
-                )
-                path.moveTo(x(0.86f), y(0.43f))
-                path.cubicTo(x(0.86f), y(0.64f), x(0.70f), y(0.83f), x(0.42f), y(0.93f))
-            }
-        }
-        return path
-    }
-    /**
-     * The lock-screen "1" uses a dedicated display silhouette instead of
-     * SF Pro's narrow text numeral: a short angled flag, straight stem and
-     * small baseline foot. It is fitted to the measured glyph box, so tracking
-     * and line layout remain unchanged.
-     */
-    private fun buildReferenceOnePath(bounds: RectF): Path {
-        val left = bounds.left
-        val top = bounds.top
-        val width = bounds.width().coerceAtLeast(1f)
-        val height = bounds.height().coerceAtLeast(1f)
-        fun x(value: Float) = left + width * value
-        fun y(value: Float) = top + height * value
-
-        return Path().apply {
-            moveTo(x(0.12f), y(0.235f))
-            cubicTo(
-                x(0.25f), y(0.195f),
-                x(0.42f), y(0.075f),
-                x(0.55f), y(0.055f)
-            )
-            lineTo(x(0.69f), y(0.055f))
-            lineTo(x(0.69f), y(0.875f))
-            lineTo(x(0.93f), y(0.875f))
-            lineTo(x(0.93f), y(0.975f))
-            lineTo(x(0.12f), y(0.975f))
-            lineTo(x(0.12f), y(0.875f))
-            lineTo(x(0.47f), y(0.875f))
-            lineTo(x(0.47f), y(0.245f))
-            cubicTo(
-                x(0.39f), y(0.285f),
-                x(0.25f), y(0.345f),
-                x(0.15f), y(0.375f)
-            )
-            close()
-        }
     }
 
     /**
@@ -1814,7 +1628,7 @@ internal class LiquidWallpaperRenderer(
     private fun glyphWidthProfile(glyph: String, expansion: Float): Float {
         val progress = expansion.coerceIn(0f, 1f)
         val compact = when (glyph) {
-            "1" -> 0.94f
+            "1" -> 1.00f
             "2" -> 1.08f
             "3" -> 1.04f
             "4" -> 1.08f
@@ -1827,7 +1641,7 @@ internal class LiquidWallpaperRenderer(
             else -> 1.00f
         }
         val expanded = when (glyph) {
-            "1" -> 0.97f
+            "1" -> 1.00f
             "2" -> 1.13f
             "3" -> 1.07f
             "4" -> 1.12f
