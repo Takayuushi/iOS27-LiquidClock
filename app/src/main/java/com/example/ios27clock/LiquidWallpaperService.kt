@@ -15,6 +15,7 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sin
 
@@ -32,6 +33,8 @@ class LiquidWallpaperService : WallpaperService() {
     }
 
     override fun onCreateEngine(): Engine = LiquidEngine()
+
+    private enum class PinchAxis { HORIZONTAL, VERTICAL }
 
     private inner class LiquidEngine : Engine() {
 
@@ -64,6 +67,7 @@ class LiquidWallpaperService : WallpaperService() {
         private var activePointerId = MotionEvent.INVALID_POINTER_ID
         private var lastTouchX = 0f
         private var lastTouchY = 0f
+        private var pinchAxis = PinchAxis.VERTICAL
         private var pinchStartDistance = 0f
         private var pinchActive = false
 
@@ -136,6 +140,7 @@ class LiquidWallpaperService : WallpaperService() {
                     // Clear stale state before each new pointer sequence.
                     draggingClock = renderer.isClockHit(x, y)
                     pinchActive = false
+                    pinchStartDistance = 0f
                     activePointerId = MotionEvent.INVALID_POINTER_ID
                     if (draggingClock) {
                         activePointerId = event.getPointerId(0)
@@ -146,9 +151,7 @@ class LiquidWallpaperService : WallpaperService() {
 
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     if (draggingClock && event.pointerCount >= 2) {
-                        pinchStartDistance = pointerDistance(event)
-                        pinchActive = pinchStartDistance > MIN_PINCH_DISTANCE_PX
-                        if (pinchActive) renderer.beginScaleGesture()
+                        beginPinchGesture(event)
                     }
                 }
 
@@ -156,11 +159,16 @@ class LiquidWallpaperService : WallpaperService() {
                     if (!draggingClock) return
 
                     if (event.pointerCount >= 2 && pinchActive) {
-                        val currentDistance = pointerDistance(event)
+                        val currentDistance = currentPinchDistance(event)
                         if (currentDistance > MIN_PINCH_DISTANCE_PX &&
                             pinchStartDistance > MIN_PINCH_DISTANCE_PX
                         ) {
-                            renderer.scaleClock(currentDistance / pinchStartDistance)
+                            val ratio = currentDistance / pinchStartDistance
+                            if (pinchAxis == PinchAxis.HORIZONTAL) {
+                                renderer.scaleClockWidth(ratio)
+                            } else {
+                                renderer.scaleClock(ratio)
+                            }
                         }
                     } else {
                         val index = event.findPointerIndex(activePointerId)
@@ -193,10 +201,7 @@ class LiquidWallpaperService : WallpaperService() {
                             lastTouchY = event.getY(remainingIndex)
                         }
                     } else {
-                        pinchStartDistance = pointerDistanceExcluding(event, event.actionIndex)
-                        if (pinchStartDistance > MIN_PINCH_DISTANCE_PX) {
-                            renderer.beginScaleGesture()
-                        }
+                        beginPinchGesture(event, event.actionIndex)
                     }
                 }
 
@@ -249,25 +254,52 @@ class LiquidWallpaperService : WallpaperService() {
             tiltTrackingActive = false
         }
 
-        private fun pointerDistance(event: MotionEvent): Float {
-            if (event.pointerCount < 2) return 0f
-            val dx = event.getX(0) - event.getX(1)
-            val dy = event.getY(0) - event.getY(1)
-            return hypot(dx, dy)
-        }
-
-        private fun pointerDistanceExcluding(
+        private fun beginPinchGesture(
             event: MotionEvent,
-            excludedIndex: Int
-        ): Float {
-            if (event.pointerCount < 3) return 0f
-            val indexes = (0 until event.pointerCount).filter { it != excludedIndex }
+            excludedIndex: Int = -1
+        ) {
+            val indexes = (0 until event.pointerCount)
+                .filter { it != excludedIndex }
+            if (indexes.size < 2) {
+                pinchActive = false
+                pinchStartDistance = 0f
+                return
+            }
+
             val first = indexes[0]
             val second = indexes[1]
-            return hypot(
-                event.getX(first) - event.getX(second),
-                event.getY(first) - event.getY(second)
-            )
+            val deltaX = event.getX(first) - event.getX(second)
+            val deltaY = event.getY(first) - event.getY(second)
+            pinchAxis = if (abs(deltaX) > abs(deltaY) * 1.15f) {
+                PinchAxis.HORIZONTAL
+            } else {
+                PinchAxis.VERTICAL
+            }
+            pinchStartDistance = if (pinchAxis == PinchAxis.HORIZONTAL) {
+                abs(deltaX)
+            } else {
+                hypot(deltaX, deltaY)
+            }
+            pinchActive = pinchStartDistance > MIN_PINCH_DISTANCE_PX
+
+            if (pinchActive) {
+                if (pinchAxis == PinchAxis.HORIZONTAL) {
+                    renderer.beginWidthScaleGesture()
+                } else {
+                    renderer.beginScaleGesture()
+                }
+            }
+        }
+
+        private fun currentPinchDistance(event: MotionEvent): Float {
+            if (event.pointerCount < 2) return 0f
+            val deltaX = event.getX(0) - event.getX(1)
+            val deltaY = event.getY(0) - event.getY(1)
+            return if (pinchAxis == PinchAxis.HORIZONTAL) {
+                abs(deltaX)
+            } else {
+                hypot(deltaX, deltaY)
+            }
         }
 
         private fun scheduleNextFrame() {

@@ -866,6 +866,9 @@ class ClockAppearanceActivity : Activity() {
         private var touchGestureCaptured = false
         private var lastTouchX = 0f
         private var lastTouchY = 0f
+        private enum class PinchAxis { HORIZONTAL, VERTICAL }
+
+        private var pinchAxis = PinchAxis.VERTICAL
         private var pinchStartDistance = 0f
         private var lastFrameErrorReportAt = 0L
 
@@ -914,6 +917,11 @@ class ClockAppearanceActivity : Activity() {
             return hypot(dx, dy)
         }
 
+        private fun horizontalPointerDistance(event: MotionEvent): Float {
+            if (event.pointerCount < 2) return 0f
+            return abs(renderX(event.getX(0)) - renderX(event.getX(1)))
+        }
+
         override fun onTouchEvent(event: MotionEvent): Boolean {
             if (renderWidth <= 0 || renderHeight <= 0) return false
 
@@ -937,9 +945,24 @@ class ClockAppearanceActivity : Activity() {
 
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     if (event.pointerCount >= 2 && draggingClock) {
-                        pinchStartDistance = pointerDistance(event)
+                        val deltaX = renderX(event.getX(0)) - renderX(event.getX(1))
+                        val deltaY = renderY(event.getY(0)) - renderY(event.getY(1))
+                        pinchAxis = if (abs(deltaX) > abs(deltaY) * 1.15f) {
+                            PinchAxis.HORIZONTAL
+                        } else {
+                            PinchAxis.VERTICAL
+                        }
+                        pinchStartDistance = if (pinchAxis == PinchAxis.HORIZONTAL) {
+                            abs(deltaX)
+                        } else {
+                            pointerDistance(event)
+                        }
                         if (pinchStartDistance > 8f) {
-                            renderer.beginScaleGesture()
+                            if (pinchAxis == PinchAxis.HORIZONTAL) {
+                                renderer.beginWidthScaleGesture()
+                            } else {
+                                renderer.beginScaleGesture()
+                            }
                             draggingClock = false
                             pinchingClock = true
                         }
@@ -949,9 +972,18 @@ class ClockAppearanceActivity : Activity() {
 
                 MotionEvent.ACTION_MOVE -> {
                     if (pinchingClock && event.pointerCount >= 2) {
-                        val distance = pointerDistance(event)
+                        val distance = if (pinchAxis == PinchAxis.HORIZONTAL) {
+                            horizontalPointerDistance(event)
+                        } else {
+                            pointerDistance(event)
+                        }
                         if (pinchStartDistance > 8f && distance > 8f) {
-                            renderer.scaleClock(distance / pinchStartDistance)
+                            val ratio = distance / pinchStartDistance
+                            if (pinchAxis == PinchAxis.HORIZONTAL) {
+                                renderer.scaleClockWidth(ratio)
+                            } else {
+                                renderer.scaleClock(ratio)
+                            }
                             invalidate()
                         }
                         return true

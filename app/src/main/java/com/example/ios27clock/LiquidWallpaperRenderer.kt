@@ -77,6 +77,9 @@ internal class LiquidWallpaperRenderer(
         private const val COLON_DOT_OFFSET_EM = 0.16f
         private const val MIN_CLOCK_SCALE = 0.72f
         private const val MAX_CLOCK_SCALE = 2.55f
+        private const val MIN_CLOCK_WIDTH_SCALE = 0.70f
+        private const val MAX_CLOCK_WIDTH_SCALE = 1.65f
+        private const val MAX_COMMITTED_WIDTH_FRACTION = 0.94f
         private const val SDF_RANGE_PX = 24f
         private const val SDF_PADDING_PX = 28
 
@@ -269,22 +272,26 @@ internal class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
             ) * edgeBand;
-            float glassSpecular = pow(facing, 8.0) * glassRim;
+            float glassSpecular = pow(facing, 10.0) * glassRim;
+            float glassHighlight = pow(facing, 18.0) *
+                exp(-abs(signedDistance - 1.2) / 3.2);
             float solidSpecular = pow(facing, 4.0) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
-            float fillSpecular = pow(oppositeFacing, 4.5) * edgeBand;
+            float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
             float bevelShade = innerBevel * (1.0 - facing) *
                 mix(0.018, 0.11, solidMode);
 
             float3 colour = body;
             colour *= mix(0.985, 1.025, glassLens);
-            colour += uAccentColor * fresnel * mix(0.42, 0.15, solidMode);
+            colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
             colour += float3(0.98, 0.99, 1.0) *
-                innerBevel * mix(0.025, 0.14, solidMode);
+                innerBevel * mix(0.055, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(0.92, 0.42, solidMode);
+                keySpecular * mix(1.32, 0.42, solidMode);
+            colour += float3(1.0, 1.0, 1.0) *
+                glassHighlight * (1.0 - solidMode) * 0.86;
             colour += uAccentColor *
-                fillSpecular * mix(0.30, 0.15, solidMode);
+                fillSpecular * mix(0.50, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             colour -= float3(0.08, 0.09, 0.14) *
                 edgeBand * (1.0 - facing) * mix(0.018, 0.055, solidMode);
@@ -299,7 +306,7 @@ internal class LiquidWallpaperRenderer(
                 pow(max(dot(normal, keyLight), 0.0), 1.8);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
-                mix(0.40, 0.17, solidMode);
+                mix(0.76, 0.17, solidMode);
 
             // A moving, soft studio reflection makes the lens readable on
             // low-detail wallpapers without creating a raised all-around bevel.
@@ -315,20 +322,45 @@ internal class LiquidWallpaperRenderer(
             float narrowReflection = exp(
                 -pow((reflectionAxis - 48.0) / 34.0, 2.0)
             ) * glassLens;
+            float brightRibbon = exp(
+                -pow((reflectionAxis + 22.0) / 10.0, 2.0)
+            ) * glassLens;
+            float secondaryRibbon = exp(
+                -pow((reflectionAxis - 78.0) / 18.0, 2.0)
+            ) * glassLens;
+            float warmBounce = exp(
+                -pow((reflectionAxis - 116.0) / 52.0, 2.0)
+            ) * glassLens;
             float3 reflectionColour = mix(
                 uAccentColor,
                 float3(0.97, 0.985, 1.0),
                 0.72
             );
+            float3 coolReflection = mix(
+                uAccentColor,
+                float3(0.50, 0.78, 1.0),
+                0.58
+            );
+            float3 warmReflection = mix(
+                uAccentColor,
+                float3(1.0, 0.55, 0.32),
+                0.46
+            );
             colour += reflectionColour * broadReflection *
-                (1.0 - solidMode) * 0.27;
+                (1.0 - solidMode) * 0.40;
             colour += float3(1.0, 1.0, 1.0) * narrowReflection *
-                (1.0 - solidMode) * 0.16;
+                (1.0 - solidMode) * 0.34;
+            colour += float3(1.0, 1.0, 1.0) * brightRibbon *
+                (1.0 - solidMode) * 0.78;
+            colour += coolReflection * secondaryRibbon *
+                (1.0 - solidMode) * 0.27;
+            colour += warmReflection * warmBounce *
+                (1.0 - solidMode) * 0.19;
 
             // Increase the transparent face contribution modestly. The
             // wallpaper is still visible through it, but it no longer vanishes
             // on dark sections of a high-contrast wallpaper.
-            float glassOpacity = mix(0.36, 0.46, glassLens);
+            float glassOpacity = mix(0.40, 0.50, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
@@ -376,6 +408,9 @@ internal class LiquidWallpaperRenderer(
     private var clockScale = 1f
     private var maskClockScale = 1f
     private var pinchStartClockScale = 1f
+    private var clockWidthScale = 1f
+    private var maskClockWidthScale = 1f
+    private var pinchStartClockWidthScale = 1f
     private var gestureOffsetX = 0f
     private var gestureOffsetY = 0f
     private var previewScaleX = 1f
@@ -444,6 +479,8 @@ internal class LiquidWallpaperRenderer(
         }
         clockScale = clockPreferences.getFloat("clock_scale", 1f)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        clockWidthScale = clockPreferences.getFloat("clock_width_scale", 1f)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
         readAppearancePreferences()
         if (!positionMigrationDone || !studioPositionMigrationDone) {
             clockPreferences.edit()
@@ -592,11 +629,33 @@ internal class LiquidWallpaperRenderer(
         } else {
             MAX_CLOCK_SCALE / maskClockScale.coerceAtLeast(0.01f)
         }
-        previewScaleX = 1f
         previewScaleY = (requestedScale / maskClockScale.coerceAtLeast(0.01f))
             .coerceIn(0.25f, maxPreviewRatio)
         clockScale = (maskClockScale * previewScaleY)
             .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        updatePreviewBounds()
+    }
+
+    fun beginWidthScaleGesture() {
+        pinchStartClockWidthScale = clockWidthScale
+    }
+
+    fun scaleClockWidth(distanceRatio: Float) {
+        if (!distanceRatio.isFinite() || distanceRatio <= 0f) return
+
+        val maxAllowedScale = if (!glyphBaseBounds.isEmpty && surfaceWidth > 0) {
+            (
+                surfaceWidth * MAX_COMMITTED_WIDTH_FRACTION *
+                    maskClockWidthScale /
+                    glyphBaseBounds.width().coerceAtLeast(1f)
+                ).coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+        } else {
+            MAX_CLOCK_WIDTH_SCALE
+        }
+
+        clockWidthScale = (pinchStartClockWidthScale * distanceRatio)
+            .coerceIn(MIN_CLOCK_WIDTH_SCALE, maxAllowedScale)
+        previewScaleX = clockWidthScale / maskClockWidthScale.coerceAtLeast(0.01f)
         updatePreviewBounds()
     }
 
@@ -634,6 +693,7 @@ internal class LiquidWallpaperRenderer(
             .putFloat("center_x", clockCenterX)
             .putFloat("center_y", clockCenterY)
             .putFloat("clock_scale", clockScale)
+            .putFloat("clock_width_scale", clockWidthScale)
             .apply()
     }
 
@@ -1049,11 +1109,19 @@ internal class LiquidWallpaperRenderer(
         }
 
         if (hasBounds) {
-            // Apply the subtle native proportion first; the user's size gesture
-            // then expands the line vertically without a global X zoom.
+            // Horizontal pinch is independent from the vertical clock scale.
+            // Clamp against the actual glyph outline after viewport changes.
+            val maxSafeWidthScale = (
+                width * MAX_COMMITTED_WIDTH_FRACTION /
+                    (composedBounds.width().coerceAtLeast(1f) *
+                        CLOCK_GLYPH_WIDTH_SCALE)
+                ).coerceIn(MIN_CLOCK_WIDTH_SCALE, MAX_CLOCK_WIDTH_SCALE)
+            clockWidthScale = clockWidthScale.coerceAtMost(maxSafeWidthScale)
+
+            // Apply native optical proportions and independent X/Y scales.
             val naturalShapeTransform = Matrix().apply {
                 setScale(
-                    CLOCK_GLYPH_WIDTH_SCALE,
+                    CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale,
                     CLOCK_GLYPH_HEIGHT_SCALE,
                     centerX,
                     centerY
@@ -1066,11 +1134,14 @@ internal class LiquidWallpaperRenderer(
             val dotRadius = fontSize * COLON_DOT_RADIUS_EM * 1.08f
             val naturalDotOffset = fontSize * COLON_DOT_OFFSET_EM * CLOCK_GLYPH_HEIGHT_SCALE
             colonCenters.forEach { (dotX, originalY) ->
-                val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
+                val naturalX = centerX +
+                    (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale
+                val naturalY = centerY +
+                    (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
                 val bounds = RectF(
-                    dotX - dotRadius,
+                    naturalX - dotRadius,
                     naturalY - dotRadius,
-                    dotX + dotRadius,
+                    naturalX + dotRadius,
                     naturalY + dotRadius
                 )
                 composedBounds.union(bounds)
@@ -1096,9 +1167,11 @@ internal class LiquidWallpaperRenderer(
             // Keep the two colon dots circular as the clock grows. Only their
             // separation follows the vertical expansion.
             colonCenters.forEach { (dotX, originalY) ->
+                val naturalX = centerX +
+                    (dotX - centerX) * CLOCK_GLYPH_WIDTH_SCALE * clockWidthScale
                 val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
                 val finalY = centerY + (naturalY - centerY) * committedScaleY
-                finalPath.addCircle(dotX, finalY, dotRadius, Path.Direction.CW)
+                finalPath.addCircle(naturalX, finalY, dotRadius, Path.Direction.CW)
             }
 
             val finalBounds = RectF()
@@ -1139,6 +1212,7 @@ internal class LiquidWallpaperRenderer(
 
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
+        maskClockWidthScale = clockWidthScale
         gestureOffsetX = 0f
         gestureOffsetY = 0f
         previewScaleX = 1f
