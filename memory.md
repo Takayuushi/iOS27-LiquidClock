@@ -117,6 +117,16 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Adds a modest sharp, unblurred, wallpaper-derived key-environment reflection to the Liquid Glass face (3.5% base up to 11% at the curved shoulder). This is gated by `(1.0 - solidMode)`, so it does not enter Solid. Glass shoulder side shading increases from 0.16 to 0.22, also Glass-only. No white fill or blurred backdrop layer was added.
 - Solid/Frosted material code remains protected. Shared spacing changes apply to Solid because the user explicitly requested that typography changes be shared; all new reflection/highlight/shadow adjustments are Glass-only.
 - Production build #302 and Digit Lab build #24 were triggered from `9cc30ea`; CI and on-device verification pending.
+### Final micro-adjustment before production app verification (13 Nov 2026, ~16:40 IST)
+- User tested Production #302 and Digit Lab #24 from `9cc30ea`, says the clock is almost finished. Latest screenshots show the `1–0` hour pair is slightly too far apart, while the `4–7` minute pair needs a tiny increase. User did not request any change to colon spacing or the colon optical profile.
+- Commit `71a36ce6a93b4ffa011d832bdf0f712956da6ab8` (“Fine-tune hour and minute pair gaps”) changes only two shared outline-layout constants:
+  - `hourPairGapEm`: 0.024em → 0.021em (brings 1–0 slightly closer);
+  - `minutePairGapEm`: 0.018em → 0.021em (opens 4–7 slightly);
+  - colon gaps stay exactly 0.016em (hour-to-colon) and 0.030em (colon-to-first-minute);
+  - no font files, variable axes, glyph outlines, material shader values, colon dot size or optical profile changed.
+- This is shared `:clock-renderer` typography and therefore affects both production Glass and Solid plus both Digit Lab options.
+- Production build #303 and Digit Lab build #25 were triggered from `71a36ce`; CI and device verification pending.
+- User plans to test the original production app after this final micro-adjustment. If it behaves correctly, they expect to declare the project done. Do not start additional visual redesigns unless the user reports a specific regression.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -225,15 +235,15 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `9cc30ea2ff03cea1c20b0a6de9303655ad4cad67` — “Tune colon and hour spacing and refine Glass shoulder lighting”
-- **Current shared spacing:** hour digit pair 0.024em; minute digit pair 0.018em (preserves approved 4–7 gap); hour-to-colon 0.016em; colon-to-first-minute 0.030em. Applies to both production materials and both Digit Lab modes.
-- **Current Glass refinements:** reduce horizontal-surface specular by 26%; add sharp wallpaper-derived face reflection (3.5–11%, shoulder dependent); increase Glass-only side shading. Solid/Frosted does not receive these new shader effects.
-- **Glass digit profile:** 20px; Glass colon profile 3.2px. Solid remains 20px.
-- **Latest user-tested builds:** Production #301 and Digit Lab #23 succeeded from `6b0f1d9`; user's latest screenshots correspond to these results. Spacing was still too tight around colon/hour, 4 base and 7 top looked broad, and beach wallpaper remained less convincing than dark-wallpaper rendering.
-- **Current production build:** #302, run ID `43413288951`, from `9cc30ea`; running at time of update: [Actions #302](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43413288951)
-- **Current Digit Lab build:** #24, run ID `43413289058`, from `9cc30ea`; running at time of update: [Actions #24](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43413289058)
-- **On-device verification:** `9cc30ea` pending. Do not claim the spacing, highlight width or beach material issue is fixed until the user's next screenshots.
-- **Primary next priority:** verify builds #302/#24; assess colon-to-4 and 1–0 spacing independently, keep 4–7 as approved, check slimmer horizontal highlights, check beach reflection clarity, and verify Solid remains visually unchanged apart from shared spacing.
+- **Latest renderer source commit:** `71a36ce6a93b4ffa011d832bdf0f712956da6ab8` — “Fine-tune hour and minute pair gaps”
+- **Latest user-tested build pair:** Production #302 and Digit Lab #24 succeeded from `9cc30ea`; user says almost there.
+- **Latest shared spacing:** `1–0` hour pair 0.021em; `4–7` minute pair 0.021em; hour-to-colon 0.016em; colon-to-minute 0.030em. Only first two values changed in `71a36ce`; colon spacing is deliberately unchanged. Applies to Glass and Solid in production and both Digit Lab materials.
+- **Glass material:** retains the `9cc30ea` state: reduced glow, horizontal shoulder highlight control, sharp wallpaper-derived face reflection. Do not alter this pass unless user reports a specific material regression.
+- **Solid material:** approved/protected; no shader values changed in typography commits.
+- **Colon:** retain its current Glass 3.2px optical profile and Solid 20px profile; no changes in `71a36ce`.
+- **Current production build:** #303, run ID `43415035765`, from `71a36ce`; in progress: [Actions #303](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415035765)
+- **Current Digit Lab build:** #25, run ID `43415035655`, from `71a36ce`; in progress: [Actions #25](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415035655)
+- **Next user step:** test #303/#25, then test the original production app. If the original app works and visual spacing is accepted, treat this project as complete; do not invent further improvements.
 
 ## New issue reported and root cause (13 Nov 2026)
 
