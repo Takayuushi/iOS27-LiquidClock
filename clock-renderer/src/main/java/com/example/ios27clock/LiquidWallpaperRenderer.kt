@@ -457,14 +457,28 @@ class LiquidWallpaperRenderer(
             float probeRightLuma = dot(probeRight, float3(0.2126, 0.7152, 0.0722));
             float probeTopLuma = dot(probeTop, float3(0.2126, 0.7152, 0.0722));
             float probeBottomLuma = dot(probeBottom, float3(0.2126, 0.7152, 0.0722));
-            float2 wallpaperGradient = float2(
+            float2 luminanceGradient = float2(
                 probeRightLuma - probeLeftLuma,
                 probeBottomLuma - probeTopLuma
             );
-            float wallpaperContrast = length(wallpaperGradient);
-            float2 diffusionAxis = wallpaperGradient /
-                max(wallpaperContrast, 0.0001);
-            float bandContrast = smoothstep(0.025, 0.18, wallpaperContrast);
+            // Luminance alone under-detects saturated transitions such as
+            // electric blue against black. Measure RGB edge energy per axis,
+            // then retain the luminance gradient signs to orient the same
+            // cross-band filter. This keeps chromatic edges from bypassing
+            // diffusion without introducing a glyph- or colour-specific path.
+            float2 wallpaperColourGradient = float2(
+                length(probeRight - probeLeft),
+                length(probeBottom - probeTop)
+            );
+            float2 diffusionGradient = float2(
+                sign(luminanceGradient.x) * wallpaperColourGradient.x,
+                sign(luminanceGradient.y) * wallpaperColourGradient.y
+            );
+            float wallpaperContrast = length(wallpaperColourGradient);
+            float diffusionGradientLength = length(diffusionGradient);
+            float2 diffusionAxis = diffusionGradient /
+                max(diffusionGradientLength, 0.0001);
+            float bandContrast = smoothstep(0.08, 0.55, wallpaperContrast);
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
