@@ -594,13 +594,26 @@ Changes:
 - CI runs from `202f8a8` should be recorded after Actions starts: Production and Digit Lab build numbers, run IDs, results and artifact IDs. On-device verification remains pending.
 - Next comparison must judge the whole glass body, not only isolated digits: it should have an even, natural haze like the iOS reference, softened bright wallpaper streaks, retained black/blue colour and continuous silver-blue reflections. Reject a flat opaque/frosted film or patchy gray smoke.
 
+### Atmospheric haze comparison and bright-pass scattering revision (14 Nov 2026, ~01:27 IST)
+- User tested Digit Lab #52 / Production #329 from commit `202f8a8` and reports the result still does not show the natural foggy/hazy behaviour visible in Apple's iOS reference. The face continues to read too much like clear refraction plus bright bevels.
+- This confirms the 16% isotropic wallpaper blend at a 30px radius was too subtle. The intended material is not merely edge-softened glass: it needs a consistent atmospheric veil across the face, plus gentle spread from bright wallpaper regions, while remaining coloured, translucent and reflective.
+- Follow-up renderer commit `7e4670e22b2e6f2687e00bc0fef7aba93c9f4ddd` — “Strengthen natural Liquid Glass haze and bright bloom”:
+  - Increases the shared isotropic blend of the existing 30px blurred wallpaper from 16% to 32% across the glyph volume.
+  - Derives a bright-pass bloom from the same eight already-fetched blur taps. Each tap is soft-thresholded by luminance (0.22–0.68), then averaged into `glassBrightBloom`; this adds a gentle screen-composited light spread at 18% of the shared glyph-volume coverage.
+  - Reuses existing blur samples only; no additional wallpaper texture lookups.
+  - No glyph-specific logic, no changes to accepted glyph geometry/kerning, clock layout, or gestures.
+  - Solid/Frosted remains protected: the blur radius still resolves to 38px in Solid, atmospheric/bloom contributions only feed the Liquid Glass `glassTransmitted` path, and Solid continues to select `center` through the existing `mix(glassTransmitted, center, solidMode)`; original 0.78 opacity/bevel/sheen retained.
+  - Static checks passed for 32% haze, 18% bloom, reuse of existing blur taps, no new texture fetches, unchanged Solid path and no digit-specific branches.
+- CI builds from `7e4670e` were triggered automatically. Record Production and Digit Lab run IDs/results/artifacts after Actions reports them. On-device verification is pending; do not claim the new haze looks right until user tests it.
+- Next visual check should judge uniform natural fogging and soft glow through the entire glass surface, especially on both bright and dark wallpaper regions. Reject a flat milky/frosted look, loss of wallpaper colour, or glow that appears as isolated white outlines.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `202f8a84e4ce338a6b8f04e17d9891ef84b37c20` — “Add uniform atmospheric haze to Liquid Glass”
+- **Latest renderer commit:** `7e4670e22b2e6f2687e00bc0fef7aba93c9f4ddd` — “Strengthen natural Liquid Glass haze and bright bloom”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** first image is our Digit Lab rendering; second image is Apple's iOS reference. User clarified target as consistent natural atmospheric haze like bright light through a lightly fogged glass pane, not just directional edge blur. Follow-up 202f8a8 adds a shared isotropic low-frequency haze layer.
+- **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
