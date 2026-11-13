@@ -28,6 +28,7 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Renderer commit `da687bb` accidentally put the new negative refraction direction into the shared warp expression. Commit `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` corrects this by splitting `glassWarp` and `solidWarp`; at `solidMode == 1`, the Solid warp again matches the previous implementation exactly. Never collapse these paths into one direction-sensitive expression again.
 - Before each future shader commit, explicitly review all output-affecting expressions at `solidMode == 1` and compare them with the last user-approved Solid implementation. Do not infer safety merely because a variable is named `glass*`.
 - Typography/layout is shared across materials and should be fixed globally when requested. The tighter digit-pair tracking committed in `13121da` applies identically to Glass and Solid (and both Digit Lab materials), while leaving tracking adjacent to the colon unchanged. This is not a Solid material/shader change.
+- Colon optical treatment is material-specific: the requested flatter colon applies only to production Glass / Digit Lab Liquid Glass. Solid / Frosted colon rendering must retain its original 20px optical profile and exact appearance. The new colon mask is a small cropped bitmap; do not replace it with a full-screen second mask.
 
 ### Latest screenshot assessment (13 Nov 2026, ~14:00 IST)
 - User tested build #293 / Digit Lab #15 from commit `d2dec8b`. Refraction is visible, but the clock still reads as a flat distortion outline rather than a raised 3D glass object. On the diagonal-streak wallpaper, the refraction creates conspicuous wavy bands, especially across the `4`.
@@ -47,6 +48,13 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - Uses the height-map normal for directional diffuse and specular lighting; removes the arbitrary screen-space reflection strips from Liquid Glass.
 - The approved Solid/Frosted renderer remains protected. `solidWarp` preserves its original positive SDF-normal displacement, displacement expression and 0.68 tilt; Solid still uses its prior blurred wallpaper, face, 0.78 opacity, solid bevel/specular/sheen, and unmodified non-Glass shadow. All new height-map, Snell, dispersion and reflection contributions are selected only by Liquid Glass.
 - New build workflows #295 (Production) and #17 (Digit Lab) were triggered from `e195e17`; their completion and the on-device appearance are pending. This is the first implementation that follows the complete height-map/refraction/dispersion sequence; do not claim success before compilation and the user's screenshot comparison.
+### Colon flattening and spacing-build correction (13 Nov 2026)
+- User noted that the colon dots looked too spherical/raised and should be flatter, while the existing digit-pair spacing change should remain shared by Glass and Solid.
+- Builds #296 and Digit Lab #18 from `13121da` both failed Kotlin compilation because one obsolete `val tracking = fontSize * trackingEm` line remained after the tracking implementation changed to `trackingAfter()`. Exact CI error: unresolved reference `trackingEm` at `LiquidWallpaperRenderer.kt:1194:35`.
+- Commit `3b8383ca3296896ad17fab63ef37b44bf2eb9d35` fixes the stale reference and adds a separate cropped colon mask to the shared renderer. The mask is a tiny crop around only the two dot positions, not another full-screen allocation.
+- In AGSL, the colon mask selects a flatter 8px height-map radius for Liquid Glass only. All ordinary Glass glyphs retain the 20px profile. With `solidMode == 1`, the radius remains 20px, preserving the approved Solid/Frosted colon material.
+- Digit-to-digit tracking remains at 20% of `TRACKING_EM`; colon-adjacent tracking and colon advance remain unchanged.
+- Production build #297 and Digit Lab build #19 are triggered from `3b8383c`; status and on-device result pending.
 ### Digit spacing correction (13 Nov 2026)
 - User noted that the screenshot's digit gaps were wider than the iOS reference, particularly `1–0` and `4–7`.
 - This is a shared typography/layout issue, not a material issue. It must apply to both production materials (**Glass and Solid**) and both corresponding Digit Lab options (**Liquid Glass and Frosted Glass**), because all use the shared `:clock-renderer` glyph layout.
@@ -161,16 +169,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `13121dac4a34c55f7524eeba57af8ab7c81f8f20` — “Tighten digit-pair spacing across Glass and Solid”
-- **Latest Glass shader implementation:** `e195e17d9c3e52f7d074153675bffe9abe0aacda` — SDF height map, 3D normals, Snell refraction, RGB dispersion and normal-driven Fresnel. This has not yet received user on-device acceptance.
-- **Latest spacing change:** shared digit-to-digit tracking reduced to 20% of TRACKING_EM; colon-adjacent spacing and colon advance remain unchanged. This intentionally affects both Glass and Solid because it is typography/layout, not material rendering.
-- **Material guard:** production Solid / Digit Lab Frosted Glass remains approved and its renderer path is protected. No shader or material code changed in commit `13121da`.
-- **Latest completed production build:** #295 — success from `e195e17`: [Actions #295](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830056)
-- **Latest completed Digit Lab build:** #17 — success from `e195e17`: [Actions #17](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830010)
-- **Current production build:** #296, run ID `43403237661`, from `13121da`; pending at time of writing: [Actions #296](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43403237661)
-- **Current Digit Lab build:** #18, run ID `43403237776`, from `13121da`; pending at time of writing: [Actions #18](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43403237776)
-- **On-device status:** Glass shader from `e195e17` and digit spacing from `13121da` are not yet verified on device.
-- **Primary next priority:** test build #296/#18. Check tighter `10` and `47` pairs while confirming colon gaps are unchanged; test both materials and verify Solid's material appearance is identical. Continue the Glass visual target separately.
+- **Latest renderer source commit:** `3b8383ca3296896ad17fab63ef37b44bf2eb9d35` — “Fix shared tracking build error and flatten Liquid Glass colon”
+- **Latest Glass shader:** `e195e17` — SDF height map, 3D normals, Snell refraction, dispersion and normal-driven reflection; awaiting user visual acceptance.
+- **Latest shared typography:** adjacent digit-pair tracking reduced to 20% of `TRACKING_EM`; colon-adjacent tracking and colon advance preserved.
+- **Latest colon change:** cropped colon mask selects an 8px optical profile for Glass only; ordinary Glass digits remain 20px, and Solid/Frosted remains exactly 20px.
+- **Protected material:** production Solid / Digit Lab Frosted Glass. Do not change its approved shader, blur, face, profile, opacity, sheen, or shadow.
+- **Build #296 and Digit Lab #18:** both failed because of obsolete `trackingEm` reference at line 1194; exact error recorded above.
+- **Current production build:** #297, run ID `43404014475`, from `3b8383c`; running at time of writing: [Actions #297](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014475)
+- **Current Digit Lab build:** #19, run ID `43404014416`, from `3b8383c`; running at time of writing: [Actions #19](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014416)
+- **On-device status:** spacing and flatter colon corrections are not yet verified.
+- **Primary next priority:** ensure both builds compile; test tighter 10/47 digit pairs and flatter Liquid Glass colon. Confirm Solid remains pixel/material-equivalent to its approved path.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
