@@ -319,14 +319,31 @@ class LiquidWallpaperRenderer(
                 uResolution
             );
             float3 environmentReflection = uWallpaper.eval(reflectionPoint).rgb;
-            float2 keyEnvironmentPoint = clamp(p - keyLight3D.xy * 34.0, float2(0.0), uResolution);
-            float3 keyEnvironmentReflection = uWallpaper.eval(keyEnvironmentPoint).rgb;
+            float2 keyEnvironmentPoint = clamp(
+                p - keyLight3D.xy * 42.0,
+                float2(0.0),
+                uResolution
+            );
+            float2 fillEnvironmentPoint = clamp(
+                p + fillLight3D.xy * 34.0,
+                float2(0.0),
+                uResolution
+            );
+            float3 keyEnvironmentReflection =
+                uWallpaper.eval(keyEnvironmentPoint).rgb;
+            float3 fillEnvironmentReflection =
+                uWallpaper.eval(fillEnvironmentPoint).rgb;
+            float3 directionalEnvironmentReflection = mix(
+                fillEnvironmentReflection,
+                keyEnvironmentReflection,
+                0.64
+            );
 
             // Reuse the eight-direction blur below for both materials:
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(22.0, 38.0, solidMode);
+            float blurRadius = mix(30.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -374,8 +391,8 @@ class LiquidWallpaperRenderer(
             // producing restrained chromatic dispersion rather than a broad
             // painted rainbow fringe.
             float dispersionAmount = mix(
-                2.4,
-                4.2,
+                3.2,
+                5.8,
                 smoothstep(0.10, 0.48, glassProfileSlope)
             );
             float2 dispersionOffset = refractedRay.xy * dispersionAmount;
@@ -402,17 +419,25 @@ class LiquidWallpaperRenderer(
                 mix(
                     float3(refractedLuma),
                     refractedGlass,
-                    1.35
+                    1.52
                 ),
                 0.0,
                 1.0
             );
-            // Adaptive internal bounce: dark backgrounds receive a modest
-            // lift from nearby light, while bright beach/sky pixels stay clear.
-            float glassDarkness = 1.0 - smoothstep(0.16, 0.42, refractedLuma);
-            float glassBounceStrength = 0.18 * glassDarkness;
+            // Rich internal light pickup: dark regions gather nearby colour
+            // from the wallpaper, while bright beach/sky regions remain clear.
+            // Requiring local blurred illumination avoids a milky veil where
+            // the surrounding wallpaper is already uniformly bright.
+            float blurredWallpaperLuma = dot(
+                frostedWallpaper,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float glassDarkness = 1.0 - smoothstep(0.12, 0.38, refractedLuma);
+            float glassNearbyLight = smoothstep(0.06, 0.30, blurredWallpaperLuma);
+            float glassBounceStrength =
+                0.28 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.28 + float3(0.012, 0.014, 0.020),
+                frostedWallpaper * 1.42 + float3(0.018, 0.020, 0.030),
                 0.0,
                 1.0
             );
@@ -474,18 +499,23 @@ class LiquidWallpaperRenderer(
                 0.11 * solidMode;
 
             float3 colour = body;
-            // The glass face remains wallpaper-derived. Surface normals
-            // provide gentle volume shading; environment reflections supply
-            // the glossy body rather than a painted outline.
-            // Directional diffuse falloff gives the curved cross-section
-            // real volume: the key light brightens its upper-left shoulder
-            // while the opposing side retains a darker glass body.
-            float glassFaceLighting = 0.54 +
-                keyDiffuse3D * 0.34 +
-                fillDiffuse3D * 0.18;
+            // Lift the transmissive face so wallpaper colour remains vivid
+            // through the glyph instead of reading as a dark cut-out. This
+            // multiplier is blended out completely for Solid/Frosted.
+            float glassFaceLighting = 0.70 +
+                keyDiffuse3D * 0.28 +
+                fillDiffuse3D * 0.14;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
-            float glassFaceReflectionAmount = mix(0.035, 0.11, smoothstep(0.08, 0.48, glassProfileSlope));
-            colour = mix(colour, keyEnvironmentReflection, glassFaceReflectionAmount * (1.0 - solidMode));
+            float glassFaceReflectionAmount = mix(
+                0.075,
+                0.20,
+                smoothstep(0.08, 0.48, glassProfileSlope)
+            );
+            colour = mix(
+                colour,
+                directionalEnvironmentReflection,
+                glassFaceReflectionAmount * (1.0 - solidMode)
+            );
             colour -= float3(0.12, 0.15, 0.22) *
                 glassSideShadow * (1.0 - solidMode) * 0.22;
             colour *= mix(0.985, 1.025, glassLens);
