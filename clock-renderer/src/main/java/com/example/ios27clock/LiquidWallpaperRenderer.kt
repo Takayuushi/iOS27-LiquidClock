@@ -244,10 +244,13 @@ class LiquidWallpaperRenderer(
             float viewCosine = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float glassVolumeFresnel = 0.04 +
                 0.96 * pow(1.0 - viewCosine, 5.0);
+            // Keep the broad softbox reflection on the rounded shoulder.
+            // A front-facing normal has little Fresnel curvature and must not
+            // receive a white fill across the whole face.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 7.0
-            ) * 0.82;
+            ) * 0.82 * smoothstep(0.08, 0.48, glassProfileSlope);
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 42.0
