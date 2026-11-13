@@ -412,40 +412,79 @@ class LiquidWallpaperRenderer(
                 glassBlueSample.b
             );
 
-            // A real glass volume has small-scale surface/microfacet diffusion.
-            // Soften high-frequency wallpaper streaks through the transmitted
-            // image itself, not by blurring the whole wallpaper or the outline.
-            // The same compact kernel is evaluated for every glyph and time.
-            float refractionSoftRadius = 3.8;
-            float2 refractionSoftX = float2(refractionSoftRadius, 0.0);
-            float2 refractionSoftY = float2(0.0, refractionSoftRadius);
-            float3 softLeft = uWallpaper.eval(clamp(
-                samplePoint - refractionSoftX,
+            // Directional microfacet transmission: estimate the local wallpaper
+            // edge normal, then diffuse ACROSS high-contrast bands rather than
+            // along them. This merges paired white streaks into a coherent
+            // optical body while retaining their direction and larger detail.
+            // It is one image-driven material response shared by every glyph.
+            float2 diffusionProbe = float2(4.0, 4.0);
+            float3 probeLeft = uWallpaper.eval(clamp(
+                samplePoint - float2(diffusionProbe.x, 0.0),
                 float2(0.0),
                 uResolution
             )).rgb;
-            float3 softRight = uWallpaper.eval(clamp(
-                samplePoint + refractionSoftX,
+            float3 probeRight = uWallpaper.eval(clamp(
+                samplePoint + float2(diffusionProbe.x, 0.0),
                 float2(0.0),
                 uResolution
             )).rgb;
-            float3 softTop = uWallpaper.eval(clamp(
-                samplePoint - refractionSoftY,
+            float3 probeTop = uWallpaper.eval(clamp(
+                samplePoint - float2(0.0, diffusionProbe.y),
                 float2(0.0),
                 uResolution
             )).rgb;
-            float3 softBottom = uWallpaper.eval(clamp(
-                samplePoint + refractionSoftY,
+            float3 probeBottom = uWallpaper.eval(clamp(
+                samplePoint + float2(0.0, diffusionProbe.y),
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float probeLeftLuma = dot(probeLeft, float3(0.2126, 0.7152, 0.0722));
+            float probeRightLuma = dot(probeRight, float3(0.2126, 0.7152, 0.0722));
+            float probeTopLuma = dot(probeTop, float3(0.2126, 0.7152, 0.0722));
+            float probeBottomLuma = dot(probeBottom, float3(0.2126, 0.7152, 0.0722));
+            float2 wallpaperGradient = float2(
+                probeRightLuma - probeLeftLuma,
+                probeBottomLuma - probeTopLuma
+            );
+            float wallpaperContrast = length(wallpaperGradient);
+            float2 diffusionAxis = wallpaperGradient /
+                max(wallpaperContrast, 0.0001);
+            float bandContrast = smoothstep(0.025, 0.18, wallpaperContrast);
+            float diffusionRadius = mix(4.8, 7.6, bandContrast);
+            float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
+            float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.34;
+            float3 softNearA = uWallpaper.eval(clamp(
+                samplePoint - nearDiffusionOffset,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softNearB = uWallpaper.eval(clamp(
+                samplePoint + nearDiffusionOffset,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softFarA = uWallpaper.eval(clamp(
+                samplePoint - farDiffusionOffset,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softFarB = uWallpaper.eval(clamp(
+                samplePoint + farDiffusionOffset,
                 float2(0.0),
                 uResolution
             )).rgb;
             float3 microfacetTransmission =
-                center * 0.36 +
-                (softLeft + softRight + softTop + softBottom) * 0.16;
+                center * 0.34 +
+                (softNearA + softNearB) * 0.21 +
+                (softFarA + softFarB) * 0.12;
             float microfacetDiffusion = mix(
-                0.30,
-                0.38,
-                smoothstep(0.10, 0.48, glassProfileSlope)
+                0.22,
+                0.58,
+                bandContrast
+            ) * mix(
+                0.82,
+                1.0,
+                smoothstep(0.04, 0.32, glassProfileSlope)
             );
             refractedGlass = mix(
                 refractedGlass,
@@ -490,6 +529,32 @@ class LiquidWallpaperRenderer(
                 saturatedRefractedGlass,
                 screenedGlassFace,
                 glassBounceStrength
+            );
+            // A restrained volume-scatter contribution lifts and blends the
+            // transmitted colour in illuminated midtones. It is strongest
+            // where the local image contains useful light, but tapers on nearly
+            // white samples so bright wallpapers do not become milky/frosted.
+            float microfacetLuma = dot(
+                microfacetTransmission,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float scatterInLitGlass = smoothstep(0.12, 0.38, microfacetLuma);
+            float scatterWhiteProtection = 1.0 -
+                0.42 * smoothstep(0.72, 0.94, microfacetLuma);
+            float glassVolumeScatter = 0.085 *
+                scatterInLitGlass *
+                scatterWhiteProtection *
+                smoothstep(0.08, 0.42, glassProfileCoverage);
+            float3 volumeScatteredTransmission = clamp(
+                microfacetTransmission * 1.06 +
+                    float3(0.006, 0.008, 0.014),
+                0.0,
+                1.0
+            );
+            glassTransmitted = mix(
+                glassTransmitted,
+                volumeScatteredTransmission,
+                glassVolumeScatter
             );
             // Solid keeps its prior diffuse/frosted source path.
             float3 refracted = mix(glassTransmitted, center, solidMode);
