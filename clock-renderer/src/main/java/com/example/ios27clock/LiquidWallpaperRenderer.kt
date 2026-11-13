@@ -1134,8 +1134,22 @@ class LiquidWallpaperRenderer(
         val fontWidth = clockFontWidthCoordinate()
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
-        val trackingEm = TRACKING_EM * 0.55f
+        // Tighten only adjacent numeral pairs. The same shared layout is
+        // used by both Glass and Solid; spacing around the colon is preserved.
+        val digitPairTrackingEm = TRACKING_EM * 0.20f
+        val colonAdjacentTrackingEm = TRACKING_EM * 0.55f
         val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
+
+        fun trackingAfter(index: Int, size: Float): Float {
+            if (index < 0 || index >= glyphs.lastIndex) return 0f
+            val digitPair = glyphs[index] != ":" && glyphs[index + 1] != ":"
+            val trackingEm = if (digitPair) {
+                digitPairTrackingEm
+            } else {
+                colonAdjacentTrackingEm
+            }
+            return size * trackingEm
+        }
 
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = Color.WHITE
@@ -1147,17 +1161,18 @@ class LiquidWallpaperRenderer(
 
         fun measureLine(size: Float): Float {
             sizingPaint.textSize = size
-            val tracking = size * trackingEm
-            val naturalWidth = glyphs.sumOf { glyph ->
+            val advancesWidth = glyphs.sumOf { glyph ->
                 val advance = if (glyph == ":") {
                     size * colonAdvanceEm
                 } else {
                     sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
                 }
                 advance.toDouble()
-            }.toFloat() + tracking * (glyphs.size - 1).coerceAtLeast(0)
-
-            return naturalWidth * CLOCK_GLYPH_WIDTH_SCALE
+            }.toFloat()
+            val pairSpacing = glyphs.indices.sumOf { index ->
+                trackingAfter(index, size).toDouble()
+            }.toFloat()
+            return (advancesWidth + pairSpacing) * CLOCK_GLYPH_WIDTH_SCALE
         }
 
         // Fit the expanded per-digit advances to the usable line width. This
@@ -1184,7 +1199,10 @@ class LiquidWallpaperRenderer(
                 sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
             }
         }
-        val totalWidth = advances.sum() + tracking * (glyphs.size - 1).coerceAtLeast(0)
+        val trailingSpacing = glyphs.indices.map { index ->
+            trackingAfter(index, fontSize)
+        }
+        val totalWidth = advances.sum() + trailingSpacing.sum()
         var cursorX = centerX - totalWidth * 0.5f
 
         val composedPath = Path().apply { fillType = Path.FillType.WINDING }
@@ -1248,7 +1266,7 @@ class LiquidWallpaperRenderer(
                     }
                 }
             }
-            cursorX += advances[index] + tracking
+            cursorX += advances[index] + trailingSpacing[index]
         }
 
         if (hasBounds) {
