@@ -607,6 +607,15 @@ Changes:
 - CI builds from `7e4670e` were triggered automatically. Record Production and Digit Lab run IDs/results/artifacts after Actions reports them. On-device verification is pending; do not claim the new haze looks right until user tests it.
 - Next visual check should judge uniform natural fogging and soft glow through the entire glass surface, especially on both bright and dark wallpaper regions. Reject a flat milky/frosted look, loss of wallpaper colour, or glow that appears as isolated white outlines.
 
+### User confirms visible atmospheric-haze progress in Digit Lab #53 (14 Nov 2026, ~01:34 IST)
+- User supplied the next same-wallpaper comparison and explicitly said: “YES MAN Finally we are making progress, we aren't there yet but to my human eyes this looks progress.”
+- Correct image order: first image is our Digit Lab #53 result; second image is Apple's iOS reference.
+- This is the first explicit positive user confirmation that the atmospheric-haze direction is producing visible progress. The 32% isotropic local-wallpaper haze plus 18% bright-pass bloom from commit 7e4670e is materially closer to the intended natural fogged-glass appearance.
+- The image comparison still shows remaining difference: Apple's glass has a more continuous and evenly distributed soft luminous haze across the entire glyph body, while our result retains more visible fine wallpaper streak structure and a somewhat more defined/refractive face. Do not interpret the positive feedback as approval or 1:1 parity.
+- Builds verified successful for this comparison: Production #330 run 43497528568, artifact 14071328923; Digit Lab #53 run 43497528710, artifact 14071828511; both commit 7e4670e22b2e6f2687e00bc0fef7aba93c9f4ddd.
+- Do not immediately make another large scattering increase. Preserve the current #53 state as the positive baseline and continue with a small controlled refinement of continuous atmospheric softness / light spread, preserving wallpaper colour, glass transparency, and reflective contours.
+- Non-negotiable: all material/haze/reflection changes are shared and glyph-independent for every numeral/time. No digit-specific, character-specific or screen-coordinate conditions. Solid/Frosted remains protected.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
