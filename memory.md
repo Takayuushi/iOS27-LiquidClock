@@ -511,16 +511,29 @@ Changes:
 5. If the latest pass still looks like an outline, redesign the face/environment reflection contribution in the shared `clock-renderer` AGSL rather than merely increasing edge brightness. Keep wallpaper refraction, bevel normals and alpha/body response coherent.
 6. After each source-code commit, update this file with the exact change, SHA, actual CI run/result, on-device verification and remaining issues. A documentation-only update does not establish a visual fix.
 
+### User comparison and broadened Liquid Glass optics pass (14 Nov 2026, ~00:23 IST)
+- User supplied a same-wallpaper, same-time comparison: first image is the Digit Lab rendering, second image is Apple's iOS reference. The comparison is not yet 1:1. The current render has sharper, more separated wallpaper streaks and a more narrow/outline-dominant softbox response; Apple's face reflections read as broader and more continuous.
+- The submitted image follows Digit Lab #47's successful run window. #47 includes the same renderer source as #46 (9651e9c); its only relevant intervening code change is the persistent Digit Lab signing-key fix, not a renderer change.
+- Follow-up renderer commit f6e61bc4e4e6e24938abc87f76ae0e1fbd6b9efa — “Broaden shared Liquid Glass reflections and soften streaks”:
+  - Broadens the shared SDF-normal softbox response from exponent 7.0 / coefficient 0.64 to exponent 5.5 / coefficient 0.52. This increases the mid-angle lobe while reducing its peak; it is intended to make reflected light read as a continuous surface rather than simply making the rim brighter.
+  - Expands the contrast-adaptive wallpaper diffusion radius from 14–20px to 16–22px.
+  - Rebalances the five-tap diffusion kernel from centre/near/far weights 0.22/0.21/0.18 to 0.16/0.22/0.20 (per near/far tap); total weight remains exactly 1.0. This shifts a little transmission away from the unfiltered centre sample without introducing an opaque/frosted overlay.
+  - No digit-specific conditions, no change to accepted typography/kerning, glyph silhouette, 20px digit cap, clock placement, pinch behaviour or wallpaper isolation.
+  - Solid/Frosted remains protected: changes are on Liquid Glass contributions before the existing mix(glassTransmitted, center, solidMode) selection or behind (1.0 - solidMode); Solid's 38px blur, centre transmission, opacity, bevel and sheen are unchanged.
+- Static source checks passed: all three replacements occurred exactly once; kernel weight sum is 1.0; Solid selection and 38px blur remain present; no digit-index branches were introduced.
+- Candidate CI runs from f6e61bc: Production #325, run ID 43487564874; Digit Lab #48, run ID 43487564891. Both were queued at 18:57:21 UTC on 13 Nov 2026; build results and APK artifacts must be checked before sharing install links.
+- On-device visual verification is pending. Compare the same diagonal wallpaper and all glyphs; reject any increased streak smearing, cloudy/frosted face, harsh all-around outline or Solid/Frosted regression. This pass is a candidate, not a claimed fix.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `9651e9c2e53766e4174d4fc5992612ccbb6b4a90` — “Polish unified Liquid Glass edge reflections”
+- **Latest renderer commit:** `f6e61bc4e4e6e24938abc87f76ae0e1fbd6b9efa` — “Broaden shared Liquid Glass reflections and soften streaks”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest confirmed comparison build pair:** Production #323 and Digit Lab #45, both completed/success from `6a3a20a`. Digit Lab #45's appearance was reported by the user to be closer to the iOS reference.
-- **Latest comparison image order:** first supplied screenshot is our Digit Lab #45; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
+- **Latest submitted comparison:** Digit Lab image is our rendering; second image is Apple's iOS reference. The user says it is not yet 1:1. Latest completed matching renderer source is `9651e9c` (Digit Lab #47 includes only a signing-key change after #46); candidate updated renderer builds are Production #325 / Digit Lab #48 from `f6e61bc`.
+- **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
-- **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion. The user tested #45 and says it is closer. Commit `9651e9c` adds only a subtle global directional-glint and grazing-rim increase; all remain SDF-normal-driven and Liquid Glass-only.
+- **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
 - **Do not claim visual parity from CI alone.** Build #44/#322 from `5ee517e` succeeded, but user comparison confirmed optical work remains. Commit `6a3a20a` is the new candidate; builds #45/#323 are in progress and on-device appearance remains unverified.
