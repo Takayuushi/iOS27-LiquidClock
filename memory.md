@@ -650,6 +650,14 @@ Changes:
 - Candidate runs from `4bbb7ea`: Digit Lab #55 run `43501120779`; Production #332 run `43501120746`. Both were queued when recorded; check completion and artifacts before linking APKs.
 - Unchanged hard rule: shared glyph-independent shader for all numbers and times. Do not tune 1/0/4/7 independently. Solid/Frosted protections, geometry, spacing, gestures, wallpaper isolation remain untouched.
 
+### User's Digit Lab #55 assessment — small visible progress over #54 (14 Nov 2026, ~01:57 IST)
+- User uploaded the #55 screenshot (`Screenshot_20261114_015725.jpg`) and the same iOS reference, saying: “I think this looks like a tiny bit progress from build 54?”
+- I inspected #54 (`Screenshot_20261114_015009.jpg`) and #55 side by side, including aligned clock crops and an amplified difference view. Assessment: yes, there is a small improvement. The #55 face reads slightly softer/more diffused, most visibly in the `0` and some curved interior transmission. It is incremental, not a major step; the `1` and especially `7` still show too much defined internal wallpaper/refraction structure compared with Apple's smoother atmospheric body. The `4` still reads strongly edge-lit, with less broad haze across its face than the reference.
+- The #55-to-#54 change pattern is strongest inside the `0` and colon/nearby glass region, with smaller changes to 1/4/7. The user's qualitative impression of tiny progress is consistent with the side-by-side view. Do not overstate the result or claim iOS parity.
+- Build verification: Digit Lab #55 run `43501120779` succeeded, artifact `14075135005`; Production #332 run `43501120746` succeeded, artifact `14073852786`; both built commit `4bbb7ea00c985532b5583b44a20c7d5612cea67b`.
+- Current recommendation: retain #55 as the latest incremental improvement and do not immediately make another broad blur increase. For the next pass, focus on a more physically coherent volume response—blend low-frequency diffuse transmission with the sharp refractive ray instead of simply increasing blur radius/bloom. Keep highlights integrated with the surface rather than only stronger edge lines.
+- Non-negotiable Rule #1: no digit-specific or character-specific behavior. All changes must remain shared across every glyph and any displayed time. Keep Solid/Frosted, typography, spacing, gestures and wallpaper isolation unchanged.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
