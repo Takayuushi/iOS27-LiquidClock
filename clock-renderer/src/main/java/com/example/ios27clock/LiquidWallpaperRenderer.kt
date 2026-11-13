@@ -401,8 +401,12 @@ class LiquidWallpaperRenderer(
                 0.0,
                 1.0
             );
+            // Adaptive internal bounce: dark backgrounds receive a modest
+            // lift from nearby light, while bright beach/sky pixels stay clear.
+            float glassDarkness = 1.0 - smoothstep(0.16, 0.42, refractedLuma);
+            float glassBounceStrength = 0.18 * glassDarkness;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.55 + float3(0.035, 0.040, 0.050),
+                frostedWallpaper * 1.28 + float3(0.012, 0.014, 0.020),
                 0.0,
                 1.0
             );
@@ -412,7 +416,7 @@ class LiquidWallpaperRenderer(
             float3 glassTransmitted = mix(
                 saturatedRefractedGlass,
                 screenedGlassFace,
-                0.30
+                glassBounceStrength
             );
             // Solid keeps its prior diffuse/frosted source path.
             float3 refracted = mix(glassTransmitted, center, solidMode);
@@ -1205,22 +1209,11 @@ class LiquidWallpaperRenderer(
         val fontWidth = clockFontWidthCoordinate()
         val maxWidth = width * MAX_GLYPH_WIDTH_FRACTION
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
-        // Tighten only adjacent numeral pairs. The same shared layout is
-        // used by both Glass and Solid; spacing around the colon is preserved.
-        val digitPairTrackingEm = TRACKING_EM * 0.02f
-        val colonAdjacentTrackingEm = TRACKING_EM * 0.55f
-        val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
-
-        fun trackingAfter(index: Int, size: Float): Float {
-            if (index < 0 || index >= glyphs.lastIndex) return 0f
-            val digitPair = glyphs[index] != ":" && glyphs[index + 1] != ":"
-            val trackingEm = if (digitPair) {
-                digitPairTrackingEm
-            } else {
-                colonAdjacentTrackingEm
-            }
-            return size * trackingEm
-        }
+        // Kerning is based on actual visible outline bounds, not the font's
+        // nominal advances. This removes built-in side-bearing gaps directly.
+        val digitPairGapEm = 0.018f
+        val colonAdjacentGapEm = 0.016f
+        val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
 
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = Color.WHITE
@@ -1230,20 +1223,52 @@ class LiquidWallpaperRenderer(
             isSubpixelText = true
         }
 
-        fun measureLine(size: Float): Float {
+        fun visibleGlyphBounds(size: Float): List<Pair<Float, Float>> {
             sizingPaint.textSize = size
-            val advancesWidth = glyphs.sumOf { glyph ->
-                val advance = if (glyph == ":") {
-                    size * colonAdvanceEm
+            return glyphs.map { glyph ->
+                if (glyph == ":") {
+                    val radius = size * colonRadiusEm
+                    -radius to radius
                 } else {
-                    sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
+                    val path = Path()
+                    sizingPaint.getTextPath(glyph, 0, glyph.length, 0f, 0f, path)
+                    val bounds = RectF()
+                    path.computeBounds(bounds, true)
+                    if (bounds.isEmpty) {
+                        0f to (sizingPaint.measureText(glyph) *
+                            glyphWidthProfile(glyph, expansion))
+                    } else {
+                        val compactWidth = glyphWidthProfile(glyph, expansion)
+                        val center = bounds.centerX()
+                        (center + (bounds.left - center) * compactWidth) to
+                            (center + (bounds.right - center) * compactWidth)
+                    }
                 }
-                advance.toDouble()
-            }.toFloat()
-            val pairSpacing = glyphs.indices.sumOf { index ->
-                trackingAfter(index, size).toDouble()
-            }.toFloat()
-            return (advancesWidth + pairSpacing) * CLOCK_GLYPH_WIDTH_SCALE
+            }
+        }
+
+        fun visualGlyphOrigins(
+            bounds: List<Pair<Float, Float>>,
+            size: Float
+        ): FloatArray {
+            val origins = FloatArray(glyphs.size)
+            if (glyphs.isEmpty()) return origins
+            origins[0] = -bounds[0].first
+            for (index in 1 until glyphs.size) {
+                val digitPair = glyphs[index - 1] != ":" && glyphs[index] != ":"
+                val gap = size * if (digitPair) digitPairGapEm else colonAdjacentGapEm
+                val previousRight = origins[index - 1] + bounds[index - 1].second
+                origins[index] = previousRight + gap - bounds[index].first
+            }
+            return origins
+        }
+
+        fun measureLine(size: Float): Float {
+            val bounds = visibleGlyphBounds(size)
+            val origins = visualGlyphOrigins(bounds, size)
+            val visualWidth = if (glyphs.isEmpty()) 0f
+                else origins.last() + bounds.last().second
+            return visualWidth * CLOCK_GLYPH_WIDTH_SCALE
         }
 
         // Fit the expanded per-digit advances to the usable line width. This
@@ -1262,18 +1287,12 @@ class LiquidWallpaperRenderer(
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
         val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
-        val advances = glyphs.map { glyph ->
-            if (glyph == ":") {
-                fontSize * colonAdvanceEm
-            } else {
-                sizingPaint.measureText(glyph) * glyphWidthProfile(glyph, expansion)
-            }
-        }
-        val trailingSpacing = glyphs.indices.map { index ->
-            trackingAfter(index, fontSize)
-        }
-        val totalWidth = advances.sum() + trailingSpacing.sum()
-        var cursorX = centerX - totalWidth * 0.5f
+        val finalVisibleBounds = visibleGlyphBounds(fontSize)
+        val relativeOrigins = visualGlyphOrigins(finalVisibleBounds, fontSize)
+        val totalWidth = if (glyphs.isEmpty()) 0f
+            else relativeOrigins.last() + finalVisibleBounds.last().second
+        val lineOffsetX = centerX - totalWidth * 0.5f
+        val glyphOrigins = relativeOrigins.map { it + lineOffsetX }
 
         val composedPath = Path().apply { fillType = Path.FillType.WINDING }
         val digitTwoPaths = mutableListOf<Path>()
@@ -1284,7 +1303,7 @@ class LiquidWallpaperRenderer(
         glyphs.forEachIndexed { index, glyph ->
             if (glyph == ":") {
                 val dotOffset = fontSize * COLON_DOT_OFFSET_EM
-                val dotX = cursorX + advances[index] * 0.5f
+                val dotX = glyphOrigins[index]
                 colonCenters += dotX to (centerY - dotOffset)
                 colonCenters += dotX to (centerY + dotOffset)
             } else {
@@ -1299,7 +1318,14 @@ class LiquidWallpaperRenderer(
                     strokeWidth = 0f
                 }
                 val glyphPath = Path()
-                glyphPaint.getTextPath(glyph, 0, glyph.length, cursorX, baseline, glyphPath)
+                glyphPaint.getTextPath(
+                    glyph,
+                    0,
+                    glyph.length,
+                    glyphOrigins[index],
+                    baseline,
+                    glyphPath
+                )
 
                 val pathBounds = RectF()
                 glyphPath.computeBounds(pathBounds, true)
@@ -1336,7 +1362,6 @@ class LiquidWallpaperRenderer(
                     }
                 }
             }
-            cursorX += advances[index] + trailingSpacing[index]
         }
 
         if (hasBounds) {
