@@ -131,16 +131,16 @@ class LiquidWallpaperRenderer(
 
             // Glass has a gently curved optical face and a broader, softer
             // Fresnel transition. Solid keeps its already-approved tighter edge.
-            float glassEdge = exp(-abs(signedDistance) / 7.0);
+            float glassEdge = exp(-abs(signedDistance) / 5.6);
             float solidEdge = exp(-abs(signedDistance) / 3.4);
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 1.8) / 5.8);
+            float glassRim = exp(-abs(signedDistance - 1.15) / 3.4);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             float glassBevel = 1.0 -
-                smoothstep(1.5, 25.0, insideDistance);
+                smoothstep(1.2, 22.0, insideDistance);
             float innerBevel = mix(glassBevel, solidBevel, solidMode);
             float outerLip = 1.0 -
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
@@ -158,7 +158,7 @@ class LiquidWallpaperRenderer(
             // into the face. This bends the actual wallpaper underneath each
             // numeral instead of painting a uniform highlight around text.
             float glassDisplacement =
-                1.6 + glassRim * 4.2 + glassLens * 2.8;
+                1.6 + glassRim * 5.0 + glassLens * 3.1;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -226,7 +226,7 @@ class LiquidWallpaperRenderer(
             ) * 0.125;
             // A modest portion of the same isotropic sample set softens
             // harsh wallpaper streaks through Glass without making it opaque.
-            float3 refracted = mix(center, frostedWallpaper, 0.14);
+            float3 refracted = mix(center, frostedWallpaper, 0.07);
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -259,12 +259,19 @@ class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
             ) * edgeBand;
-            float glassSpecular = pow(facing, 11.0) * glassRim;
-            float glassHighlight = pow(facing, 18.0) *
-                exp(-abs(signedDistance - 1.0) / 3.8);
+            float glassSpecular = pow(facing, 10.0) * glassRim;
+            float glassHighlight = pow(facing, 16.0) *
+                exp(-abs(signedDistance - 0.9) / 2.8);
             float solidSpecular = pow(facing, 3.5) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
-            float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
+            float glassFillSpecular = pow(oppositeFacing, 9.0) *
+                exp(-abs(signedDistance - 1.15) / 3.0);
+            float solidFillSpecular = pow(oppositeFacing, 3.2) * solidEdge;
+            float fillSpecular = mix(
+                glassFillSpecular,
+                solidFillSpecular,
+                solidMode
+            );
             float bevelShade = innerBevel * (1.0 - facing) *
                 mix(0.018, 0.11, solidMode);
 
@@ -274,11 +281,16 @@ class LiquidWallpaperRenderer(
             colour += float3(0.98, 0.99, 1.0) *
                 innerBevel * mix(0.075, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(1.62, 0.62, solidMode);
+                keySpecular * mix(1.82, 0.62, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
                 glassHighlight * (1.0 - solidMode) * 1.02;
-            colour += uAccentColor *
-                fillSpecular * mix(0.50, 0.15, solidMode);
+            float3 fillReflectionColour = mix(
+                float3(0.82, 0.91, 1.0),
+                uAccentColor,
+                0.14
+            );
+            colour += fillReflectionColour *
+                fillSpecular * mix(1.08, 0.15, solidMode);
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             colour -= float3(0.08, 0.09, 0.14) *
                 edgeBand * (1.0 - facing) * mix(0.018, 0.055, solidMode);
@@ -287,13 +299,22 @@ class LiquidWallpaperRenderer(
 
             // A thin high-energy caustic sits just inside the contour.
             // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.4) / 3.6) *
+            float glassCaustic = exp(-abs(signedDistance - 1.15) / 2.4) *
                 pow(max(dot(normal, keyLight), 0.0), 1.25);
             float solidRim = exp(-abs(signedDistance - 2.5) / 4.6) *
                 pow(max(dot(normal, keyLight), 0.0), 1.45);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
-                mix(0.98, 0.25, solidMode);
+                mix(1.12, 0.25, solidMode);
+
+            // A second, opposing contour reflection prevents dark wallpaper
+            // areas from turning the glass into a dull rubber-like silhouette.
+            // It follows the real glyph normal instead of painting a screen-space ribbon.
+            float glassCounterCaustic =
+                exp(-abs(signedDistance - 2.0) / 2.2) *
+                pow(oppositeFacing, 1.35);
+            colour += float3(0.72, 0.86, 1.0) *
+                glassCounterCaustic * (1.0 - solidMode) * 0.72;
 
             // A moving, soft studio reflection makes the lens readable on
             // low-detail wallpapers without creating a raised all-around bevel.
