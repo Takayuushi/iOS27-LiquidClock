@@ -308,7 +308,7 @@ Changes:
 - **Unchanged typography:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em.
 - **Protected Solid/Frosted:** all new terminal-light contributions gated by `(1.0-solidMode)`; Solid material stays unchanged. Glyph shapes, official SF Pro axes and shared spacing unchanged.
 - **Current production build:** #309, run ID `43441833708`, from `9c06eb5`; queued at last check: [Actions #309](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43441833708)
-- **Digit Lab build:** matching #31 has not yet appeared in the workflow run listing at last check; verify whether the separate Digit Lab workflow triggered. Previous #30 from `686220c` succeeded.
+- **Current Digit Lab build:** #31, run ID `43441833734`, from `9c06eb5`; in progress at last check: [Actions #31](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43441833734).
 - **On-device status:** new end-cap treatment not yet tested. Do not claim success from source diff or CI alone.
 - **Next priority:** verify #309 and start/verify Digit Lab #31 from the same SHA; inspect the terminal reflection, ensure it stays narrow and does not broaden glyph strokes, compare both beach and diagonal wallpapers, verify Solid unchanged.
 
