@@ -401,6 +401,47 @@ class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
+            // Extract bright energy before averaging so bright wallpaper bands
+            // create a soft, low-frequency glow through the glass instead of
+            // remaining only as sharp refracted lines.
+            float brightA = smoothstep(
+                0.22, 0.68,
+                dot(blurA, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightB = smoothstep(
+                0.22, 0.68,
+                dot(blurB, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightC = smoothstep(
+                0.22, 0.68,
+                dot(blurC, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightD = smoothstep(
+                0.22, 0.68,
+                dot(blurD, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightE = smoothstep(
+                0.22, 0.68,
+                dot(blurE, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightF = smoothstep(
+                0.22, 0.68,
+                dot(blurF, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightG = smoothstep(
+                0.22, 0.68,
+                dot(blurG, float3(0.2126, 0.7152, 0.0722))
+            );
+            float brightH = smoothstep(
+                0.22, 0.68,
+                dot(blurH, float3(0.2126, 0.7152, 0.0722))
+            );
+            float3 glassBrightBloom = (
+                blurA * brightA + blurB * brightB +
+                blurC * brightC + blurD * brightD +
+                blurE * brightE + blurF * brightF +
+                blurG * brightG + blurH * brightH
+            ) * 0.125;
             // Keep the green channel on the central refracted ray. Red and
             // blue take tiny opposite offsets along the same optical path,
             // producing restrained chromatic dispersion rather than a broad
@@ -615,12 +656,20 @@ class LiquidWallpaperRenderer(
                 glassVolumeRegion
             );
             float glassAtmosphericScatter =
-                0.16 * glassAtmosphericCoverage;
+                0.32 * glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
                 frostedWallpaper,
                 glassAtmosphericScatter
             );
+            // Bright-pass bloom is screen-composited at low strength so
+            // illuminated regions spread softly without turning the complete
+            // face into a white or gray frosted layer.
+            float glassAtmosphericBloom =
+                0.18 * glassAtmosphericCoverage;
+            glassTransmitted = 1.0 -
+                (1.0 - glassTransmitted) *
+                (1.0 - glassBrightBloom * glassAtmosphericBloom);
             // Solid keeps its prior diffuse/frosted source path.
             float3 refracted = mix(glassTransmitted, center, solidMode);
             float3 milkyFrost = mix(
