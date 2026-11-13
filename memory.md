@@ -61,6 +61,21 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Commit `13121dac4a34c55f7524eeba57af8ab7c81f8f20` (“Tighten digit-pair spacing across Glass and Solid”) reduces digit-to-digit tracking from `TRACKING_EM * 0.55` to `TRACKING_EM * 0.20` (about 64% less pair tracking). Spacing either side of the colon remains at the previous `TRACKING_EM * 0.55`; colon advance itself is unchanged. Font files and Apple's `wdth` axis are not modified.
 - The spacing adjustment only changes glyph advances/composition; it does not touch the AGSL material branches, so it does not alter the approved Solid material treatment.
 - Production build #296 and Digit Lab build #18 were triggered from `13121da`; on-device spacing comparison is pending.
+### Latest user evaluation and optical-light pass (13 Nov 2026, ~15:29 IST)
+- The user's latest two Digit Lab screenshots in the preceding message are from the latest successfully built pair at that point: production #297 and Digit Lab #19, both from commit `3b8383ca3296896ad17fab63ef37b44bf2eb9d35`. Do not question whether the user tested the latest builds or imply their screenshots may be stale.
+- User's assessment: still not the desired material. Gemini's comparative analysis says the current version has true refractive geometry and a rounded bevel profile, but is too dark/recessed on dark wallpaper and lacks internal light bounce, a thicker/brighter directional rim, stronger chromatic dispersion/saturation, and longer edge refraction offsets to pull nearby bright pixels into the glass.
+- User also says adjacent digit pairs still have slightly too much spacing; colon still needs to be flatter, nearly a disc.
+- Follow-up commit `a17e2ac048041b252cbff0e53539643851e2cf6a` adds a Glass-only optical lighting pass:
+  - widens the digit convex profile radius from 20px to 24px (Glass only), keeping Solid at 20px;
+  - broadens Glass edge response and adds a stronger top-left directional rim using the existing rim band;
+  - increases Glass two-light specular intensities;
+  - raises Snell optical thickness from 30px to 34px with up to 1.22x edge pull;
+  - increases glass blur/bounce sample radius from 8px to 22px (Solid remains 38px), screen-blends a 1.55x brightness-boosted blurred environment at 30%, and adds restrained 1.35x saturation plus an image-derived inner tint;
+  - increases RGB dispersion spread from 1.8px to a 2.4–4.2px slope-dependent spread;
+  - tightens digit-pair tracking again from 0.20x to 0.02x TRACKING_EM. Colon-adjacent tracking remains 0.55x and colon advance is unchanged;
+  - flattens only the Liquid Glass colon to a 3.2px profile; Solid/Frosted colon remains at 20px.
+- Production Solid / Digit Lab Frosted Glass remains protected. All added shader response is Glass-only; radius selection resolves to 20px at `solidMode == 1`, blur radius remains 38px, existing Solid specular/frosted response remains selected, and the shared typography tracking applies by user request.
+- Production build #298 and Digit Lab build #20 were triggered from `a17e2ac`; CI and on-device results pending. Do not claim the optical changes solve the issue until the user's next side-by-side screenshots.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -169,16 +184,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `3b8383ca3296896ad17fab63ef37b44bf2eb9d35` — “Fix shared tracking build error and flatten Liquid Glass colon”
-- **Latest Glass shader:** `e195e17` — SDF height map, 3D normals, Snell refraction, dispersion and normal-driven reflection; awaiting user visual acceptance.
-- **Latest shared typography:** adjacent digit-pair tracking reduced to 20% of `TRACKING_EM`; colon-adjacent tracking and colon advance preserved.
-- **Latest colon change:** cropped colon mask selects an 8px optical profile for Glass only; ordinary Glass digits remain 20px, and Solid/Frosted remains exactly 20px.
-- **Protected material:** production Solid / Digit Lab Frosted Glass. Do not change its approved shader, blur, face, profile, opacity, sheen, or shadow.
-- **Build #296 and Digit Lab #18:** both failed because of obsolete `trackingEm` reference at line 1194; exact error recorded above.
-- **Current production build:** #297, run ID `43404014475`, from `3b8383c`; running at time of writing: [Actions #297](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014475)
-- **Current Digit Lab build:** #19, run ID `43404014416`, from `3b8383c`; running at time of writing: [Actions #19](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014416)
-- **On-device status:** spacing and flatter colon corrections are not yet verified.
-- **Primary next priority:** ensure both builds compile; test tighter 10/47 digit pairs and flatter Liquid Glass colon. Confirm Solid remains pixel/material-equivalent to its approved path.
+- **Latest renderer source commit:** `a17e2ac048041b252cbff0e53539643851e2cf6a` — “Brighten Liquid Glass internally and strengthen optical rim”
+- **Latest optical changes:** digit profile 24px for Glass; shallow 3.2px colon disc for Glass; stronger directional rim/specular; Snell thickness 34px plus edge pull; 22px blurred brightness-boosted environment screen blend; 1.35x saturation; slope-dependent RGB separation (2.4–4.2px).
+- **Latest typography:** adjacent numeral tracking now 0.02x TRACKING_EM; colon-adjacent tracking and colon advance unchanged.
+- **Protected Solid:** production Solid / Digit Lab Frosted Glass remains approved. Its 20px profile, 38px blur, positive SDF warp, existing frosted face, opacity, solid specular/sheen and old shadow remain preserved. Only digit-pair spacing changes globally by request.
+- **Latest completed production build:** #297 — success from `3b8383c`, artifact ID `14026910695`: [Actions #297](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014475)
+- **Latest completed Digit Lab build:** #19 — success from `3b8383c`, artifact ID `14026337618`: [Actions #19](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014416)
+- **Current production build:** #298, run ID `43405958300`, from `a17e2ac`; in progress at last check: [Actions #298](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43405958300)
+- **Current Digit Lab build:** #20, run ID `43405958529`, from `a17e2ac`; in progress at last check: [Actions #20](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43405958529)
+- **On-device status:** screenshots from #297/#19 show remaining optical-light and rim weaknesses; the #298/#20 pass has not yet been tested.
+- **Primary next priority:** check #298/#20 builds; compare on bright beach and dark diagonal wallpapers. Confirm brighter inner bounce without frosting, thicker directional highlights, visible colour dispersion, tighter numeral pairs, flatter colon, and unchanged Solid.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
