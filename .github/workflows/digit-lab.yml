@@ -51,6 +51,35 @@ jobs:
           gradle-version: '9.6.1'
       - name: Prepare official SF Pro clock font assets
         run: bash .github/scripts/prepare-digit-lab-fonts.sh
+      - name: Restore persistent Digit Lab debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: digit-lab-debug-signing-${{ github.ref_name }}-v1
+
+      - name: Initialise persistent Digit Lab debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          KEYSTORE="$HOME/.android/debug.keystore"
+          if [[ ! -s "$KEYSTORE" ]]; then
+            echo "No saved Digit Lab signing key found; creating this branch's stable key."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "Restored the existing Digit Lab signing key."
+          fi
+          chmod 600 "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass android -alias androiddebugkey
+
       - name: Build standalone Digit Lab debug APK
         run: gradle -p digit-lab assembleDebug
       - name: Upload standalone Digit Lab APK
