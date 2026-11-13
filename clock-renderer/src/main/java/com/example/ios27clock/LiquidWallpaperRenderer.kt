@@ -176,19 +176,20 @@ class LiquidWallpaperRenderer(
             float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);
             float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
             float fillDiffuse3D = max(dot(glassSurfaceNormal, fillLight3D), 0.0);
-            // A broad area reflection gives the lens a continuous polished
-            // face; tighter glints sit on the same physically curved shoulder.
+            // Specular response is concentrated on the curved shoulder.
+            // Keep the face itself clear; strong highlights belong to the
+            // rounded glass cross-section, not a white fill over every glyph.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                5.0
-            ) * 0.58;
+                13.0
+            ) * 0.24 * glassProfileCoverage;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                68.0
+                38.0
             ) * glassProfileCoverage;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
-                52.0
+                28.0
             ) * glassProfileCoverage;
             float glassVolumeFresnel = 0.04 +
                 0.96 * pow(
@@ -209,13 +210,17 @@ class LiquidWallpaperRenderer(
             float waveA = sin(p.y * 0.0038 + uTime * 0.10);
             float waveB = cos(p.x * 0.0028 - uTime * 0.09);
 
-            // Stronger displacement follows the local contour and then eases
-            // into the face. This bends the actual wallpaper underneath each
-            // numeral instead of painting a uniform highlight around text.
-            // A stronger contour displacement bends real wallpaper detail
-            // through the curved shoulder, making the glyph read as a lens.
-            float glassDisplacement =
-                2.4 + glassRim * 8.0 + glassLens * 4.0;
+            // SDF lens refraction: maximum displacement sits at the glyph
+            // contour and falls smoothly toward the centre of each stroke.
+            // This follows the glyph's real curves instead of filling them
+            // with a broad translucent/white overlay.
+            float lensDepth = 1.0 -
+                smoothstep(0.0, 40.0, insideDistance);
+            float lensCurve = 1.0 - sqrt(max(
+                1.0 - lensDepth * lensDepth,
+                0.0
+            ));
+            float glassDisplacement = lensCurve * 38.0;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
             float displacement = mix(
@@ -223,9 +228,9 @@ class LiquidWallpaperRenderer(
                 solidDisplacement,
                 solidMode
             );
-            float2 warp = refractionNormal * displacement +
+            float2 warp = -refractionNormal * displacement +
                 tilt * mix(1.8, 0.68, solidMode) +
-                float2(waveA * 0.38, waveB * 0.30) * (1.0 - solidMode);
+                float2(waveA * 0.12, waveB * 0.10) * (1.0 - solidMode);
             float2 samplePoint = clamp(
                 p + warp,
                 float2(0.0),
@@ -297,9 +302,10 @@ class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
-            // A modest portion of the same isotropic sample set softens
-            // harsh wallpaper streaks through Glass without making it opaque.
-            float3 refracted = mix(center, frostedWallpaper, 0.07);
+            // Liquid Glass preserves wallpaper detail. Refraction comes
+            // from the curved SDF warp above; Frosted Glass continues to use
+            // the separate eight-direction diffusion.
+            float3 refracted = center;
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -307,14 +313,11 @@ class LiquidWallpaperRenderer(
             );
             milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
 
-            // The face combines direct refraction with a reflected view of
-            // the surrounding wallpaper. The source remains image-derived,
-            // but unlike alpha-blending the original image over itself this
-            // gives the glass a distinct optical body on both bright and dark
-            // backgrounds.
-            float3 glassFace = mix(refracted, environmentReflection, 0.26);
-            glassFace = mix(glassFace, center, 0.10);
-            glassFace = mix(glassFace, uAccentColor, 0.045);
+            // Keep the main face as a clear refracted view of the wallpaper.
+            // Environment reflection is applied later only where the SDF
+            // normal turns toward a grazing angle (Fresnel), not across the
+            // entire glyph face.
+            float3 glassFace = refracted;
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
                 milkyFrost,
@@ -342,9 +345,9 @@ class LiquidWallpaperRenderer(
             // The glass face remains wallpaper-derived. Surface normals
             // provide gentle volume shading; environment reflections supply
             // the glossy body rather than a painted outline.
-            float glassFaceLighting = 0.80 +
-                keyDiffuse3D * 0.14 +
-                fillDiffuse3D * 0.10;
+            float glassFaceLighting = 0.94 +
+                keyDiffuse3D * 0.06 +
+                fillDiffuse3D * 0.035;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
             colour -= float3(0.12, 0.15, 0.22) *
                 glassSideShadow * (1.0 - solidMode) * 0.16;
@@ -360,10 +363,16 @@ class LiquidWallpaperRenderer(
             colour += uAccentColor *
                 solidFillSpecular * 0.15 * solidMode;
 
-            // Broad reflection is visible across the front face. Two tighter
-            // glints track the actual rounded cap on the light-facing sides.
+            // Reflected wallpaper and specular highlights are restricted to
+            // the curved glass shoulder. This produces the bright optical rim
+            // while leaving the central face transparent and undiffused.
+            colour = mix(
+                colour,
+                environmentReflection,
+                glassVolumeFresnel * 0.32 * (1.0 - solidMode)
+            );
             colour += float3(0.92, 0.97, 1.0) *
-                glassAreaReflection * (1.0 - solidMode) * 1.38;
+                glassAreaReflection * (1.0 - solidMode) * 1.05;
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.20;
             colour += float3(0.68, 0.82, 1.0) *
@@ -383,30 +392,20 @@ class LiquidWallpaperRenderer(
             colour += float3(1.0, 1.0, 1.0) *
                 solidRim * 0.25 * solidMode;
 
-            // Directional environment reflections span the glass face,
-            // not just its perimeter. A broad softbox gives the rounded lens
-            // a continuous reflection while a narrower ribbon supplies the
-            // crisp highlight visible in polished optical glass.
+            // A narrow directional strip produces a crisp specular glint
+            // along the bevel only. It must not wash the entire glyph face.
             float reflectionAxis = clockRelative.x * -0.42 +
                 clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
             float glassSoftbox = exp(
-                -pow((reflectionAxis - 18.0) / 76.0, 2.0)
-            ) * glassLens;
+                -pow((reflectionAxis - 18.0) / 24.0, 2.0)
+            ) * glassProfileCoverage;
             float glassRibbon = exp(
-                -pow((reflectionAxis + 28.0) / 19.0, 2.0)
-            ) * glassLens;
-            float3 environmentLight = mix(
-                environmentReflection,
-                float3(0.96, 0.98, 1.0),
-                0.48
-            );
-            colour = mix(
-                colour,
-                environmentLight,
-                glassSoftbox * 0.24 * (1.0 - solidMode)
-            );
+                -pow((reflectionAxis + 28.0) / 9.5, 2.0)
+            ) * glassProfileCoverage;
+            colour += float3(0.94, 0.98, 1.0) *
+                glassSoftbox * (1.0 - solidMode) * 0.22;
             colour += float3(0.92, 0.97, 1.0) *
-                glassRibbon * 0.28 * (1.0 - solidMode);
+                glassRibbon * (1.0 - solidMode) * 0.18;
 
             // Frosted Glass keeps its separate, subdued satin highlight.
             float solidSheen = exp(
@@ -415,15 +414,11 @@ class LiquidWallpaperRenderer(
             colour += float3(1.0, 1.0, 1.0) *
                 solidSheen * solidMode * 0.16;
 
-            // Keep Liquid Glass genuinely transparent: the wallpaper is
-            // the dominant face colour, with a restrained body and contour rim.
-            // Frosted Glass retains its separate, intentionally denser opacity.
-            // The sampled image is already the wallpaper beneath the
-            // glyph. Low alpha simply composites nearly identical pixels and
-            // erases the refraction/reflection, leaving only a faint outline.
-            // Near-opaque premultiplied output is appropriate here because
-            // the face colour itself is the refracted/reflected environment.
-            float glassOpacity = mix(0.88, 0.95, glassLens);
+            // The shader replaces the backdrop pixels inside the glyph with
+            // their refracted samples. Full mask alpha is required; the glass
+            // remains optically clear because its RGB is the warped wallpaper,
+            // not a white translucent paint layer.
+            float glassOpacity = 1.0;
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
