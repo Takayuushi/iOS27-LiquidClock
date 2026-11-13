@@ -671,16 +671,32 @@ Changes:
 - CI runs triggered from this commit: Production #333 run ID `43503417342`; Digit Lab #56 run ID `43503417296`. Both were in progress when recorded; verify workflow results and artifacts before offering APK links.
 - This is a new material-model candidate, not a visually confirmed 1:1 fix. The next screenshot must be compared on the same diagonal wallpaper/time. Evaluate whether the whole glyph body gains continuous natural haze, whether sharp streaks blend without becoming flat/opaque, and whether reflections feel integrated rather than separate bevel lines. Preserve #55 as the rollback/reference baseline.
 
+### Digit Lab #56 regression: chroma loss; restore #55 colour-bearing transmission (14 Nov 2026, ~02:13 IST)
+- User tested Digit Lab #56 / Production #333 (commit `62b26dd`) and reports the render looks artificial: orange scattering in the `0` is nearly gone; the `4` loses its bluish hue; the `1` loses the earlier hazy feel; the `7` shows haze mostly on its upper arm and looks artificial. This is a real regression versus the #55 baseline.
+- Side-by-side visual diagnosis: #56 replaced the separate colour-bearing microfacet scatter + 46% wallpaper haze with a 62% mix whose target was 82% isotropic blurred wallpaper. That makes the transmitted face dominated by spatially averaged wallpaper and suppresses local chromatic energy. It also independently blurred the Fresnel environment reflection by 22–30%, washing out the orange and blue reflection cues a second time.
+- Corrective renderer commit `8c80a942aaa2b62b35543e7ffcdabb3ccdf71c37` — “Restore colour-preserving Liquid Glass scattering”:
+  - Restores #55's gated 28% directional `volumeScatteredTransmission` contribution, preserving chromatic microfacet energy from the local refracted wallpaper.
+  - Restores #55's separate 46% isotropic atmospheric wallpaper mix, rather than replacing it with the #56 62% / 82%-blurred composite.
+  - Removes the extra `glassOpticalPath` weighting introduced in #56, which was not needed and contributed to uneven-looking haze as different strokes have different interior-distance distributions.
+  - Removes the 22–30% blurred environment-reflection convolution; restores the original colour-bearing `chromaticEnvironmentReflection` so warm orange and cool blue reflection cues survive. Existing crisp key/fill glints remain.
+  - Retains #55's 44px Liquid Glass / 38px Solid blur split and 30% bright-pass bloom.
+  - Static checks passed: 28% directional volume scatter restored, 46% isotropic haze restored, no 82% blurred replacement, no reflection smearing, chromatic environment reflection restored, 44/38px blur and 30% bloom retained, Solid selector preserved, no digit-specific branches.
+  - No change to typography, spacing, glyph geometry, clock layout, gestures, wallpaper isolation, or Solid/Frosted material.
+- #56 and Production #333 both compiled successfully before this visual regression was reported (Digit Lab run `43503417296`; Production run `43503417342`).
+- CI after corrective commit `8c80a94`: Digit Lab #57 run `43505174420`; Production #334 run `43505174252`. Both were queued at record time; check results/artifacts before sharing installation links.
+- Treat #55 as the approved visual baseline until #57 is tested. The aim is to regain its warm/cool colour transmission while preserving the broad atmospheric haze; do not add more global blur or neutral scatter without a screenshot proving benefit.
+- Rule #1 remains absolute: material response must be shared/glyph-independent for all digits and any time. No special cases for 0/1/4/7. Solid/Frosted is protected.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `62b26ddcdecb9c03f317fe698f4d50a39ea6d845` — “Unify Liquid Glass volume scattering and soften reflections”
+- **Latest renderer commit:** `8c80a942aaa2b62b35543e7ffcdabb3ccdf71c37` — “Restore colour-preserving Liquid Glass scattering”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
 - **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
-- **Latest candidate builds:** Production #333 (run `43503417342`) and Digit Lab #56 (run `43503417296`), both from `62b26dd`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
+- **Latest candidate builds:** Production #334 (run `43505174252`) and Digit Lab #57 (run `43505174420`), both from `8c80a94`; queued when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
