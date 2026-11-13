@@ -567,6 +567,19 @@ Changes:
 - CI from 7e11b7d: Production #328, run ID 43492951742; Digit Lab #51, run ID 43492951818. Both were in progress when recorded; check final statuses and artifact IDs. Visual verification remains pending until user compares the new Digit Lab APK.
 - Next check: confirm dark blue/black regions retain wallpaper hue rather than neutral smoke, while internal black/blue/white bands blend smoothly across every glyph. Reject cloudy/opaque Frosted appearance.
 
+
+### Digit Lab #51 installation failure — signature/package audit (14 Nov 2026)
+- User reports Android displays “App not installed” for Digit Lab #51.
+- Compared the actual downloaded APK archives from Digit Lab #50 (artifact 14069862582) and #51 (artifact 14071225562), not just workflow configuration.
+- Both APKs have the same V2 signing certificate SHA-256 fingerprint: `05:AE:3C:45:3D:D1:72:8F:82:BD:30:46:08:C3:43:99:08:3E:90:7C:F4:12:74:23:01:5C:1F:B5:58:84:B5:4C`.
+- The #51 Actions log confirms a cache hit and restore for `digit-lab-debug-signing-feature/live-wallpaper-big-clock-v1`, says “Restored the existing Digit Lab signing key,” and prints the same SHA-256 fingerprint as #50. Therefore the original per-run signing-key mismatch is not present between these two APKs.
+- Decoded both APK binary manifests:
+  - Both application IDs are `com.example.ios27clock.digitlab`.
+  - #50 versionCode 50, versionName `1.0.50-digit-lab-debug`; #51 versionCode 51, versionName `1.0.51-digit-lab-debug`.
+  - Both declare minSdk 37 and targetSdk 37.
+- Both workflow jobs completed successfully and uploaded artifacts. This verifies compile/upload, not actual device installation.
+- No app source or signing workflow change was made in response to this report because the most likely cause (different #50/#51 certificate) was disproved. Remaining diagnosis requires Android's exact Package Installer failure code. Ask user to run `adb install -r app-debug.apk` from the extracted #51 artifact (or provide the installer details screen) and share the exact `INSTALL_FAILED_...` output. Do not advise uninstalling pre-emptively; it may erase Digit Lab preferences and is not justified by the evidence yet.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
