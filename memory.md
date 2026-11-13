@@ -524,13 +524,30 @@ Changes:
 - Candidate CI runs from f6e61bc: Production #325, run ID 43487564874; Digit Lab #48, run ID 43487564891. Both were queued at 18:57:21 UTC on 13 Nov 2026; build results and APK artifacts must be checked before sharing install links.
 - On-device visual verification is pending. Compare the same diagonal wallpaper and all glyphs; reject any increased streak smearing, cloudy/frosted face, harsh all-around outline or Solid/Frosted regression. This pass is a candidate, not a claimed fix.
 
+
+### User comparison: wallpaper transmission still too sharp; stronger uniform scattering pass (14 Nov 2026, ~00:33 IST)
+- User tested the #48 / #325 candidate from commit f6e61bc and supplied a same-wallpaper comparison. First image is our Digit Lab rendering; second image is Apple's original iOS reference. The user says it is closer, but the wallpaper seen through the digits remains noticeably too sharp.
+- Explicitly restated Rule #1: all blending/scattering/material changes must be uniform and glyph-independent. Do not introduce digit ID, glyph-index, coordinate-region, or special-case rules. The design must remain correct for times containing any digits, including ones not present in the screenshot.
+- Visual diagnosis: inside the reference glass, high-contrast black/blue/white wallpaper bands merge into broad, soft colour transitions. In our output, the same bands remain legible as separate stripes, especially in vertical/curved stroke regions. The issue is the shared transmissive body/scattering response, not digit geometry, typography or highlight brightness.
+- Follow-up renderer commit e3c555f78b6d1098f397610dbdb5293c39cdd8eb — “Increase shared Liquid Glass cross-band scattering”:
+  - Expands the contrast-adaptive perpendicular diffusion radius from 16–22px to 24–34px.
+  - Rebalances the symmetric five-tap kernel to centre 0.08, each near tap 0.24, each far tap 0.22; total weight remains exactly 1.0. The blur remains image-gradient-oriented across bands, not along them.
+  - Raises the high-contrast adaptive diffusion blend from 0.86 to 0.96 while retaining 0.42 in low-contrast areas; preserves the tiny slope modulation (0.96–1.0).
+  - Reduces high-contrast transmission saturation from 1.20 to 1.08 (ordinary low-contrast areas remain 1.42) so the diffusion does not re-amplify colour contrast and make the bands look crisp again.
+  - Raises restrained volume scattering from 0.22 to 0.28, still using the same wallpaper luminance and white-protection gates.
+  - No glyph-specific logic, no geometry, glyph outline, spacing, clock placement, or gesture changes.
+  - Solid/Frosted remains protected: Glass scattering feeds the existing mix(glassTransmitted, center, solidMode) selector; Solid retains its 38px blur, centre wallpaper sample, opacity 0.78, bevel and satin sheen.
+- Static source checks passed: all edits matched once; kernel sums to 1.0; Solid selector/38px blur/0.78 opacity remain; no digit-index branches exist.
+- Candidate CI from e3c555f: Production #326 run ID 43489806556; Digit Lab #49 run ID 43489806575. Both queued at 19:11:17 UTC on 13 Nov 2026. Check completion and artifacts before sharing APKs.
+- The user's #48 screenshot is evidence that commit f6e61bc alone did not sufficiently soften the interior transmission. The new pass is not visually verified yet. On device, compare the same diagonal wallpaper; the black/blue/white bands should blend smoothly across all glyphs while preserving the broad reflective glass body. Reject a cloudy/frosted look, loss of wallpaper colour or a uniform blur that ignores local wallpaper direction.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `f6e61bc4e4e6e24938abc87f76ae0e1fbd6b9efa` — “Broaden shared Liquid Glass reflections and soften streaks”
+- **Latest renderer commit:** `e3c555f78b6d1098f397610dbdb5293c39cdd8eb` — “Increase shared Liquid Glass cross-band scattering”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** Digit Lab image is our rendering; second image is Apple's iOS reference. The user says it is not yet 1:1. Latest completed matching renderer source is `9651e9c` (Digit Lab #47 includes only a signing-key change after #46); candidate updated renderer builds are Production #325 / Digit Lab #48 from `f6e61bc`.
+- **Latest submitted comparison:** first image is our Digit Lab #48 rendering; second image is Apple's iOS reference. The user says bands inside the glyphs are still too sharp. Candidate follow-up builds are Production #326 / Digit Lab #49 from `e3c555f`.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
