@@ -410,35 +410,35 @@ class LiquidWallpaperRenderer(
             // remaining only as sharp refracted lines.
             float brightA = smoothstep(
                 0.14, 0.52,
-                dot(blurA, float3(0.2126, 0.7152, 0.0722))
+                max(blurA.r, max(blurA.g, blurA.b))
             );
             float brightB = smoothstep(
                 0.14, 0.52,
-                dot(blurB, float3(0.2126, 0.7152, 0.0722))
+                max(blurB.r, max(blurB.g, blurB.b))
             );
             float brightC = smoothstep(
                 0.14, 0.52,
-                dot(blurC, float3(0.2126, 0.7152, 0.0722))
+                max(blurC.r, max(blurC.g, blurC.b))
             );
             float brightD = smoothstep(
                 0.14, 0.52,
-                dot(blurD, float3(0.2126, 0.7152, 0.0722))
+                max(blurD.r, max(blurD.g, blurD.b))
             );
             float brightE = smoothstep(
                 0.14, 0.52,
-                dot(blurE, float3(0.2126, 0.7152, 0.0722))
+                max(blurE.r, max(blurE.g, blurE.b))
             );
             float brightF = smoothstep(
                 0.14, 0.52,
-                dot(blurF, float3(0.2126, 0.7152, 0.0722))
+                max(blurF.r, max(blurF.g, blurF.b))
             );
             float brightG = smoothstep(
                 0.14, 0.52,
-                dot(blurG, float3(0.2126, 0.7152, 0.0722))
+                max(blurG.r, max(blurG.g, blurG.b))
             );
             float brightH = smoothstep(
                 0.14, 0.52,
-                dot(blurH, float3(0.2126, 0.7152, 0.0722))
+                max(blurH.r, max(blurH.g, blurH.b))
             );
             float3 glassBrightBloom = (
                 blurA * brightA + blurB * brightB +
@@ -606,8 +606,15 @@ class LiquidWallpaperRenderer(
                 frostedWallpaper,
                 float3(0.2126, 0.7152, 0.0722)
             );
+            // Detect illumination by RGB channel energy, not luminance alone.
+            // Saturated blue and red/orange light can be visually strong while
+            // contributing less to luma than white at the same channel level.
+            float blurredWallpaperEnergy = max(
+                frostedWallpaper.r,
+                max(frostedWallpaper.g, frostedWallpaper.b)
+            );
             float glassDarkness = 1.0 - smoothstep(0.08, 0.24, refractedLuma);
-            float glassNearbyLight = smoothstep(0.10, 0.32, blurredWallpaperLuma);
+            float glassNearbyLight = smoothstep(0.10, 0.32, blurredWallpaperEnergy);
             float glassBounceStrength =
                 0.24 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
@@ -630,7 +637,14 @@ class LiquidWallpaperRenderer(
                 microfacetTransmission,
                 float3(0.2126, 0.7152, 0.0722)
             );
-            float scatterInLitGlass = smoothstep(0.10, 0.34, microfacetLuma);
+            // Use peak channel energy to activate colour-bearing volume scatter
+            // consistently for saturated blue, warm orange and neutral white.
+            // Keep the luminance-based white guard to prevent a milky result.
+            float microfacetEnergy = max(
+                microfacetTransmission.r,
+                max(microfacetTransmission.g, microfacetTransmission.b)
+            );
+            float scatterInLitGlass = smoothstep(0.10, 0.34, microfacetEnergy);
             float scatterWhiteProtection = 1.0 -
                 0.42 * smoothstep(0.72, 0.94, microfacetLuma);
             float glassVolumeScatter = 0.28 *
