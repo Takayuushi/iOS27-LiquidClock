@@ -88,10 +88,12 @@ class LiquidWallpaperRenderer(
         private val AGSL = """
         uniform shader uWallpaper;
         uniform shader uGlyphMask;
+        uniform shader uColonMask;
         uniform shader uGlyphSdf;
         uniform float2 uResolution;
         uniform float2 uClockCenter;
         uniform float2 uSdfOrigin;
+        uniform float2 uColonOrigin;
         uniform float uSdfScale;
         uniform float2 uTilt;
         uniform float uSdfRange;
@@ -106,6 +108,8 @@ class LiquidWallpaperRenderer(
             if (coverage < 0.002) {
                 return half4(0.0);
             }
+            float colonCoverage = uColonMask.eval(p - uColonOrigin).a;
+            float colonFlag = smoothstep(0.18, 0.82, colonCoverage);
 
             // The liquid-glass surface is a lens, not a raised text bevel.
             // A wider distance profile lets refraction travel through the
@@ -148,14 +152,20 @@ class LiquidWallpaperRenderer(
             // h(d) = sqrt(2*R*d - d*d), with a flat centre after one radius.
             // Its gradient is sampled from neighbouring SDF texels so the
             // normal, refraction and lighting all describe the same surface.
-            const float GLASS_PROFILE_RADIUS = 20.0;
+            // The colon uses a shallower lens cap in Liquid Glass only.
+            // Solid/Frosted always retains the original 20px profile.
+            float glassProfileRadius = mix(
+                20.0,
+                8.0,
+                colonFlag * (1.0 - solidMode)
+            );
             float profileDistance = clamp(
                 insideDistance,
                 0.0,
-                GLASS_PROFILE_RADIUS
+                glassProfileRadius
             );
             float glassHeight = sqrt(max(
-                2.0 * GLASS_PROFILE_RADIUS * profileDistance -
+                2.0 * glassProfileRadius * profileDistance -
                     profileDistance * profileDistance,
                 0.0
             ));
@@ -176,27 +186,27 @@ class LiquidWallpaperRenderer(
                 (sdfBottom - 0.5) * 2.0 * uSdfRange,
                 0.0
             );
-            float heightLeftDistance = min(distanceLeft, GLASS_PROFILE_RADIUS);
-            float heightRightDistance = min(distanceRight, GLASS_PROFILE_RADIUS);
-            float heightTopDistance = min(distanceTop, GLASS_PROFILE_RADIUS);
-            float heightBottomDistance = min(distanceBottom, GLASS_PROFILE_RADIUS);
+            float heightLeftDistance = min(distanceLeft, glassProfileRadius);
+            float heightRightDistance = min(distanceRight, glassProfileRadius);
+            float heightTopDistance = min(distanceTop, glassProfileRadius);
+            float heightBottomDistance = min(distanceBottom, glassProfileRadius);
             float heightLeft = sqrt(max(
-                2.0 * GLASS_PROFILE_RADIUS * heightLeftDistance -
+                2.0 * glassProfileRadius * heightLeftDistance -
                     heightLeftDistance * heightLeftDistance,
                 0.0
             ));
             float heightRight = sqrt(max(
-                2.0 * GLASS_PROFILE_RADIUS * heightRightDistance -
+                2.0 * glassProfileRadius * heightRightDistance -
                     heightRightDistance * heightRightDistance,
                 0.0
             ));
             float heightTop = sqrt(max(
-                2.0 * GLASS_PROFILE_RADIUS * heightTopDistance -
+                2.0 * glassProfileRadius * heightTopDistance -
                     heightTopDistance * heightTopDistance,
                 0.0
             ));
             float heightBottom = sqrt(max(
-                2.0 * GLASS_PROFILE_RADIUS * heightBottomDistance -
+                2.0 * glassProfileRadius * heightBottomDistance -
                     heightBottomDistance * heightBottomDistance,
                 0.0
             ));
@@ -207,8 +217,8 @@ class LiquidWallpaperRenderer(
             );
             float glassProfileCoverage = 1.0 -
                 smoothstep(
-                    GLASS_PROFILE_RADIUS * 0.78,
-                    GLASS_PROFILE_RADIUS,
+                    glassProfileRadius * 0.78,
+                    glassProfileRadius,
                     insideDistance
                 );
             float3 glassSurfaceNormal = normalize(float3(
@@ -500,8 +510,12 @@ class LiquidWallpaperRenderer(
     private var wallpaperSample: Bitmap? = null
     private var foregroundOcclusionMask: Bitmap? = null
     private var glyphMask: Bitmap? = null
+    private var colonMask: Bitmap? = null
+    private var colonMaskOriginX = 0f
+    private var colonMaskOriginY = 0f
     private var glyphSdf: Bitmap? = null
     private val retiredGlyphMasks = mutableListOf<Bitmap>()
+    private val retiredColonMasks = mutableListOf<Bitmap>()
     private val retiredGlyphSdfs = mutableListOf<Bitmap>()
     private var glyphSdfOriginX = 0f
     private var glyphSdfOriginY = 0f
@@ -930,6 +944,10 @@ class LiquidWallpaperRenderer(
         glassShader = null
         glyphMask?.takeUnless { it.isRecycled }?.recycle()
         glyphMask = null
+        colonMask?.takeUnless { it.isRecycled }?.recycle()
+        colonMask = null
+        retiredColonMasks.forEach { if (!it.isRecycled) it.recycle() }
+        retiredColonMasks.clear()
         glyphSdf?.takeUnless { it.isRecycled }?.recycle()
         glyphSdf = null
         retiredGlyphMasks.forEach { if (!it.isRecycled) it.recycle() }
@@ -1110,6 +1128,7 @@ class LiquidWallpaperRenderer(
         if (width <= 0 || height <= 0) return
 
         val previousMask = glyphMask
+        val previousColonMask = colonMask
 
         val mask = try {
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -1191,7 +1210,6 @@ class LiquidWallpaperRenderer(
         val centerX = clockCenterX * width
         val centerY = clockCenterY * height
         val baseline = centerY - (metrics.ascent + metrics.descent) * 0.5f
-        val tracking = fontSize * trackingEm
         val advances = glyphs.map { glyph ->
             if (glyph == ":") {
                 fontSize * colonAdvanceEm
@@ -1336,6 +1354,7 @@ class LiquidWallpaperRenderer(
             val finalDigitTwoPaths = naturalDigitTwoPaths.map { sourcePath ->
                 Path().also { sourcePath.transform(verticalTransform, it) }
             }
+            val finalColonCenters = mutableListOf<Pair<Float, Float>>()
 
             // Keep the two colon dots circular as the clock grows. Only their
             // separation follows the vertical expansion.
@@ -1345,7 +1364,17 @@ class LiquidWallpaperRenderer(
                 val naturalY = centerY + (originalY - centerY) * CLOCK_GLYPH_HEIGHT_SCALE
                 val finalY = centerY + (naturalY - centerY) * committedScaleY
                 finalPath.addCircle(naturalX, finalY, dotRadius, Path.Direction.CW)
+                finalColonCenters += naturalX to finalY
             }
+            val colonMaskData = createColonMask(
+                finalColonCenters,
+                dotRadius,
+                width,
+                height
+            )
+            colonMask = colonMaskData.first
+            colonMaskOriginX = colonMaskData.second
+            colonMaskOriginY = colonMaskData.third
 
             val finalBounds = RectF()
             finalPath.computeBounds(finalBounds, true)
@@ -1384,6 +1413,11 @@ class LiquidWallpaperRenderer(
         } else {
             glyphBounds.setEmpty()
             glyphBaseBounds.setEmpty()
+            val emptyColonMask = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            emptyColonMask.eraseColor(Color.TRANSPARENT)
+            colonMask = emptyColonMask
+            colonMaskOriginX = 0f
+            colonMaskOriginY = 0f
         }
 
         glyphMask = mask
@@ -1396,6 +1430,7 @@ class LiquidWallpaperRenderer(
             updateGlyphMaskInput()
         }
         retireGlyphMask(previousMask)
+        retireColonMask(previousColonMask)
 
         glyphBaseBounds.set(glyphBounds)
         maskClockScale = clockScale
@@ -1405,6 +1440,44 @@ class LiquidWallpaperRenderer(
         previewScaleX = 1f
         previewScaleY = 1f
         cachedTimeText = timeText
+    }
+
+    private fun createColonMask(
+        centers: List<Pair<Float, Float>>,
+        radius: Float,
+        surfaceWidth: Int,
+        surfaceHeight: Int
+    ): Triple<Bitmap, Float, Float> {
+        if (centers.isEmpty()) {
+            val empty = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            empty.eraseColor(Color.TRANSPARENT)
+            return Triple(empty, 0f, 0f)
+        }
+
+        val padding = max(3f, radius * 0.15f)
+        val left = (centers.minOf { it.first } - radius - padding)
+            .toInt().coerceIn(0, surfaceWidth - 1)
+        val top = (centers.minOf { it.second } - radius - padding)
+            .toInt().coerceIn(0, surfaceHeight - 1)
+        val right = (centers.maxOf { it.first } + radius + padding)
+            .toInt().coerceIn(left + 1, surfaceWidth)
+        val bottom = (centers.maxOf { it.second } + radius + padding)
+            .toInt().coerceIn(top + 1, surfaceHeight)
+
+        val mask = Bitmap.createBitmap(
+            right - left,
+            bottom - top,
+            Bitmap.Config.ARGB_8888
+        )
+        val maskCanvas = Canvas(mask)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        centers.forEach { (x, y) ->
+            maskCanvas.drawCircle(x - left, y - top, radius, paint)
+        }
+        return Triple(mask, left.toFloat(), top.toFloat())
     }
 
     private fun rebuildGlyphSdf() {
@@ -1451,6 +1524,15 @@ class LiquidWallpaperRenderer(
         retiredGlyphMasks += bitmap
         while (retiredGlyphMasks.size > 1) {
             val oldest = retiredGlyphMasks.removeAt(0)
+            if (!oldest.isRecycled) oldest.recycle()
+        }
+    }
+
+    private fun retireColonMask(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled || bitmap === colonMask) return
+        retiredColonMasks += bitmap
+        while (retiredColonMasks.size > 1) {
+            val oldest = retiredColonMasks.removeAt(0)
             if (!oldest.isRecycled) oldest.recycle()
         }
     }
@@ -1901,6 +1983,12 @@ class LiquidWallpaperRenderer(
                 "uGlyphMask",
                 BitmapShader(mask, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             )
+            val colon = colonMask ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            shader.setInputShader(
+                "uColonMask",
+                BitmapShader(colon, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            )
+            shader.setFloatUniform("uColonOrigin", colonMaskOriginX, colonMaskOriginY)
             val sdf = glyphSdf ?: mask
             shader.setInputShader(
                 "uGlyphSdf",
@@ -1987,6 +2075,12 @@ class LiquidWallpaperRenderer(
                     Shader.TileMode.CLAMP
                 )
             )
+            val colon = colonMask ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            shader.setInputShader(
+                "uColonMask",
+                BitmapShader(colon, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            )
+            shader.setFloatUniform("uColonOrigin", colonMaskOriginX, colonMaskOriginY)
             val sdf = glyphSdf ?: mask
             shader.setInputShader(
                 "uGlyphSdf",
