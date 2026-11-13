@@ -716,16 +716,30 @@ Changes:
 - Candidate CI from this commit: Digit Lab #59 run `43508138603`; Production #335 run `43508138426`. Both were in progress when recorded. Verify build outcomes and artifacts before linking.
 - This pass is intended to fix mask continuity rather than blindly increase blur. User testing is required to verify that `1`, `0`, `4`, and `7` gain a consistent natural haze, the orange/white and blue colours remain rich, the `4` edge looks more polished, and the result does not become frosted/opaque.
 
+### Digit Lab #59 review: `4` edge improved; remaining light wrap needs chromatic-energy detection (14 Nov 2026, ~02:47 IST)
+- User reports #59: `4` has improved, though it still lacks the soft hazy quality; the `1` and `0` still lack natural orange/white light wrap, and `7` remains insufficiently hazy. The screenshot confirms the edge refinement is visible mainly on `4`; other glyphs retain a more sharply refracted/outlined look.
+- Diagnosis: several shared scattering/bloom gates use luminance (`dot(rgb, 0.2126/0.7152/0.0722)`) to decide whether environmental light is present. This under-detects saturated blue (blue has low luma weight) and can under-trigger warm saturated colour compared with neutral white. The result is uneven atmospheric response even though the shader is shared.
+- New renderer commit `d403a82b9e2d5663f666f67eefdc96fd7876f57d` — “Use chromatic energy for shared glass light scattering”:
+  - Changes all eight bright-pass soft thresholds from luma to peak RGB channel energy (`max(r,g,b)`), so orange, blue and white sources can all contribute to the same bloom response while retaining their original RGB colour.
+  - Changes the nearby-wallpaper light gate for bounce from blurred wallpaper luminance to peak RGB energy.
+  - Changes the directional microfacet in-scatter activation from microfacet luminance to peak RGB energy, while retaining the luminance-based near-white protection so highlights do not turn into a milky wash.
+  - Keeps smooth-union volume coverage and the #59 4-edge softbox improvement (exponent 4.5 / coefficient 0.58), #55 colour-bearing directional scatter, 46% atmospheric blend, 30% bloom, 44px Liquid Glass / 38px Solid blur split.
+  - Static checks passed for all eight RGB bright-pass gates, chromatic bounce/volume gates, retained white guard, smooth union, 4-edge reflection, unchanged Solid path, and no digit-specific branches.
+  - No glyph-specific tuning, geometry, typography, spacing, layout, gestures or wallpaper-isolation changes.
+- Candidate CI: Production #336 run `43509973595`; Digit Lab #60 run `43509976236`; both built from `d403a82b9e2d5663f666f67eefdc96fd7876f57d` and were in progress at record time.
+- User-facing target: make the `1` and `0` regain soft orange/white light wrapping, preserve the polished `4` edge and blue hue, and give the `7` a consistent blue atmospheric volume. Do not increase global blur blindly. After testing #60, check that color response is richer without clipping/oversaturation or milky haze.
+- Rule #1 remains absolute: one shared material response for every glyph/time. No digit-specific conditionals. Solid/Frosted remains protected.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `463fd43de8c2a0409978eb1d130f62676cba4c34` — “Unify glass volume coverage and broaden softbox edge reflection”
+- **Latest renderer commit:** `d403a82b9e2d5663f666f67eefdc96fd7876f57d` — “Use chromatic energy for shared glass light scattering”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
 - **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
-- **Latest candidate builds:** Production #335 (run `43508138426`) and Digit Lab #59 (run `43508138603`), both from `463fd43`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
+- **Latest candidate builds:** Production #336 (run `43509973595`) and Digit Lab #60 (run `43509976236`), both from `d403a82`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
