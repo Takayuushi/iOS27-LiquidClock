@@ -269,6 +269,21 @@ class LiquidWallpaperRenderer(
                 mix(42.0, 13.0, solidMode),
                 signedDistance
             );
+            // The edge profile describes the curved shoulder, while
+            // interiorVolume describes the glass thickness behind it.
+            // Combine them so transmitted scattering reaches the centre of
+            // wide strokes instead of fading out after the first 20 pixels.
+            // This mask is glyph-independent and is used only by Glass passes.
+            float glassEdgeVolume = smoothstep(
+                0.12,
+                0.66,
+                glassProfileCoverage
+            );
+            float glassCoreVolume = interiorVolume * 0.72;
+            float glassVolumeRegion = max(
+                glassEdgeVolume,
+                glassCoreVolume
+            );
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
 
@@ -450,10 +465,10 @@ class LiquidWallpaperRenderer(
             float2 diffusionAxis = wallpaperGradient /
                 max(wallpaperContrast, 0.0001);
             float bandContrast = smoothstep(0.025, 0.18, wallpaperContrast);
-            // The previous radius did not span the separation between the
-            // bright wallpaper bands in the reference. Widen the symmetric
-            // sampling footprint so the two streaks merge through the glass.
-            float diffusionRadius = mix(6.8, 10.8, bandContrast);
+            // Diffuse across (not along) high-contrast wallpaper bands.
+            // The larger footprint merges paired streaks into a continuous
+            // glass volume, while low-contrast areas retain sharper detail.
+            float diffusionRadius = mix(10.0, 15.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
@@ -481,11 +496,11 @@ class LiquidWallpaperRenderer(
                 (softNearA + softNearB) * 0.20 +
                 (softFarA + softFarB) * 0.16;
             float microfacetDiffusion = mix(
-                0.25,
-                0.72,
+                0.36,
+                0.80,
                 bandContrast
             ) * mix(
-                0.90,
+                0.92,
                 1.0,
                 smoothstep(0.04, 0.32, glassProfileSlope)
             );
@@ -541,16 +556,16 @@ class LiquidWallpaperRenderer(
                 microfacetTransmission,
                 float3(0.2126, 0.7152, 0.0722)
             );
-            float scatterInLitGlass = smoothstep(0.12, 0.38, microfacetLuma);
+            float scatterInLitGlass = smoothstep(0.10, 0.34, microfacetLuma);
             float scatterWhiteProtection = 1.0 -
                 0.42 * smoothstep(0.72, 0.94, microfacetLuma);
-            float glassVolumeScatter = 0.14 *
+            float glassVolumeScatter = 0.22 *
                 scatterInLitGlass *
                 scatterWhiteProtection *
-                smoothstep(0.08, 0.42, glassProfileCoverage);
+                smoothstep(0.12, 0.60, glassVolumeRegion);
             float3 volumeScatteredTransmission = clamp(
-                microfacetTransmission * 1.07 +
-                    float3(0.014, 0.018, 0.024),
+                microfacetTransmission * 1.10 +
+                    float3(0.016, 0.020, 0.028),
                 0.0,
                 1.0
             );
@@ -738,9 +753,9 @@ class LiquidWallpaperRenderer(
             float ambientDarkness = 1.0 -
                 smoothstep(0.025, 0.20, ambientFaceLuma);
             float ambientInteriorMask = smoothstep(
-                0.12,
-                0.66,
-                glassProfileCoverage
+                0.10,
+                0.62,
+                glassVolumeRegion
             );
             float ambientScatter = 0.70 *
                 ambientDarkness *
