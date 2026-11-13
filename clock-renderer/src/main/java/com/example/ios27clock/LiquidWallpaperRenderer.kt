@@ -223,14 +223,18 @@ class LiquidWallpaperRenderer(
             float glassDisplacement = lensCurve * 38.0;
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
-            float displacement = mix(
-                glassDisplacement,
-                solidDisplacement,
-                solidMode
-            );
-            float2 warp = -refractionNormal * displacement +
-                tilt * mix(1.8, 0.68, solidMode) +
-                float2(waveA * 0.12, waveB * 0.10) * (1.0 - solidMode);
+
+            // Keep the proven Solid/Frosted path byte-for-byte equivalent in
+            // its displacement direction and tilt. Only Liquid Glass uses
+            // the new SDF lens refraction profile.
+            float2 glassWarp =
+                -refractionNormal * glassDisplacement +
+                tilt * 1.8 +
+                float2(waveA * 0.12, waveB * 0.10);
+            float2 solidWarp =
+                refractionNormal * solidDisplacement +
+                tilt * 0.68;
+            float2 warp = mix(glassWarp, solidWarp, solidMode);
             float2 samplePoint = clamp(
                 p + warp,
                 float2(0.0),
