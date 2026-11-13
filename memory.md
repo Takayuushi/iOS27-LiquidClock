@@ -194,6 +194,16 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - Explicitly Glass-only via `(1.0 - solidMode)`; does not change broad horizontal highlights, glyph mask/path geometry, font axes, kerning or Solid.
 - Production build #309 has started from `9c06eb5`, run ID `43441833708`; Digit Lab build status not yet present in latest run listing at time of note. CI and device test pending.
 - Existing spacing remains: `1–0` 0.024em, `0–:` 0.027em, `:–4` 0.033em, `4–7` 0.021em. Do not change.
+### Corrected 7 end-cap illumination direction and tiny 1–0 gap increase (13 Nov 2026, ~20:08 IST)
+- User tested Production #309 and Digit Lab #31 from commit `9c06eb5`; both Actions runs succeeded. The current screenshots show that the dedicated terminal highlight is still too weak, while the 1–0 spacing needs a tiny increase.
+- Visual inspection of the same-wallpaper reference plus the composite overlay identifies a direction mistake in the previous cap lobe: SF Pro's 7 descends from upper-left toward lower-right, so the lower terminal's outward normal is approximately `(+0.28,+0.96)`. The earlier code pointed `(-0.28,+0.96)` and the cap specular half-vector was aimed lower-left, explaining why the special highlight barely appeared.
+- New source commit `0b3789d1d7645c8220382dd0fd82651892234c05` — “Aim 7 terminal highlight correctly and refine glass illumination” makes these exact changes:
+  - `terminalAxis` is corrected from `(-0.28,0.96)` to `(+0.28,0.96)`; dedicated 3D cap light X direction is flipped to +0.32; angular exponents broaden 12→8 (2D) and 12→9 (3D); wallpaper-chroma cap peak increases 0.82→1.02 and cyan-white core 0.24→0.34. This is a local Glass-only end-cap contribution; existing broad bar limiter remains untouched.
+  - shared visible outline gap `1–0` increases from 0.024em to 0.026em (a small +0.002em adjustment at user's request). Other gaps stay 4–7 0.021em, 0–: 0.027em, :–4 0.033em.
+  - whole-glass colour pickup is raised modestly without reintroducing a frosted veil: adaptive dark/local-light bounce max 0.20→0.24; blurred bounce sample gain 1.38→1.44; environment chroma gain 1.18→1.28; directional chroma pickup 1.20→1.34; final chromatic Fresnel 0.12→0.15. The 22px Glass blur, strict local darkness/highlight gates and high-luminance reflection protection remain unchanged.
+  - no glyph outline geometry, official font source/axes, horizontal bar highlight limiter, colon geometry, or any Solid material settings changed.
+- Build #309 and Digit Lab #31 are confirmed successful from parent `9c06eb5`; these latest screenshots prove the original lower-left cap lobe was not sufficient. New builds for `0b3789d` have been triggered; run IDs to be verified.
+- Do not claim success until the user checks the new lower-right 7 terminal reflection and the tiny 1–0 spacing increase, plus the beach wallpaper for no frosted regression. Continue same-wallpaper side-by-side comparisons.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -302,15 +312,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `9c06eb5146c5975e769e8a30ae840eba34a71e2f` — “Add directional Liquid Glass end-cap reflection”
-- **Latest tested pair:** Production #308 and Digit Lab #30 succeeded from `686220c`; user reports the reference iOS still has stronger internal illumination, especially at the 7 lower terminal.
-- **Latest targeted fix:** separate Glass-only lower-left end-cap specular lobe using SDF outward-normal alignment `(-0.28,0.96)`, edge slope/confidence gates, a dedicated cap half-vector and wallpaper-derived cyan-white highlight. The existing horizontal bar highlight attenuation stays in place.
-- **Unchanged typography:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em.
-- **Protected Solid/Frosted:** all new terminal-light contributions gated by `(1.0-solidMode)`; Solid material stays unchanged. Glyph shapes, official SF Pro axes and shared spacing unchanged.
-- **Current production build:** #309, run ID `43441833708`, from `9c06eb5`; queued at last check: [Actions #309](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43441833708)
-- **Current Digit Lab build:** #31, run ID `43441833734`, from `9c06eb5`; in progress at last check: [Actions #31](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43441833734).
-- **On-device status:** new end-cap treatment not yet tested. Do not claim success from source diff or CI alone.
-- **Next priority:** verify #309 and start/verify Digit Lab #31 from the same SHA; inspect the terminal reflection, ensure it stays narrow and does not broaden glyph strokes, compare both beach and diagonal wallpapers, verify Solid unchanged.
+- **Latest renderer source commit:** `0b3789d1d7645c8220382dd0fd82651892234c05` — “Aim 7 terminal highlight correctly and refine glass illumination”
+- **Latest tested pair:** Production #309 and Digit Lab #31 succeeded from `9c06eb5`; user still sees weak 7 terminal illumination and requests a tiny increase to 1–0.
+- **Latest terminal correction:** dedicated lower-right end-cap lobe now points along `(+0.28,+0.96)` with matching 3D light X +0.32; exponents 8/9; wallpaper chroma peak 1.02 and cyan-white core 0.34. Only Glass, no glyph geometry changes.
+- **Latest shared spacing:** 1–0 0.026em (from 0.024em); 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve these.
+- **Latest Glass colour refinement:** 22px blur retained; adaptive bounce max 24%; blurred sample gain 1.44; chroma reflection gains 1.28 / 1.34; final chromatic Fresnel 0.15. High-luminance and local-darkness gates retained.
+- **Protected Solid:** no Solid values changed; all new cap/colour contributions gated by Glass mode. Solid blur remains 38px.
+- **Latest completed builds:** Production #309 / Digit Lab #31 succeeded from `9c06eb5`.
+- **Current candidate:** commit `0b3789d`; verify Actions for matching Production and Digit Lab build numbers from this SHA.
+- **On-device status:** `0b3789d` not yet tested; user feedback pending.
+- **Primary next priority:** compare same wallpaper against iOS reference, specifically lower-right terminal of 7, overall transmitted illumination, beach clarity, and tiny 1–0 spacing. Do not alter other spacing or Solid.
 
 ## New issue reported and root cause (13 Nov 2026)
 
