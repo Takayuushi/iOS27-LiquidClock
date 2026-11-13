@@ -435,9 +435,9 @@ class LiquidWallpaperRenderer(
             float glassDarkness = 1.0 - smoothstep(0.08, 0.24, refractedLuma);
             float glassNearbyLight = smoothstep(0.10, 0.32, blurredWallpaperLuma);
             float glassBounceStrength =
-                0.20 * glassDarkness * glassNearbyLight;
+                0.24 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.38 + float3(0.012, 0.014, 0.022),
+                frostedWallpaper * 1.44 + float3(0.012, 0.014, 0.022),
                 0.0,
                 1.0
             );
@@ -472,7 +472,7 @@ class LiquidWallpaperRenderer(
                 0.58 * smoothstep(0.42, 0.78, environmentReflectionLuma);
             float3 chromaticEnvironmentReflection = clamp(
                 float3(environmentReflectionLuma) +
-                    environmentReflectionChroma * 1.18,
+                    environmentReflectionChroma * 1.28,
                 0.0,
                 1.0
             );
@@ -550,7 +550,7 @@ class LiquidWallpaperRenderer(
             colour = clamp(
                 colour +
                     directionalReflectionChroma *
-                        glassFaceReflectionAmount * glassChromaPickup * 1.20 +
+                        glassFaceReflectionAmount * glassChromaPickup * 1.34 +
                     float3(glassReflectionLumaLift),
                 0.0,
                 1.0
@@ -573,7 +573,7 @@ class LiquidWallpaperRenderer(
             // the subtler face reflection. The broad specular remains visible
             // on the front cap; tight glints stay confined to its shoulder.
             float finalFresnelAmount =
-                glassVolumeFresnel * 0.12 * (1.0 - solidMode);
+                glassVolumeFresnel * 0.15 * (1.0 - solidMode);
             colour = clamp(
                 colour +
                     environmentReflectionChroma * finalFresnelAmount * 0.72,
@@ -595,16 +595,16 @@ class LiquidWallpaperRenderer(
             // highlight limiter above. It catches the lower-left terminal
             // direction of the 7's descending stroke without brightening
             // its long sides or increasing the glyph's apparent thickness.
-            float2 terminalAxis = normalize(float2(-0.28, 0.96));
+            float2 terminalAxis = normalize(float2(0.28, 0.96));
             float terminalNormalAlignment = pow(
                 max(dot(normal, terminalAxis), 0.0),
-                12.0
+                8.0
             );
             float terminalEdgeMask =
                 smoothstep(0.18, 0.52, glassProfileSlope) *
                 normalConfidence;
             float3 terminalCapLight = normalize(
-                float3(-0.32, 0.91, 0.48)
+                float3(0.32, 0.91, 0.48)
             );
             float3 terminalCapHalfVector = normalize(
                 terminalCapLight + viewDirection3D
@@ -613,12 +613,12 @@ class LiquidWallpaperRenderer(
                 terminalEdgeMask *
                 pow(
                     max(dot(glassSurfaceNormal, terminalCapHalfVector), 0.0),
-                    12.0
+                    9.0
                 );
             colour += environmentReflectionChroma *
-                terminalCapSpecular * 0.82 * (1.0 - solidMode);
+                terminalCapSpecular * 1.02 * (1.0 - solidMode);
             colour += float3(0.78, 0.91, 1.0) *
-                terminalCapSpecular * 0.24 * (1.0 - solidMode);
+                terminalCapSpecular * 0.34 * (1.0 - solidMode);
 
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             // These perimeter strokes belong only to Frosted Glass; applying
@@ -1320,7 +1320,7 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val hourPairGapEm = 0.024f
+        val hourPairGapEm = 0.026f
         val minutePairGapEm = 0.021f
         val hourToColonGapEm = 0.027f
         val colonToMinuteGapEm = 0.033f
