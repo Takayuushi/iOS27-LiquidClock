@@ -129,12 +129,14 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest code commit:** `54679f0154a1a70d8d52796153a07f13a279f0b4` — “Replace embossed digit edges with a rounded liquid-glass surface”
-- **Latest production build:** #290 — completed/success from the latest code SHA; artifact `iOS27-LiquidClock-Android17-debug`, ID `14019043376`: [GitHub Actions #290](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387166002)
-- **Latest Digit Lab build:** #12 — completed/success from the same code SHA; artifact `liquid-clock-digit-lab-debug`, ID `14019535593`: [GitHub Actions #12](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387165956)
-- **On-device verification of commit 54679f0:** pending
-- **Primary next priority:** establish whether the rounded profile and broad face reflection restore a convincing liquid-glass body. If not, fix the shader's interior/environment reflection contribution rather than adding a brighter perimeter outline.
-
+- **Latest renderer source commit:** `a4db737bbf63359258cb9abacdb003fd31bff54f` — “Give Liquid Glass a reflective face and visible optical body”
+- **Latest documentation commit:** `b15d323a357c2b8c57c3353e9394426c53051b79` — records why the prior visual pass failed and describes the new correction.
+- **Production CI:** build #291, run ID `43390706317`, triggered from renderer commit `a4db737`; status pending at the time of this update: [GitHub Actions #291](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706317)
+- **Digit Lab CI:** build #13, run ID `43390706515`, triggered from renderer commit `a4db737`; status pending at the time of this update: [GitHub Actions #13](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706515)
+- **Latest previously successful production build:** #290 from `54679f0`, artifact ID `14019043376`.
+- **Latest previously successful Digit Lab build:** #12 from `54679f0`, artifact ID `14019535593`.
+- **On-device status:** commit `54679f0` was tested by the user and did not produce a meaningful material improvement. Commit `a4db737` is not yet built or device-tested.
+- **Primary next priority:** verify build #291 and #13; then visually judge the new reflective face against both the beach/flower wallpaper and the diagonal light-streak wallpaper.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
