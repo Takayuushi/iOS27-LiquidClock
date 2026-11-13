@@ -411,6 +411,48 @@ class LiquidWallpaperRenderer(
                 center.g,
                 glassBlueSample.b
             );
+
+            // A real glass volume has small-scale surface/microfacet diffusion.
+            // Soften high-frequency wallpaper streaks through the transmitted
+            // image itself, not by blurring the whole wallpaper or the outline.
+            // The same compact kernel is evaluated for every glyph and time.
+            float refractionSoftRadius = 3.8;
+            float2 refractionSoftX = float2(refractionSoftRadius, 0.0);
+            float2 refractionSoftY = float2(0.0, refractionSoftRadius);
+            float3 softLeft = uWallpaper.eval(clamp(
+                samplePoint - refractionSoftX,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softRight = uWallpaper.eval(clamp(
+                samplePoint + refractionSoftX,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softTop = uWallpaper.eval(clamp(
+                samplePoint - refractionSoftY,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 softBottom = uWallpaper.eval(clamp(
+                samplePoint + refractionSoftY,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 microfacetTransmission =
+                center * 0.36 +
+                (softLeft + softRight + softTop + softBottom) * 0.16;
+            float microfacetDiffusion = mix(
+                0.30,
+                0.38,
+                smoothstep(0.10, 0.48, glassProfileSlope)
+            );
+            refractedGlass = mix(
+                refractedGlass,
+                microfacetTransmission,
+                microfacetDiffusion
+            );
+
             float refractedLuma = dot(
                 refractedGlass,
                 float3(0.2126, 0.7152, 0.0722)
@@ -1342,8 +1384,8 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val hourPairGapEm = 0.028f
-        val minutePairGapEm = 0.019f
+        val hourPairGapEm = 0.036f
+        val minutePairGapEm = 0.017f
         val hourToColonGapEm = 0.0355f
         val colonToMinuteGapEm = 0.034f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
