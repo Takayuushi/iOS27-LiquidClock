@@ -27,6 +27,7 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Keep every new Liquid Glass-only shader contribution behind `(1.0 - solidMode)` or in a separately computed Glass path. Preserve the Solid path's wallpaper sampling, positive SDF-normal displacement direction, `1.5 + solidEdge * 6.0 + solidBevel * 1.1` displacement, `0.68) tilt contribution, blur, face, opacity (`0.78`), edge lighting and sheen.
 - Renderer commit `da687bb` accidentally put the new negative refraction direction into the shared warp expression. Commit `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` corrects this by splitting `glassWarp` and `solidWarp`; at `solidMode == 1`, the Solid warp again matches the previous implementation exactly. Never collapse these paths into one direction-sensitive expression again.
 - Before each future shader commit, explicitly review all output-affecting expressions at `solidMode == 1` and compare them with the last user-approved Solid implementation. Do not infer safety merely because a variable is named `glass*`.
+- Typography/layout is shared across materials and should be fixed globally when requested. The tighter digit-pair tracking committed in `13121da` applies identically to Glass and Solid (and both Digit Lab materials), while leaving tracking adjacent to the colon unchanged. This is not a Solid material/shader change.
 
 ### Latest screenshot assessment (13 Nov 2026, ~14:00 IST)
 - User tested build #293 / Digit Lab #15 from commit `d2dec8b`. Refraction is visible, but the clock still reads as a flat distortion outline rather than a raised 3D glass object. On the diagonal-streak wallpaper, the refraction creates conspicuous wavy bands, especially across the `4`.
@@ -46,6 +47,12 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - Uses the height-map normal for directional diffuse and specular lighting; removes the arbitrary screen-space reflection strips from Liquid Glass.
 - The approved Solid/Frosted renderer remains protected. `solidWarp` preserves its original positive SDF-normal displacement, displacement expression and 0.68 tilt; Solid still uses its prior blurred wallpaper, face, 0.78 opacity, solid bevel/specular/sheen, and unmodified non-Glass shadow. All new height-map, Snell, dispersion and reflection contributions are selected only by Liquid Glass.
 - New build workflows #295 (Production) and #17 (Digit Lab) were triggered from `e195e17`; their completion and the on-device appearance are pending. This is the first implementation that follows the complete height-map/refraction/dispersion sequence; do not claim success before compilation and the user's screenshot comparison.
+### Digit spacing correction (13 Nov 2026)
+- User noted that the screenshot's digit gaps were wider than the iOS reference, particularly `1–0` and `4–7`.
+- This is a shared typography/layout issue, not a material issue. It must apply to both production materials (**Glass and Solid**) and both corresponding Digit Lab options (**Liquid Glass and Frosted Glass**), because all use the shared `:clock-renderer` glyph layout.
+- Commit `13121dac4a34c55f7524eeba57af8ab7c81f8f20` (“Tighten digit-pair spacing across Glass and Solid”) reduces digit-to-digit tracking from `TRACKING_EM * 0.55` to `TRACKING_EM * 0.20` (about 64% less pair tracking). Spacing either side of the colon remains at the previous `TRACKING_EM * 0.55`; colon advance itself is unchanged. Font files and Apple's `wdth` axis are not modified.
+- The spacing adjustment only changes glyph advances/composition; it does not touch the AGSL material branches, so it does not alter the approved Solid material treatment.
+- Production build #296 and Digit Lab build #18 were triggered from `13121da`; on-device spacing comparison is pending.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -154,15 +161,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `e195e17d9c3e52f7d074153675bffe9abe0aacda` — “Build Liquid Glass from SDF height map, Snell refraction and dispersion”
-- **Latest implementation:** 20px SDF-derived convex height map; finite-difference 3D normals; Snell refraction (IOR 1.50, optical thickness 30px); restrained red/blue dispersion; normal-driven environment reflection/Fresnel; height-normal diffuse/specular lighting.
-- **Material guard:** only production Glass / Digit Lab Liquid Glass changes. Production Solid / Digit Lab Frosted Glass remains approved and protected; its old warp, blur, face, opacity, bevel, satin sheen and shadow are preserved.
-- **Latest completed production build:** #294 — success from `869692f`: [Actions #294](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321465)
-- **Latest completed Digit Lab build:** #16 — success from `869692f`: [Actions #16](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321484)
-- **Current production build:** #295, run ID `43399830056`, from `e195e17`; pending at time of writing: [Actions #295](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830056)
-- **Current Digit Lab build:** #17, run ID `43399830010`, from `e195e17`; pending at time of writing: [Actions #17](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830010)
-- **On-device status:** #294 still appeared as an outer frosted rim plus flat/old interior. The `e195e17` height-map pass has not yet been built or device-tested.
-- **Primary next priority:** verify #295/#17 compile and upload; then evaluate convex surface depth, continuously refracted wallpaper, subtle RGB dispersion and directional specular reflections on both supplied wallpapers. Confirm Solid remains visually unchanged.
+- **Latest renderer source commit:** `13121dac4a34c55f7524eeba57af8ab7c81f8f20` — “Tighten digit-pair spacing across Glass and Solid”
+- **Latest Glass shader implementation:** `e195e17d9c3e52f7d074153675bffe9abe0aacda` — SDF height map, 3D normals, Snell refraction, RGB dispersion and normal-driven Fresnel. This has not yet received user on-device acceptance.
+- **Latest spacing change:** shared digit-to-digit tracking reduced to 20% of TRACKING_EM; colon-adjacent spacing and colon advance remain unchanged. This intentionally affects both Glass and Solid because it is typography/layout, not material rendering.
+- **Material guard:** production Solid / Digit Lab Frosted Glass remains approved and its renderer path is protected. No shader or material code changed in commit `13121da`.
+- **Latest completed production build:** #295 — success from `e195e17`: [Actions #295](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830056)
+- **Latest completed Digit Lab build:** #17 — success from `e195e17`: [Actions #17](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830010)
+- **Current production build:** #296, run ID `43403237661`, from `13121da`; pending at time of writing: [Actions #296](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43403237661)
+- **Current Digit Lab build:** #18, run ID `43403237776`, from `13121da`; pending at time of writing: [Actions #18](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43403237776)
+- **On-device status:** Glass shader from `e195e17` and digit spacing from `13121da` are not yet verified on device.
+- **Primary next priority:** test build #296/#18. Check tighter `10` and `47` pairs while confirming colon gaps are unchanged; test both materials and verify Solid's material appearance is identical. Continue the Glass visual target separately.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
