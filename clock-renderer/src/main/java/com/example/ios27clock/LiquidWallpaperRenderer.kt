@@ -244,7 +244,7 @@ class LiquidWallpaperRenderer(
             float glassVolumeFresnel = 0.04 +
                 0.96 * pow(1.0 - viewCosine, 5.0);
             float horizontalShoulder = smoothstep(0.52, 0.88, abs(glassSurfaceNormal.y));
-            float glassHorizontalHighlight = mix(1.0, 0.74, horizontalShoulder);
+            float glassHorizontalHighlight = mix(1.0, 0.58, horizontalShoulder);
             // Keep the broad softbox reflection on the rounded shoulder.
             // A front-facing normal has little Fresnel curvature and must not
             // receive a white fill across the whole face.
@@ -343,7 +343,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(30.0, 38.0, solidMode);
+            float blurRadius = mix(42.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -435,9 +435,9 @@ class LiquidWallpaperRenderer(
             float glassDarkness = 1.0 - smoothstep(0.12, 0.38, refractedLuma);
             float glassNearbyLight = smoothstep(0.06, 0.30, blurredWallpaperLuma);
             float glassBounceStrength =
-                0.28 * glassDarkness * glassNearbyLight;
+                0.38 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.42 + float3(0.018, 0.020, 0.030),
+                frostedWallpaper * 1.52 + float3(0.020, 0.022, 0.034),
                 0.0,
                 1.0
             );
@@ -502,18 +502,21 @@ class LiquidWallpaperRenderer(
             // Lift the transmissive face so wallpaper colour remains vivid
             // through the glyph instead of reading as a dark cut-out. This
             // multiplier is blended out completely for Solid/Frosted.
-            float glassFaceLighting = 0.70 +
-                keyDiffuse3D * 0.28 +
-                fillDiffuse3D * 0.14;
+            float glassFaceLighting = 0.82 +
+                keyDiffuse3D * 0.30 +
+                fillDiffuse3D * 0.16;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
             float glassFaceReflectionAmount = mix(
-                0.075,
-                0.20,
+                0.055,
+                0.24,
                 smoothstep(0.08, 0.48, glassProfileSlope)
-            );
+            ) * glassHorizontalHighlight;
+            float3 glassScreenReflection = 1.0 -
+                (1.0 - clamp(colour, 0.0, 1.0)) *
+                (1.0 - clamp(directionalEnvironmentReflection, 0.0, 1.0));
             colour = mix(
                 colour,
-                directionalEnvironmentReflection,
+                glassScreenReflection,
                 glassFaceReflectionAmount * (1.0 - solidMode)
             );
             colour -= float3(0.12, 0.15, 0.22) *
