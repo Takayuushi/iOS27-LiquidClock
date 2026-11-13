@@ -556,13 +556,24 @@ Changes:
 - CI for 7497fdf was triggered by the renderer change. Record exact Production/Digit Lab run IDs, results and artifacts after checking Actions. Do not call the chromatic detector visually fixed until the user compares the APK.
 - Next visual check: inspect all strokes, especially segments where saturated blue meets black as well as white/blue boundaries. The colour bands should be smooth like Apple's reference, but larger wallpaper colours and glass reflections should remain identifiable. Do not let the material become cloudy/opaque like Frosted Glass.
 
+
+### Dark-glass haze and structure-tensor refinement (14 Nov 2026, ~00:57 IST)
+- User tested the #50 / #327 pair from 7497fdf. First screenshot is our Digit Lab rendering; second is Apple's iOS reference. User says the result is very close, but dark glass regions (notably the 7 in this sample) still appear smoky/neutral, and internal band blending remains slightly different.
+- Rule #1 reaffirmed: all blending, scattering and material responses must be uniform across all glyphs and all times. No digit IDs, glyph indices, character-specific cases or screen-position branches.
+- Diagnosis: ambientScatter at 0.70 mixed dark Liquid Glass interiors toward a fixed neutral slate gradient, which can create a gray veil and suppress blue wallpaper colour. RGB edge magnitudes were also oriented using luminance-gradient signs, which is unstable for saturated chromatic transitions.
+- Renderer commit 7e11b7dc2d13dd2bb45909d3ec32565919e6a329 (Refine shared colour-edge diffusion and reduce glass haze): replaces luma-sign orientation with a full-RGB 2D structure tensor and its dominant eigenvector; keeps the 24–34px diffusion radius, up-to-0.96 blend and symmetric kernel; makes the dark-area ambient target 55% locally wallpaper-derived and lowers ambientScatter from 0.70 to 0.42.
+- New ambient response is gated by (1.0 - solidMode). Solid/Frosted retains its existing source path, 38px blur, 0.78 opacity, bevel and sheen. No kerning, glyph geometry, layout, gesture or wallpaper-isolation changes.
+- Static checks passed: full-RGB tensor/eigenvector, existing diffusion constants retained, ambient environment-colour contribution and 0.42 scatter present, Solid path protections present, no glyph-index branches.
+- CI from 7e11b7d: Production #328, run ID 43492951742; Digit Lab #51, run ID 43492951818. Both were in progress when recorded; check final statuses and artifact IDs. Visual verification remains pending until user compares the new Digit Lab APK.
+- Next check: confirm dark blue/black regions retain wallpaper hue rather than neutral smoke, while internal black/blue/white bands blend smoothly across every glyph. Reject cloudy/opaque Frosted appearance.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `7497fdf56eec29dbcb864623ee0f64233227b25f` — “Detect chromatic wallpaper edges for Liquid Glass diffusion”
+- **Latest renderer commit:** `7e11b7dc2d13dd2bb45909d3ec32565919e6a329` — “Refine shared colour-edge diffusion and reduce glass haze”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** first image is our Digit Lab #49 rendering; second image is Apple's iOS reference. The user says internal wallpaper bands remain too sharp, especially blue/black. Follow-up 7497fdf adds full-RGB edge detection so saturated boundaries activate the existing diffusion.
+- **Latest submitted comparison:** first image is our Digit Lab #50 rendering; second image is Apple's iOS reference. The user says the result is close but dark glass is still smoky/neutral. Follow-up 7e11b7d uses a full-RGB structure tensor and reduces neutral ambient fill.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
