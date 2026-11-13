@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "iOS27-LiquidClock"
-include(":app")
+include(":app", ":clock-renderer")

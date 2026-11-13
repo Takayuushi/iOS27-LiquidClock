@@ -25,7 +25,7 @@ import kotlin.system.exitProcess
  * Recoverable incidents are appended to the same file. Older timestamped
  * crash-*.txt files from earlier app builds are folded into it on first use.
  */
-object ClockDiagnostics {
+object ClockDiagnostics : RendererDiagnostics {
     private const val TAG = "IOS27ClockDiagnostics"
     private const val REPORT_FILE_NAME = "crash-report.txt"
     private const val REPORT_FOLDER = "IOS27Clock/"
@@ -76,7 +76,7 @@ object ClockDiagnostics {
         )
     }
 
-    fun record(message: String) {
+    override fun record(message: String) {
         val stamp = timestamp()
         synchronized(lock) {
             breadcrumbs.addLast("$stamp [${Thread.currentThread().name}] $message")
@@ -85,7 +85,7 @@ object ClockDiagnostics {
         Log.d(TAG, message)
     }
 
-    fun report(tag: String, throwable: Throwable) {
+    override fun report(tag: String, throwable: Throwable) {
         record("$tag: ${throwable.javaClass.name}: ${throwable.message}")
         writeReport(
             context = appContext,
@@ -96,7 +96,7 @@ object ClockDiagnostics {
         )
     }
 
-    fun reportMessage(title: String, details: String) {
+    override fun reportMessage(title: String, details: String) {
         record("$title: $details")
         writeReport(
             context = appContext,

@@ -21,7 +21,6 @@ import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
-import android.text.format.DateFormat
 import android.util.Log
 import kotlin.math.abs
 import kotlin.math.max
@@ -37,9 +36,11 @@ import kotlin.math.roundToInt
  * 2. Liquid-glass clock, clipped by the real glyph alpha mask
  * 3. The selected-object mask erases only clock pixels beneath the object
  */
-internal class LiquidWallpaperRenderer(
+class LiquidWallpaperRenderer(
     private val context: Context,
-    private val wallpaperContent: ClockWallpaperContent = ClockWallpaperContent.PREVIEW
+    private val wallpaperContent: RendererWallpaperContent = RendererWallpaperContent.PREVIEW,
+    private val diagnostics: RendererDiagnostics = LogRendererDiagnostics,
+    private val clockTextSource: RendererClockTextSource = SystemRendererClockTextSource
 ) {
 
     companion object {
@@ -130,16 +131,16 @@ internal class LiquidWallpaperRenderer(
 
             // Glass has a gently curved optical face and a broader, softer
             // Fresnel transition. Solid keeps its already-approved tighter edge.
-            float glassEdge = exp(-abs(signedDistance) / 10.5);
+            float glassEdge = exp(-abs(signedDistance) / 7.0);
             float solidEdge = exp(-abs(signedDistance) / 3.4);
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 2.0) / 10.0);
+            float glassRim = exp(-abs(signedDistance - 1.8) / 5.8);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             float glassBevel = 1.0 -
-                smoothstep(2.0, 34.0, insideDistance);
+                smoothstep(1.5, 25.0, insideDistance);
             float innerBevel = mix(glassBevel, solidBevel, solidMode);
             float outerLip = 1.0 -
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
@@ -179,7 +180,8 @@ internal class LiquidWallpaperRenderer(
             // Reuse the eight-direction blur below for both materials:
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
-            float blurRadius = mix(18.0, 38.0, solidMode);
+            // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
+            float blurRadius = mix(8.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -224,7 +226,7 @@ internal class LiquidWallpaperRenderer(
             ) * 0.125;
             // A modest portion of the same isotropic sample set softens
             // harsh wallpaper streaks through Glass without making it opaque.
-            float3 refracted = mix(center, frostedWallpaper, 0.34);
+            float3 refracted = mix(center, frostedWallpaper, 0.14);
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -257,9 +259,9 @@ internal class LiquidWallpaperRenderer(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
             ) * edgeBand;
-            float glassSpecular = pow(facing, 8.5) * glassRim;
-            float glassHighlight = pow(facing, 12.5) *
-                exp(-abs(signedDistance - 1.2) / 6.0);
+            float glassSpecular = pow(facing, 11.0) * glassRim;
+            float glassHighlight = pow(facing, 18.0) *
+                exp(-abs(signedDistance - 1.0) / 3.8);
             float solidSpecular = pow(facing, 3.5) * solidEdge;
             float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
             float fillSpecular = pow(oppositeFacing, 3.2) * edgeBand;
@@ -268,11 +270,11 @@ internal class LiquidWallpaperRenderer(
 
             float3 colour = body;
             colour *= mix(0.985, 1.025, glassLens);
-            colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
+            colour += uAccentColor * fresnel * mix(0.88, 0.15, solidMode);
             colour += float3(0.98, 0.99, 1.0) *
-                innerBevel * mix(0.055, 0.14, solidMode);
+                innerBevel * mix(0.075, 0.14, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(1.48, 0.62, solidMode);
+                keySpecular * mix(1.62, 0.62, solidMode);
             colour += float3(1.0, 1.0, 1.0) *
                 glassHighlight * (1.0 - solidMode) * 1.02;
             colour += uAccentColor *
@@ -285,13 +287,13 @@ internal class LiquidWallpaperRenderer(
 
             // A thin high-energy caustic sits just inside the contour.
             // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.6) / 6.2) *
+            float glassCaustic = exp(-abs(signedDistance - 1.4) / 3.6) *
                 pow(max(dot(normal, keyLight), 0.0), 1.25);
             float solidRim = exp(-abs(signedDistance - 2.5) / 4.6) *
                 pow(max(dot(normal, keyLight), 0.0), 1.45);
             colour += float3(1.0, 1.0, 1.0) *
                 mix(glassCaustic, solidRim, solidMode) *
-                mix(0.76, 0.25, solidMode);
+                mix(0.98, 0.25, solidMode);
 
             // A moving, soft studio reflection makes the lens readable on
             // low-detail wallpapers without creating a raised all-around bevel.
@@ -313,13 +315,13 @@ internal class LiquidWallpaperRenderer(
             // Keep Liquid Glass genuinely transparent: the wallpaper is
             // the dominant face colour, with a restrained body and contour rim.
             // Frosted Glass retains its separate, intentionally denser opacity.
-            float glassOpacity = mix(0.31, 0.42, glassLens);
+            float glassOpacity = mix(0.35, 0.46, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
                 coverage * (
                     bodyOpacity +
-                    edgeBand * mix(0.25, 0.10, solidMode) +
+                    edgeBand * mix(0.31, 0.10, solidMode) +
                     outerLip * mix(0.035, 0.07, solidMode)
                 ),
                 0.0,
@@ -356,7 +358,6 @@ internal class LiquidWallpaperRenderer(
     private var glassShader: RuntimeShader? = null
     private var shaderFailureReported = false
     private var cachedTimeText: String? = null
-    @Volatile private var testTimeOverride: String? = null
     private var clockCenterX = DEFAULT_CLOCK_X
     private var clockCenterY = DEFAULT_CLOCK_Y
     private var clockScale = 1f
@@ -458,20 +459,6 @@ internal class LiquidWallpaperRenderer(
         rebuildBackdrop()
     }
 
-    /** Digit Lab only: fixed glyph sample; null restores the real clock. */
-    fun setTestTimeOverride(value: String?) {
-        val normalized = value
-            ?.filter { it in '0'..'9' || it == ':' }
-            ?.take(10)
-            ?.takeIf { it.isNotEmpty() }
-        if (normalized == testTimeOverride) return
-        testTimeOverride = normalized
-        cachedTimeText = null
-        if (surfaceWidth > 0 && surfaceHeight > 0) {
-            rebuildGlyphMask(force = true)
-        }
-    }
-
     fun reloadAppliedState() {
         clockCenterX = clockPreferences.getFloat("center_x", DEFAULT_CLOCK_X)
             .coerceIn(0.10f, 0.90f)
@@ -490,7 +477,7 @@ internal class LiquidWallpaperRenderer(
      * Typeface and colour settings are stored alongside the clock composition.
      */
     fun reloadAppearance(rebuildDistanceField: Boolean = true) {
-        ClockDiagnostics.record("Renderer reload start: sdf=$rebuildDistanceField surface=${surfaceWidth}x${surfaceHeight}")
+        diagnostics.record("Renderer reload start: sdf=$rebuildDistanceField surface=${surfaceWidth}x${surfaceHeight}")
         val previousStyle = clockFontStyle
         val previousWeight = clockFontWeight
         val previousColor = clockColor
@@ -510,10 +497,10 @@ internal class LiquidWallpaperRenderer(
                         rebuildDistanceField = rebuildDistanceField
                     )
                 } catch (memoryError: OutOfMemoryError) {
-                    ClockDiagnostics.report("renderer-glyph-mask-out-of-memory", memoryError)
+                    diagnostics.report("renderer-glyph-mask-out-of-memory", memoryError)
                     Log.e(TAG, "Clock weight preview ran out of memory; keeping the last rendered mask.", memoryError)
                 } catch (exception: RuntimeException) {
-                    ClockDiagnostics.report("renderer-glyph-mask", exception)
+                    diagnostics.report("renderer-glyph-mask", exception)
                     Log.e(TAG, "Clock weight preview could not rebuild its glyph mask.", exception)
                 }
             }
@@ -746,7 +733,7 @@ internal class LiquidWallpaperRenderer(
                     shaderPaint.shader = null
                     if (!shaderFailureReported) {
                         shaderFailureReported = true
-                        ClockDiagnostics.report("agsl-render-frame", exception)
+                        diagnostics.report("agsl-render-frame", exception)
                     }
                     Log.w(TAG, "AGSL rendering failed; showing a visible clock fallback.", exception)
                 }
@@ -1250,7 +1237,7 @@ internal class LiquidWallpaperRenderer(
         val replacement = try {
             createGlyphSdf(mask, glyphBounds)
         } catch (memoryError: OutOfMemoryError) {
-            ClockDiagnostics.report("glyph-sdf-allocation-out-of-memory", memoryError)
+            diagnostics.report("glyph-sdf-allocation-out-of-memory", memoryError)
             Log.w(
                 TAG,
                 "SDF allocation skipped; keeping the previous bevel field.",
@@ -1342,7 +1329,7 @@ internal class LiquidWallpaperRenderer(
         if (pixelCountLong <= 0L || pixelCountLong > 450_000L) return null
 
         val pixelCount = pixelCountLong.toInt()
-        ClockDiagnostics.record("SDF allocation start: crop=${cropWidth}x${cropHeight} output=${sdfWidth}x${sdfHeight} pixels=$pixelCount")
+        diagnostics.record("SDF allocation start: crop=${cropWidth}x${cropHeight} output=${sdfWidth}x${sdfHeight} pixels=$pixelCount")
         val sourcePixels = IntArray(pixelCount)
         if (sdfScale >= 0.999f) {
             source.getPixels(sourcePixels, 0, sdfWidth, left, top, sdfWidth, sdfHeight)
@@ -1418,7 +1405,7 @@ internal class LiquidWallpaperRenderer(
             glyphSdfOriginX = left.toFloat()
             glyphSdfOriginY = top.toFloat()
             glyphSdfScale = sdfScale
-            ClockDiagnostics.record("SDF allocation complete: $pixelCount pixels")
+            diagnostics.record("SDF allocation complete: $pixelCount pixels")
         }
     }
 
@@ -1702,7 +1689,7 @@ internal class LiquidWallpaperRenderer(
                 )
                 .build()
         } catch (fontException: Exception) {
-            ClockDiagnostics.record("SF Pro renderer font fallback: ${fontException.javaClass.simpleName}")
+            diagnostics.record("SF Pro renderer font fallback: ${fontException.javaClass.simpleName}")
             Log.w(
                 TAG,
                 "Official Apple SF Pro variable font unavailable; using its Display Thin face.",
@@ -1710,7 +1697,7 @@ internal class LiquidWallpaperRenderer(
             )
             fallbackTypeface
         } catch (memoryError: OutOfMemoryError) {
-            ClockDiagnostics.report("renderer-sf-pro-typeface-allocation", memoryError)
+            diagnostics.report("renderer-sf-pro-typeface-allocation", memoryError)
             fallbackTypeface
         }
 
@@ -1738,7 +1725,7 @@ internal class LiquidWallpaperRenderer(
             shader.setFloatUniform("uSdfScale", glyphSdfScale)
             shader.setFloatUniform("uSdfRange", SDF_RANGE_PX)
         } catch (exception: RuntimeException) {
-            ClockDiagnostics.report("shader-glyph-input-refresh", exception)
+            diagnostics.report("shader-glyph-input-refresh", exception)
             Log.w(TAG, "Could not refresh glyph mask/SDF inputs.", exception)
             glassShader = null
         }
@@ -1852,21 +1839,25 @@ internal class LiquidWallpaperRenderer(
             )
             glassShader = shader
         } catch (exception: RuntimeException) {
-            ClockDiagnostics.report("agsl-shader-initialization", exception)
+            diagnostics.report("agsl-shader-initialization", exception)
             Log.w(TAG, "Unable to initialize AGSL shader.", exception)
             glassShader = null
         } catch (memoryError: OutOfMemoryError) {
-            ClockDiagnostics.report("agsl-shader-out-of-memory", memoryError)
+            diagnostics.report("agsl-shader-out-of-memory", memoryError)
             glassShader = null
         }
     }
 
-    private fun currentTimeText(): String {
-        testTimeOverride?.let { return it }
-        val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
-        return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault())
-            .format(java.util.Date())
+    /**
+     * Re-reads the injected clock source and rebuilds glyph outlines when its
+     * sample changes. Fixed sample state remains inside the Digit Lab host.
+     */
+    fun refreshClockText() {
+        cachedTimeText = null
+        if (surfaceWidth > 0 && surfaceHeight > 0) rebuildGlyphMask(force = true)
     }
+
+    private fun currentTimeText(): String = clockTextSource.currentTimeText(context)
 
     private fun loadFallbackTypeface(): Typeface {
         return try {

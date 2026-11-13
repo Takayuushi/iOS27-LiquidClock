@@ -842,7 +842,7 @@ class ClockAppearanceActivity : Activity() {
         context: Context,
         private val onPreviewTouch: () -> Unit
     ) : View(context) {
-        private val renderer = LiquidWallpaperRenderer(context)
+        private val renderer = LiquidWallpaperRenderer(context, ClockWallpaperContent.PREVIEW.toRendererContent(), ClockDiagnostics)
         private var renderWidth = 0
         private var renderHeight = 0
 

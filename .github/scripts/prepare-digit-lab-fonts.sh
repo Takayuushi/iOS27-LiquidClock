@@ -27,7 +27,7 @@ find_font() {
   if [[ -z "$found" ]]; then echo "Font not found: $name" >&2; exit 1; fi
   printf '%s' "$found"
 }
-ASSET_DIR="digit-lab/app/src/main/assets/fonts"
+ASSET_DIR="clock-renderer/src/main/assets/fonts"
 mkdir -p "$ASSET_DIR"
 cp "$(find_font 'SF-Pro.ttf')" "$ASSET_DIR/SF-Pro.ttf"
 cp "$(find_font 'SF-Pro-Display-Thin.otf')" "$ASSET_DIR/sf_pro_display_thin.otf"

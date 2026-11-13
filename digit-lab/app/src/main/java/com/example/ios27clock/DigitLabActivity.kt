@@ -1,6 +1,7 @@
 package com.example.ios27clock
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
@@ -59,12 +60,17 @@ class DigitLabActivity : Activity() {
     private var fontStyle = 0
     private var fontWeight = 400
     private var controlsHidden = false
+    private val sampleClockSource = object : RendererClockTextSource {
+        @Volatile var sampleText: String = DEFAULT_SAMPLE
+        override fun currentTimeText(context: Context): String = sampleText
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val applySample = Runnable {
         val value = sampleInput.text?.toString().orEmpty()
         if (isValidSample(value)) {
-            renderer.setTestTimeOverride(value)
+            sampleClockSource.sampleText = value
+            renderer.refreshClockText()
             preview.invalidate()
         }
     }
@@ -87,8 +93,13 @@ class DigitLabActivity : Activity() {
         fontStyle = preferences.getInt("clock_font_style", 0).coerceIn(0, 3)
         fontWeight = preferences.getInt("clock_font_weight", 400).coerceIn(100, 900)
 
-        renderer = LiquidWallpaperRenderer(this, ClockWallpaperContent.PREVIEW)
-        renderer.setTestTimeOverride(DEFAULT_SAMPLE)
+        sampleClockSource.sampleText = DEFAULT_SAMPLE
+        renderer = LiquidWallpaperRenderer(
+            this,
+            ClockWallpaperContent.PREVIEW.toRendererContent(),
+            ClockDiagnostics,
+            sampleClockSource
+        )
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         preview = RendererPreview(this)

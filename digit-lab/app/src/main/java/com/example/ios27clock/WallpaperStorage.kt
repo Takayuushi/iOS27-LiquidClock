@@ -17,3 +17,10 @@ internal object WallpaperStorage {
     const val PREVIEW_MANUAL_FOREGROUND_FILE_NAME = "liquid_clock_wallpaper_manual_foreground.png"
     const val PREVIEW_COMPOSITION_PREFERENCES = "digit_lab_preview_composition"
 }
+
+
+internal fun ClockWallpaperContent.toRendererContent() = RendererWallpaperContent(
+    sourceFileName = sourceFileName,
+    manualForegroundFileName = manualForegroundFileName,
+    compositionPreferencesName = compositionPreferencesName
+)

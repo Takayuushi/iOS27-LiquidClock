@@ -7,6 +7,8 @@ on:
       - 'feature/**'
     paths:
       - 'app/**'
+      - 'clock-renderer/**'
+      - '.github/workflows/build.yml'
       - 'gradle/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
@@ -16,6 +18,8 @@ on:
       - main
     paths:
       - 'app/**'
+      - 'clock-renderer/**'
+      - '.github/workflows/build.yml'
       - 'gradle/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
@@ -120,7 +124,7 @@ jobs:
           }
 
           FONT_DIR="app/src/main/res/font"
-          ASSET_FONT_DIR="app/src/main/assets/fonts"
+          ASSET_FONT_DIR="clock-renderer/src/main/assets/fonts"
           mkdir -p "$FONT_DIR" "$ASSET_FONT_DIR"
 
           VARIABLE_FONT="$(find_font 'SF-Pro.ttf')"

@@ -184,3 +184,10 @@ internal object WallpaperStorage {
         }
     }
 }
+
+
+internal fun ClockWallpaperContent.toRendererContent() = RendererWallpaperContent(
+    sourceFileName = sourceFileName,
+    manualForegroundFileName = manualForegroundFileName,
+    compositionPreferencesName = compositionPreferencesName
+)

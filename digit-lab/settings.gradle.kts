@@ -6,4 +6,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "LiquidClockDigitLab"
-include(":app")
+include(":app", ":clock-renderer")
+project(":clock-renderer").projectDir = file("../clock-renderer")

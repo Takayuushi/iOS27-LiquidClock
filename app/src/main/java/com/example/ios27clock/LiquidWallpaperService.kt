@@ -100,7 +100,7 @@ class LiquidWallpaperService : WallpaperService() {
                 }
                 ClockWallpaperContent.APPLIED
             }
-            renderer = LiquidWallpaperRenderer(this@LiquidWallpaperService, wallpaperContent)
+            renderer = LiquidWallpaperRenderer(this@LiquidWallpaperService, wallpaperContent.toRendererContent(), ClockDiagnostics)
             ClockDiagnostics.record(
                 "Wallpaper engine created: preview=$isPreview source=$wallpaperContent"
             )

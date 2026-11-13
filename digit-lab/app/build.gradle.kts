@@ -23,5 +23,6 @@ android {
 }
 
 dependencies {
+    implementation(project(":clock-renderer"))
     implementation("com.google.android.material:material:1.13.0")
 }
