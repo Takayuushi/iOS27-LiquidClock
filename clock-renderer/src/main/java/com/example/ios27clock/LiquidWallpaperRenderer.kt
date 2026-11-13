@@ -1221,8 +1221,8 @@ class LiquidWallpaperRenderer(
         // nominal advances. This removes built-in side-bearing gaps directly.
         val hourPairGapEm = 0.024f
         val minutePairGapEm = 0.021f
-        val hourToColonGapEm = 0.024f
-        val colonToMinuteGapEm = 0.030f
+        val hourToColonGapEm = 0.027f
+        val colonToMinuteGapEm = 0.033f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
 
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
