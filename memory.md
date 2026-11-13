@@ -616,16 +616,30 @@ Changes:
 - Do not immediately make another large scattering increase. Preserve the current #53 state as the positive baseline and continue with a small controlled refinement of continuous atmospheric softness / light spread, preserving wallpaper colour, glass transparency, and reflective contours.
 - Non-negotiable: all material/haze/reflection changes are shared and glyph-independent for every numeral/time. No digit-specific, character-specific or screen-coordinate conditions. Solid/Frosted remains protected.
 
+### Pixel-level comparison and controlled atmospheric refinement (14 Nov 2026, ~01:39 IST)
+- User supplied a later screenshot and said human eyes could not distinguish it from the prior build, asking for pixel-level analysis. Compared the actual files `Screenshot_20261114_013928.jpg` (Digit Lab) and `RDT_...201000.jpg` (iOS reference), plus the preceding `Screenshot_20261114_013417.jpg` (#53 baseline) and #52 pair.
+- Critical capture finding: the clock and wallpaper region of the 01:34 and 01:39 Digit Lab screenshots are pixel-for-pixel identical (MAE 0.0 across x=40..810, y=200..670). Both screenshots are the same #53 renderer output; no renderer commit/build was made between them. This explains the absence of a visible difference between those two captures.
+- Comparing #52 (`202f8a8`) to #53 (`7e4670e`) against their identical iOS reference image: raw RGB MAE in the clock crop decreased from 22.775 to 22.577 (0.87%); RMSE changed from 42.095 to 42.147 (slightly higher). Region MAE improvement: 1 0.00%, 0 0.71%, colon 0.57%, 4 0.26%, 7 2.59%. These are raw pixel distances, not pure haze metrics; they include geometry and reflected-highlight differences. They demonstrate that #53's changes were modest and uneven, not a clear global convergence.
+- The next pass was chosen as a controlled shared atmospheric refinement rather than digit-specific tuning. Renderer commit `f576082ac7adc3796834cb7b9eb0afabf971cbee` — “Refine uniform Liquid Glass atmospheric softness”:
+  - Widens the isotropic wallpaper sample radius used by Liquid Glass from 30px to 36px. Solid remains exactly 38px.
+  - Raises the uniform Liquid Glass atmospheric blend from 32% to 38%.
+  - Raises bright-pass bloom from 18% to 22% and lowers its soft threshold from 0.22–0.68 to 0.18–0.60 so more blue-white illuminated content contributes softly.
+  - Reuses the same eight blur samples; no additional wallpaper texture fetches.
+  - No glyph-index or digit-specific logic; no geometry, spacing, clock layout, gesture or wallpaper-isolation changes. Solid/Frosted keeps 38px blur, original centre transmission, opacity 0.78, bevel and sheen.
+- Static checks passed: 36/38px blur split, eight threshold updates, 38% haze, 22% bloom, existing Solid path and no per-digit logic.
+- Candidate workflows triggered from `f576082`: Production #331 run ID `43499977167`; Digit Lab #54 run ID `43499976917`. Both were queued at time of memory update. Check completion and artifact IDs before sharing download links.
+- On-device verification remains pending. Compare #54 against #53 and the exact same iOS reference. Judge uniform haze over all glyphs, especially the dark and blue areas, and ensure the result remains transparent/reflective rather than milky/frosted. Do not claim a visual improvement until tested.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `7e4670e22b2e6f2687e00bc0fef7aba93c9f4ddd` — “Strengthen natural Liquid Glass haze and bright bloom”
+- **Latest renderer commit:** `f576082ac7adc3796834cb7b9eb0afabf971cbee` — “Refine uniform Liquid Glass atmospheric softness”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
 - **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
-- **Latest candidate builds:** Production #330 (run `43497528568`) and Digit Lab #53 (run `43497528710`), both from `7e4670e`; status was in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
+- **Latest candidate builds:** Production #331 (run `43499977167`) and Digit Lab #54 (run `43499976917`), both from `f576082`; queued when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
