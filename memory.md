@@ -132,6 +132,15 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - The previous commit `71a36ce` incorrectly changed `hourPairGapEm` 0.024em→0.021em. Commit `b44c11c734e7d96ec50cede1c35f3a91e014d6b5` restores it to 0.024em and instead increases only `hourToColonGapEm` from 0.016em to 0.024em.
 - Keep `minutePairGapEm` (4–7) at the user's requested slight increase of 0.021em. Keep `colonToMinuteGapEm` at 0.030em. No font, material, glyph profile, or colon geometry changes.
 - Production #304 and Digit Lab #26 have been triggered from `b44c11c`; CI/device verification pending.
+### Clarification of spacing-feedback baseline (13 Nov 2026)
+- User clarified that the earlier “almost there” opinion (slightly adjust the hour/colon and 4–7 areas) was based on the earlier screenshot comparison, **not the latest #303/#25 build**. Do not treat that opinion as evaluation of #303/#25 or infer further changes from it.
+- User's explicit subsequent instruction was to keep `1–0` unchanged, slightly increase `0–:`, and slightly increase `:–4`.
+- Latest commit `9f3a145641e685b3894fc298691c0c2ec8d6c5ae` changes only the two colon-adjacent spacing constants:
+  - `hourPairGapEm` / `1–0`: remains 0.024em.
+  - `minutePairGapEm` / `4–7`: remains 0.021em.
+  - `hourToColonGapEm` / `0–:`: 0.024em → 0.027em.
+  - `colonToMinuteGapEm` / `:–4`: 0.030em → 0.033em.
+- The new commit cancels the in-progress #304/#26 workflows from parent `b44c11c`. The correct current candidate is Production #305 and Digit Lab #27 from `9f3a145`. Both are running; the on-device result has not yet been tested.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -240,13 +249,14 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `b44c11c734e7d96ec50cede1c35f3a91e014d6b5` — “Correct spacing between hour pair and colon”
-- **Corrected shared visible-outline spacing:** `1–0` remains 0.024em (restored; do not change); `0–:` is now 0.024em (opened from 0.016em); `:–4` stays 0.030em; `4–7` stays 0.021em. User's clarification was that the hour pair as a whole sits too close to the colon, not that 1 and 0 are too close.
-- **Other rendering:** no changes in this correction. Preserve Glass optical candidate and approved Solid material.
-- **Previous build #303:** Production succeeded from `71a36ce`; Digit Lab #25 succeeded from `71a36ce`.
-- **Current production build:** #304, run ID `43415350836`, from `b44c11c`; running: [Actions #304](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415350836)
-- **Current Digit Lab build:** #26, run ID `43415350817`, from `b44c11c`; running: [Actions #26](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415350817)
-- **Next user step:** verify #304/#26 and compare `10 :` spacing. Do not change the internal 1–0 pair. After acceptance, user intends to verify original production app.
+- **Latest renderer source commit:** `9f3a145641e685b3894fc298691c0c2ec8d6c5ae` — “Fine-tune spacing on both sides of colon”
+- **Latest spacing:** `1–0` 0.024em (unchanged); `0–:` 0.027em (increased slightly); `:–4` 0.033em (increased slightly); `4–7` 0.021em (unchanged). No other values changed in `9f3a145`.
+- **Feedback baseline clarification:** the earlier “almost there” opinion was based on the earlier screenshot, not latest #303/#25. Do not treat it as feedback on #303/#25.
+- **Current production build:** #305, run ID `43415570124`, from `9f3a145`; running: [Actions #305](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415570124)
+- **Current Digit Lab build:** #27, run ID `43415570101`, from `9f3a145`; running: [Actions #27](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415570101)
+- **Superseded runs:** #304 and #26 from `b44c11c` were cancelled when `9f3a145` triggered new workflows. Do not share those as current artifacts.
+- **Latest completed pair before colon adjustment:** Production #303 and Digit Lab #25 succeeded from `71a36ce`.
+- **Next step:** wait for #305/#27 CI success, then use those builds for visual verification. The user has not yet supplied feedback on this latest spacing-only commit.
 
 ## New issue reported and root cause (13 Nov 2026)
 
