@@ -139,14 +139,34 @@ class LiquidWallpaperRenderer(
             float glassRim = exp(-abs(signedDistance - 1.15) / 3.4);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
-            // A narrow, rounded cross-section gives Liquid Glass a real
-            // raised lens shoulder instead of a soft outline around flat text.
-            const float GLASS_BEVEL_WIDTH = 9.5;
-            float glassBevel = 1.0 -
-                smoothstep(0.8, GLASS_BEVEL_WIDTH, insideDistance);
-            float glassBevelSlope = 1.85 * glassBevel;
+            // Model each digit stroke as a rounded glass rod, not a flat
+            // plate with an embossed perimeter. The SDF measures distance
+            // inward from either side of the stroke; an elliptical cap turns
+            // that distance into a continuous optical surface normal.
+            float GLASS_PROFILE_RADIUS = 13.0;
+            float profileDistance = clamp(
+                insideDistance,
+                0.0,
+                GLASS_PROFILE_RADIUS
+            );
+            float profileChord = sqrt(max(
+                2.0 * GLASS_PROFILE_RADIUS * profileDistance -
+                    profileDistance * profileDistance,
+                0.55
+            ));
+            float glassProfileSlope = clamp(
+                (GLASS_PROFILE_RADIUS - profileDistance) / profileChord,
+                0.0,
+                2.8
+            );
+            float glassProfileCoverage = 1.0 -
+                smoothstep(
+                    GLASS_PROFILE_RADIUS * 0.72,
+                    GLASS_PROFILE_RADIUS,
+                    insideDistance
+                );
             float3 glassSurfaceNormal = normalize(float3(
-                normal * glassBevelSlope,
+                normal * glassProfileSlope,
                 1.0
             ));
             float3 keyLight3D = normalize(float3(-0.48, -0.66, 0.58));
@@ -156,21 +176,27 @@ class LiquidWallpaperRenderer(
             float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);
             float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
             float fillDiffuse3D = max(dot(glassSurfaceNormal, fillLight3D), 0.0);
+            // A broad area reflection gives the lens a continuous polished
+            // face; tighter glints sit on the same physically curved shoulder.
+            float glassAreaReflection = pow(
+                max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
+                7.0
+            ) * 0.42;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                42.0
-            ) * mix(0.16, 1.0, glassBevel);
+                68.0
+            ) * glassProfileCoverage;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
-                30.0
-            ) * glassBevel;
-            float glassVolumeFresnel = pow(
-                1.0 - clamp(glassSurfaceNormal.z, 0.0, 1.0),
-                4.2
-            ) * glassBevel;
-            float glassSideShadow = glassBevel *
+                52.0
+            ) * glassProfileCoverage;
+            float glassVolumeFresnel = 0.04 +
+                0.96 * pow(
+                    1.0 - clamp(glassSurfaceNormal.z, 0.0, 1.0),
+                    5.0
+                ) * glassProfileCoverage;
+            float glassSideShadow = glassProfileCoverage *
                 max(-dot(normal, keyLight3D.xy), 0.0);
-            float innerBevel = mix(glassBevel, solidBevel, solidMode);
             float outerLip = 1.0 -
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(
@@ -291,78 +317,55 @@ class LiquidWallpaperRenderer(
                 2.6
             ) * edgeBand;
             float fresnel = mix(glassVolumeFresnel, legacyFresnel, solidMode);
-            float glassSpecular = glassKeyGlint;
-            float glassHighlight = pow(
-                max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                13.0
-            ) * glassLens * 0.18;
             float solidSpecular = pow(facing, 3.5) * solidEdge;
-            float keySpecular = mix(glassSpecular, solidSpecular, solidMode);
-            float glassFillSpecular = glassFillGlint;
             float solidFillSpecular = pow(oppositeFacing, 3.2) * solidEdge;
-            float fillSpecular = mix(
-                glassFillSpecular,
-                solidFillSpecular,
-                solidMode
-            );
-            float bevelShade = innerBevel * (1.0 - facing) *
-                mix(0.018, 0.11, solidMode);
+            float bevelShade = solidBevel * (1.0 - facing) *
+                0.11 * solidMode;
 
             float3 colour = body;
-            // The broad face remains translucent, while the 3-D surface
-            // normal adds gentle light falloff across the rounded shoulder.
-            float glassFaceLighting = 0.76 +
-                keyDiffuse3D * 0.18 +
+            // The glass face remains wallpaper-derived. Surface normals
+            // provide gentle volume shading; environment reflections supply
+            // the glossy body rather than a painted outline.
+            float glassFaceLighting = 0.80 +
+                keyDiffuse3D * 0.14 +
                 fillDiffuse3D * 0.10;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
             colour -= float3(0.12, 0.15, 0.22) *
-                glassSideShadow * (1.0 - solidMode) * 0.22;
+                glassSideShadow * (1.0 - solidMode) * 0.16;
             colour *= mix(0.985, 1.025, glassLens);
-            colour += uAccentColor * fresnel * mix(0.88, 0.15, solidMode);
-            colour += float3(0.98, 0.99, 1.0) *
-                innerBevel * mix(0.075, 0.14, solidMode);
-            colour += float3(1.0, 1.0, 1.0) *
-                keySpecular * mix(1.82, 0.62, solidMode);
-            colour += float3(1.0, 1.0, 1.0) *
-                glassHighlight * (1.0 - solidMode) * 1.02;
-            float3 fillReflectionColour = mix(
-                float3(0.82, 0.91, 1.0),
-                uAccentColor,
-                0.14
-            );
-            colour += fillReflectionColour *
-                fillSpecular * mix(1.08, 0.15, solidMode);
-            colour -= float3(0.13, 0.15, 0.21) * bevelShade;
-            colour -= float3(0.08, 0.09, 0.14) *
-                edgeBand * (1.0 - facing) * mix(0.018, 0.055, solidMode);
-            colour += float3(1.0, 1.0, 1.0) *
-                outerLip * mix(0.025, 0.07, solidMode);
+            colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
 
-            // A thin high-energy caustic sits just inside the contour.
-            // Avoid a broad white bevel that would make the glyph look embossed.
-            float glassCaustic = exp(-abs(signedDistance - 1.15) / 2.4) *
-                pow(max(dot(normal, keyLight), 0.0), 1.25);
+            // Preserve the separate Frosted Glass treatment. Liquid Glass
+            // does not use an independent white bevel or dark perimeter.
+            colour += float3(0.98, 0.99, 1.0) *
+                solidBevel * 0.14 * solidMode;
+            colour += float3(1.0, 1.0, 1.0) *
+                solidSpecular * 0.62 * solidMode;
+            colour += uAccentColor *
+                solidFillSpecular * 0.15 * solidMode;
+
+            // Broad reflection is visible across the front face. Two tighter
+            // glints track the actual rounded cap on the light-facing sides.
+            colour += float3(0.92, 0.97, 1.0) *
+                glassAreaReflection * (1.0 - solidMode) * 1.18;
+            colour += float3(0.98, 0.99, 1.0) *
+                glassKeyGlint * (1.0 - solidMode) * 1.20;
+            colour += float3(0.68, 0.82, 1.0) *
+                glassFillGlint * (1.0 - solidMode) * 0.76;
+
+            colour -= float3(0.13, 0.15, 0.21) * bevelShade;
+            // These perimeter strokes belong only to Frosted Glass; applying
+            // them to Liquid Glass made it look like embossed text.
+            colour -= float3(0.08, 0.09, 0.14) *
+                edgeBand * (1.0 - facing) * 0.055 * solidMode;
+            colour += float3(1.0, 1.0, 1.0) *
+                outerLip * 0.07 * solidMode;
+
+            // Keep a restrained rim only for the Frosted Glass option.
             float solidRim = exp(-abs(signedDistance - 2.5) / 4.6) *
                 pow(max(dot(normal, keyLight), 0.0), 1.45);
             colour += float3(1.0, 1.0, 1.0) *
-                mix(glassCaustic, solidRim, solidMode) *
-                mix(1.12, 0.25, solidMode);
-
-            // A second, opposing contour reflection prevents dark wallpaper
-            // areas from turning the glass into a dull rubber-like silhouette.
-            // It follows the real glyph normal instead of painting a screen-space ribbon.
-            float glassCounterCaustic =
-                exp(-abs(signedDistance - 2.0) / 2.2) *
-                pow(oppositeFacing, 1.35);
-            colour += float3(0.72, 0.86, 1.0) *
-                glassCounterCaustic * (1.0 - solidMode) * 0.72;
-            // Tight specular streaks sit on the curved bevel; the broader,
-            // lower-energy face reflection preserves transparency on bright
-            // wallpapers without washing the whole glyph white.
-            colour += float3(0.92, 0.97, 1.0) *
-                glassKeyGlint * (1.0 - solidMode) * 1.35;
-            colour += float3(0.62, 0.78, 1.0) *
-                glassFillGlint * (1.0 - solidMode) * 0.82;
+                solidRim * 0.25 * solidMode;
 
             // A moving, soft studio reflection makes the lens readable on
             // low-detail wallpapers without creating a raised all-around bevel.
