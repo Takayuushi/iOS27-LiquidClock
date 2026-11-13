@@ -575,6 +575,41 @@ class LiquidWallpaperRenderer(
                 center * 0.08 +
                 (softNearA + softNearB) * 0.24 +
                 (softFarA + softFarB) * 0.22;
+
+            // The structure-tensor eigenvector is reliable for a single,
+            // coherent band direction, but becomes unstable at crossings,
+            // paired edges and locally isotropic texture. Measure tensor
+            // coherence and fall back smoothly toward a colour-preserving
+            // isotropic transport sample when no dominant direction exists.
+            // This avoids streaky direction flips without widening the probe
+            // or applying a glyph/coordinate-specific correction.
+            float tensorTrace = max(tensorXX + tensorYY, 0.0001);
+            float tensorCoherence = clamp(
+                tensorDiscriminant / tensorTrace,
+                0.0,
+                1.0
+            );
+            float directionalConfidence = smoothstep(
+                0.14,
+                0.58,
+                tensorCoherence
+            );
+            float3 isotropicFallbackTransmission = mix(
+                center,
+                frostedWallpaper,
+                0.46
+            );
+            float stableDirectionWeight = mix(
+                0.34,
+                1.0,
+                directionalConfidence
+            );
+            microfacetTransmission = mix(
+                isotropicFallbackTransmission,
+                microfacetTransmission,
+                stableDirectionWeight
+            );
+
             float microfacetDiffusion = mix(
                 0.42,
                 0.96,
