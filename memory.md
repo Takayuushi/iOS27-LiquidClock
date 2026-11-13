@@ -2,6 +2,15 @@
 
 > Living handover notes for future development sessions. Documentation only: this file is not read by the Android app, Gradle, or the rendering code.
 
+## Digit Lab APK in-place update signing (14 Nov 2026)
+
+- The separate Digit Lab package ID remains `com.example.ios27clock.digitlab`; its workflow already sets `versionCode = GITHUB_RUN_NUMBER`, so later workflow runs get increasing version codes.
+- The cause of Android's “App not installed” error when upgrading was the missing stable signing identity: each GitHub-hosted Digit Lab runner generated its own default Android debug keystore, so successive APKs had different signing certificates.
+- Fixed in `.github/workflows/digit-lab.yml`: cache `~/.android/debug.keystore` with a branch-scoped key, `digit-lab-debug-signing-${{ github.ref_name }}-v1`, then create it only when the cache is absent. The existing workflow concurrency group serializes branch builds so the cache is created once and reused. This signing key is separate from the production app's key.
+- After installing the first APK produced by the persistent-key workflow, subsequent Digit Lab APKs from the same branch can be installed over the existing app without uninstalling; Android keeps Digit Lab's private data/preferences. No OTA updater, in-app download feature, package-ID change, renderer change, or production app signing change is involved.
+- **One-time migration required:** older Digit Lab APKs were signed by ephemeral per-run keys. Android cannot upgrade those installations to the new persistent certificate. Uninstall the old Digit Lab once, then install the first APK from the updated workflow. This is limited to Digit Lab and does not require uninstalling or changing the production clock app.
+- README documents the migration and normal in-place update procedure. Verify the first updated workflow run passes, confirm its APK installs cleanly after the one-time migration, then confirm the next build updates over it without uninstalling.
+
 ## NON-NEGOTIABLE HANDOVER RULE — Apple font and renderer parity
 
 This section is deliberately repeated near the top of memory.md so it is not missed when a new chat starts or the previous chat reaches its length limit.
