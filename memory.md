@@ -129,14 +129,13 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `a4db737bbf63359258cb9abacdb003fd31bff54f` — “Give Liquid Glass a reflective face and visible optical body”
-- **Latest documentation commit:** `b15d323a357c2b8c57c3353e9394426c53051b79` — records why the prior visual pass failed and describes the new correction.
-- **Production CI:** build #291, run ID `43390706317`, triggered from renderer commit `a4db737`; status pending at the time of this update: [GitHub Actions #291](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706317)
-- **Digit Lab CI:** build #13, run ID `43390706515`, triggered from renderer commit `a4db737`; status pending at the time of this update: [GitHub Actions #13](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706515)
-- **Latest previously successful production build:** #290 from `54679f0`, artifact ID `14019043376`.
-- **Latest previously successful Digit Lab build:** #12 from `54679f0`, artifact ID `14019535593`.
-- **On-device status:** commit `54679f0` was tested by the user and did not produce a meaningful material improvement. Commit `a4db737` is not yet built or device-tested.
-- **Primary next priority:** verify build #291 and #13; then visually judge the new reflective face against both the beach/flower wallpaper and the diagonal light-streak wallpaper.
+- **Latest renderer source commit:** `da687bb4e8a1196c9f3cc8d0a409e565078ab8b1` — “Use glyph SDF refraction and edge-only glass reflections”
+- **Latest renderer documentation:** this file records the failure of `a4db737` on-device and the intent of `da687bb`.
+- **Latest completed production build:** #291 — success from `a4db737`, artifact ID `14021000833`: [Actions #291](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706317)
+- **Latest completed Digit Lab build:** #13 — success from `a4db737`, artifact ID `14019584418`: [Actions #13](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706515)
+- **Build status for `da687bb`:** pending; new renderer commit should trigger production and Digit Lab workflows.
+- **On-device status:** `a4db737` visibly failed the Liquid Glass target by appearing frosted/opaque. `da687bb` has not yet been built or device-tested.
+- **Primary next priority:** verify `da687bb` compiles, then test the same wallpapers and font settings. Assess actual wallpaper bending through curves, clear face detail, and edge-only reflections.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
@@ -384,7 +383,10 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - Digit Lab run #12 completed successfully from commit `54679f0154a1a70d8d52796153a07f13a279f0b4`: [GitHub Actions run #12](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387165956).
 - Artifact: `liquid-clock-digit-lab-debug`, ID `14019535593`, created 13 Nov 2026 07:39:45 UTC; expires 13 Dec 2026 07:39:44 UTC.
 - CI success verifies build and artifact upload only. The visual appearance of this latest rounded-profile shader has not yet been confirmed on the user's device.
-
+- The user installed and tested the #291 / Digit Lab #13 build from commit `a4db737bbf63359258cb9abacdb003fd31bff54f` (13 Nov 2026, approximately 13:46 IST). The result was judged frosted/opaque white typography, not Liquid Glass. This pass is a visual failure despite both APK builds succeeding.
+- Root cause in that pass: it combined near-opaque face output with an environment-reflection blend across the face and broad softbox/ribbon highlights. The wallpaper refraction remained too weak to compensate, so the face looked painted/frosted.
+- Follow-up commit `da687bb4e8a1196c9f3cc8d0a409e565078ab8b1` changes the material model: edge-driven SDF refraction using a curved lens-depth profile and up to 38 px displacement; removes Glass face blur and broad face-wide white/environment fill; keeps the face RGB as the refracted wallpaper; moves environmental reflection/specular contribution to the curved SDF shoulder; leaves Frosted Glass diffusion and sheen on their separate path. Liquid Glass uses full mask alpha because the shader composites refracted backdrop pixels rather than layering translucent white paint.
+- Build and on-device verification for `da687bb` are pending. Do not call it a successful visual fix until the user compares it on both wallpapers.
 ## CRITICAL — Official Apple SF Pro source and exact switch build (verified from Actions logs)
 
 This is a must-preserve project fact. Do not call the font a GitHub font, a community SF font, or a generic SF Pro download.
