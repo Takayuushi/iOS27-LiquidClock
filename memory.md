@@ -366,8 +366,8 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - No digit identity, glyph location, or per-character logic is added; the same mask and image-gradient model applies to every digit and colon.
   - No typography values changed.
 - **Solid safety check:** `solidMode == 1` still selects `center` for transmission, the original 38px blur, the original Solid opacity/lighting/bevel path; ambient scatter remains multiplied by `(1-solidMode)`. The new Glass transmission changes are blended out of the Solid path. Explicit static checks passed.
-- **Current Production workflow:** #322, run ID `43480428529`, commit `5ee517e`, in progress: [Actions #322](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428529)
-- **Current Digit Lab workflow:** #44, run ID `43480428502`, commit `5ee517e`, in progress: [Actions #44](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428502)
+- **Production build:** #322, run ID `43480428529`, commit `5ee517e`, completed/success; artifact `iOS27-LiquidClock-Android17-debug`, ID `14064324520`, expires 27 Nov 2026: [Actions #322](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428529)
+- **Digit Lab build:** #44, run ID `43480428502`, commit `5ee517e`, completed/success; artifact `liquid-clock-digit-lab-debug`, ID `14064264490`, expires 13 Dec 2026: [Actions #44](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428502)
 - These builds are for comparison only. Do not claim iOS parity or a visual improvement until both build successfully and the user compares on-device against the first iOS reference image using the same diagonal wallpaper. Also inspect the beach wallpaper afterwards to ensure the adaptive diffusion has not made it frosted/cloudy.
 - Current renderer file: `clock-renderer/src/main/java/com/example/ios27clock/LiquidWallpaperRenderer.kt`.
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
@@ -479,14 +479,14 @@ Changes:
 - **Active branch:** feature/live-wallpaper-big-clock
 - **Latest renderer commit:** `5ee517eea0cc8c33d9deff2a4356670d7ef862ec` — “Extend Liquid Glass scattering through shared glyph volume”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
-- **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and has tested varied times for cross-glyph consistency.
-- **Current test builds:** Production #322 run ID `43480428529` and Digit Lab #44 run ID `43480428502`, both from `5ee517e`, still building.
+- **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
+- **New build pair from optical pass:** Production #322, run ID `43480428529`, completed/success from `5ee517e`; artifact ID `14064324520`: [Actions #322](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428529). Digit Lab #44, run ID `43480428502`, completed/success from the same SHA; artifact ID `14064264490`: [Actions #44](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428502).
 - **Image order rule for the latest comparison:** first supplied screenshot is Apple's iOS reference; second supplied screenshot is our #43 Digit Lab. Use the first as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. Do not touch accepted typography or Solid/Frosted.
-- **Latest shader change:** a shared glyph-independent `glassVolumeRegion` now combines the rounded edge profile with SDF-derived `interiorVolume`; it drives core volume scattering and the dark-area silver-blue ambient fill. Directional wallpaper diffusion widened from 6.8–10.8px to 10–15px and its high-contrast blend strengthened from 0.25–0.72 to 0.36–0.80; volume scatter factor 0.14→0.22. Commit `5ee517e`.
-- **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Confirm with device screenshot after installation.
-- **Next visual checks:** compare same diagonal wallpaper against iOS reference. Inspect black/dark parts of 1 and 0 for silver-blue body, 0's horizontal bands for softened merging, and 4/7 for coherent refraction. Then test the beach wallpaper to catch accidental frosted/cloudy output.
-- **Do not claim visual parity from CI alone.** CI only proves compile/artifact creation; wait for user's on-device comparison.
+- **Latest shader change:** shared glyph-independent `glassVolumeRegion` combines the rounded edge profile with SDF-derived `interiorVolume`; it drives core volume scattering and dark-area silver-blue ambient fill. Directional wallpaper diffusion widened from 6.8–10.8px to 10–15px and high-contrast blend strengthened from 0.25–0.72 to 0.36–0.80; volume scatter factor 0.14→0.22. Commit `5ee517e`.
+- **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
+- **Next visual checks:** compare same diagonal wallpaper against the iOS reference. Inspect dark portions of 1 and 0 for silver-blue body, 0's horizontal bands for softer merging, and 4/7 for coherent refraction. Then test the beach wallpaper to catch accidental frosted/cloudy output.
+- **Do not claim visual parity from CI alone.** Both APKs compile and artifacts are uploaded; optical improvement and Solid preservation remain pending user's on-device comparison.
 
 ## New issue reported and root cause (13 Nov 2026)
 
