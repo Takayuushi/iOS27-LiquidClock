@@ -345,6 +345,13 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - User's non-negotiable unified rule remains: no digit-specific hacks; no Solid-only kerning; common visible-bounds layout for all digit pairs; common glyph-independent glass optical model. Solid and Glass still have legitimate distinct material appearance paths, but shared typography is identical.
 - Preserve the accepted beach Liquid Glass result as reference; current beach screenshot is Solid/Frosted, not a new confirmation of Glass beach.
 - Next: verify #43/#321; user compares the tiny 1–0 increase. Then continue one intentional optical change at a time based on trace through final compositing. Avoid claiming improvement from parameter edits without a visible comparison.
+### User accepts shared spacing and validates consistent rendering across changing times (13 Nov 2026, ~23:30 IST)
+- User tested Production #321 / Digit Lab #43 from commit `a6e3825` and supplied multiple live-time screenshots on the same diagonal-streak wallpaper. Test values shown include 10:47, 04:14, 02:59, 07:23, 06:33, 01:50, and 10:50/10:48. These are intentional cross-digit combinations to validate that the same optical treatment holds as the time changes.
+- User says the latest shared 1–0 spacing now looks perfect. **Freeze spacing at current values; do not make additional kerning changes unless the user reports a new spacing problem.**
+- User explicitly appreciates that no digit was treated uniquely: keep the shared, glyph-independent rendering/layout architecture. Do not introduce per-digit optical exceptions.
+- User deliberately did not assess the optical blending/scattering in this round because `a6e3825` was only a tiny shared 1–0 spacing change. Optical quality remains an open task and should be judged in a future build with an actual shader change and same-wallpaper comparison.
+- Both workflows for `a6e3825` completed successfully: Production #321 (run ID `43475347682`) and Digit Lab #43 (run ID `43475347715`). Both use the same shared renderer module.
+- Keep Solid/Frosted protected. Shared spacing update has now been visually accepted across the two materials; no material-specific spacing.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -454,18 +461,17 @@ Changes:
 
 - **Active branch:** feature/live-wallpaper-big-clock
 - **Latest renderer commit:** `a6e3825cacc855180f9b62441c12e38b2d21d653` — “Fine-tune shared 1–0 spacing by a fraction”
-- **Latest user-tested pair:** Production #320 / Digit Lab #42 succeeded from `9601162`; screenshots show Liquid Glass and Solid/Frosted on diagonal wallpaper plus Solid/Frosted on beach wallpaper. Beach Solid remains intact. User still wants a tiny bit more 1–0 gap and says Glass blending still does not match iOS.
-- **Build comparison note:** #42/#320 changed only spacing versus #41/#319; shader identical, so no optical difference is expected between those build pairs. Earlier #41 optical changes were user-perceived as not clearly improving glass; optical goal remains open.
-- **Current shared typography gaps:** 1–0 0.053em (latest 0.050→0.053 tiny increment); 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Values all consumed by shared visualGlyphOrigins() calculation across both materials; never branch spacing on Solid mode.
-- **Global user requirement:** unified visible-bounds typography layout and one glyph-independent, image-driven optical model; no digit-identity special cases. Material modes may preserve their distinct visual treatment, but typography remains shared.
-- **Current optical source:** directional transmission diffusion (gradient-aligned kernel radius 6.8–10.8px, blend 0.25–0.72); volume scatter factor 0.14 max, Glass-only dark ambient scatter 0.70. User says optical appearance still not iOS-equivalent and recent optical changes are not perceptibly different enough.
-- **Diagnostic note:** current `interiorVolume` mask is computed but unused; `glassVolumeScatter` mixes a slightly brighter version of `microfacetTransmission` into `glassTransmitted` before reflection/tint/final composite. This may account for subtle visible delta. Inspect end-to-end influence before future scalar changes.
-- **Protected result:** user says beach version improved previously; latest beach capture is Solid/Frosted so it does not reconfirm beach Liquid Glass. Preserve both the approved Solid path and the better beach Glass result.
-- **Previous completed builds:** Production #320 / Digit Lab #42 succeeded from `9601162`.
-- **Current Production:** #321, run ID `43475347682`, source `a6e3825`, in progress: [Actions #321](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347682)
-- **Current Digit Lab:** #43, run ID `43475347715`, source `a6e3825`, in progress: [Actions #43](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347715)
-- **On-device status:** `a6e3825` not tested. The next test is for the tiny shared 1–0 gap; shader is unchanged from #42.
-- **Next priority:** verify #321/#43, then compare 1–0 spacing. Continue Liquid Glass optical work separately, tracing whether shared scattering/diffusion survives final composition. Do not add per-digit hacks or Solid-only kerning.
+- **Latest tested builds:** Production #321 and Digit Lab #43 both succeeded from `a6e3825`.
+- **Latest user assessment:** User says the 1–0 gap now looks perfect. Multiple times (10:47, 04:14, 02:59, 07:23, 06:33, 01:50, etc.) were tested to demonstrate consistent rendering as glyphs change. User explicitly approves the uniformity/no digit-specific treatment. Freeze spacing at current values unless user reports another issue.
+- **Current shared typography gaps (accepted):** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. All flow through common `visualGlyphOrigins()` and apply equally to Liquid Glass and Solid/Frosted. No material-specific kerning.
+- **Global user requirement:** one shared visible-bounds typography layout and one glyph-independent optical model; no digit-identity special cases. Both materials share typography; their approved optical/material appearance paths remain distinct where required.
+- **Optical status:** Still unresolved against iOS reference. User deliberately did not assess glass blending/scattering in this build because `a6e3825` changed spacing only. Prior shader adjustments were not noticeably different to the user's eye. Do not claim optical improvement until a shader-changing build has been compared on the same wallpaper. Trace actual transmission/scattering through the final composite before arbitrary value changes.
+- **Diagnostic note:** current `interiorVolume` mask is calculated but unused; `glassVolumeScatter` mixes a slightly brighter version of `microfacetTransmission` into `glassTransmitted` before reflection/tint/final composite. Investigate whether the volume contribution meaningfully changes output.
+- **Protected result:** production Solid / Digit Lab Frosted is approved and protected. Latest set's main timing examples are on diagonal wallpaper; do not infer a new beach Liquid Glass assessment from this set.
+- **Latest Production:** #321, run ID `43475347682`, succeeded: [Actions #321](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347682)
+- **Latest Digit Lab:** #43, run ID `43475347715`, succeeded: [Actions #43](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347715)
+- **On-device status:** `a6e3825` spacing is accepted. Optical shader not changed in this build and still awaits focused iteration.
+- **Next priority:** work only on the shared Liquid Glass optical response, preserving the accepted spacing and Solid path. Make one well-founded shader change at a time and use same-wallpaper before/after screenshots. Do not reopen kerning or add per-digit logic.
 
 ## New issue reported and root cause (13 Nov 2026)
 
