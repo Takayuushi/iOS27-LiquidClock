@@ -358,7 +358,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(22.0, 38.0, solidMode);
+            float blurRadius = mix(30.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -604,6 +604,23 @@ class LiquidWallpaperRenderer(
                 volumeScatteredTransmission,
                 glassVolumeScatter
             );
+            // A low-frequency, isotropic environmental veil gives the face
+            // the softly luminous haze of light travelling through glass.
+            // It is deliberately present across the whole glass volume rather
+            // than only at detected edges, and it uses local wallpaper colour
+            // instead of a neutral gray overlay.
+            float glassAtmosphericCoverage = smoothstep(
+                0.10,
+                0.60,
+                glassVolumeRegion
+            );
+            float glassAtmosphericScatter =
+                0.16 * glassAtmosphericCoverage;
+            glassTransmitted = mix(
+                glassTransmitted,
+                frostedWallpaper,
+                glassAtmosphericScatter
+            );
             // Solid keeps its prior diffuse/frosted source path.
             float3 refracted = mix(glassTransmitted, center, solidMode);
             float3 milkyFrost = mix(
@@ -780,8 +797,8 @@ class LiquidWallpaperRenderer(
             // gray veil over dark blue wallpaper visible through the glass.
             float3 ambientEnvironment = mix(
                 ambientGradient,
-                microfacetTransmission,
-                0.55
+                frostedWallpaper,
+                0.72
             );
             float ambientFaceLuma = dot(
                 colour,
