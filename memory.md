@@ -247,6 +247,16 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Production #313 run ID `43456230894` and Digit Lab #35 run ID `43456230829` triggered from `4c8d828`; CI pending at time of note.
 - Solid/Frosted remains protected: all new bevel terms are multiplied by `(1.0-solidMode)`; Solid warp is unchanged. Shared typography spacing naturally applies to both materials and both app modes.
 - User requests continued side-by-side same-wallpaper comparisons and explicitly says to use unified material logic, not per-digit patches. Next acceptance checks: 1–0 gap visible; 4–7 slightly tighter; orange streak is bent/reflected through the 0; vertical arms remain crisp/crystalline; no frosted beach regression; Solid unchanged.
+### Scope correction: latest report did not ask to change 4–7 (13 Nov 2026, ~21:30 IST)
+- User correctly challenged the latest response: their immediately preceding report did NOT request any 4–7 spacing change. They had asked for 4–7 tightening in an earlier report, but that was already implemented as 0.019em in commit `4c8d828`. The most recent screenshot feedback asked only to increase 1–0, slightly increase transmitted-background blur/diffusion, and improve unified blending at the 7's vertical terminal.
+- I mistakenly changed the shared 4–7 gap again from 0.019em to 0.017em in commit `f47ee08`. User did not ask for this.
+- Corrective commit `d5816c05d0ed05aed1dbd2f7528919ca5605ad20` (“Keep latest spacing pass limited to requested 1–0 gap”) restores `minutePairGapEm` from 0.017em to 0.019em. This is the accepted previous 4–7 value; do not make any further 4–7 changes unless the user explicitly asks.
+- Current requested spacing is 1–0 0.036em (clearer ~few px increase from 0.028); 4–7 0.019em (preserved); 0–: 0.0355em (preserved); :–4 0.034em (preserved).
+- The user's latest optical note: in the reference, two adjacent white wallpaper bands blend together more than in our glass; ours retains clearly separated white bands. They want slightly stronger unified transmission blur/diffusion so bands merge more as they pass through the glass, and the blue/white/black regions at the lower end of the 7's vertical arm should blend as a coherent crystal lens rather than remain distinctly segmented. This is a global material requirement, not per-digit handling.
+- The candidate renderer pass in `f47ee08` added a shared 3.8px four-direction microfacet transmission sample mixed 30–38%, and changed pair spacing 1–0 0.028→0.036em / 4–7 0.019→0.017em. Commit `d5816c0` corrects only the latter; all other `f47ee08` changes remain.
+- Builds #314 and Digit Lab #36 from `f47ee08` were triggered but are now superseded for testing because their 4–7 value is 0.017em. Do not hand these builds to the user as the corrected final candidate.
+- New builds from `d5816c0` must be identified by exact head SHA and offered instead. CI/device test pending.
+- Do not claim the optical blend is complete until user verifies same-wallpaper comparison.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -355,18 +365,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `4c8d8286bd5c29160f0003d317d9ebb84c8044b7` — “Unify glyph refraction and refine shared clock spacing”
-- **Latest tested build pair:** Production #312 / Digit Lab #34 succeeded from `10726db`; user says 1–0 should open slightly more, 4–7 slightly tighter; refraction/colour blending through glass still lacks crystal-like bending. User explicitly wants one unified optical model, not per-digit patches.
-- **Latest shared spacing:** 1–0 0.028em; 4–7 0.019em; 0–: 0.0355em; :–4 0.034em. Preserve unless new comparison asks otherwise.
-- **Unified Glass refraction:** IOR 1.52; optical path thickness 46px; edge pull 1.34; SDF normal sample 4.25px with matching 8.5 gradient denominator. No local blur.
-- **Unified bevel reflection:** removed 7-specific terminal normal/lobe; shared `glassBevelSpecular` uses `glassSurfaceNormal`, key half-vector, slope and normal confidence for every numeral.
-- **Earlier Glass finish retained:** dark-only silver-blue ambient scatter, 6.2px soft rim at 0.18 peak, adaptive 24% colour bounce, 22px environment sample; high-luminance gating retained.
-- **Protected Solid:** Solid source/warp/material remains unchanged; new bevel reflection is Glass-only; no new Solid branch values.
-- **Latest completed builds:** Production #312 / Digit Lab #34 succeeded from `10726db`.
-- **Current production build:** #313, run ID `43456230894`, from `4c8d828`; in progress: [Actions #313](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43456230894)
-- **Current Digit Lab build:** #35, run ID `43456230829`, from `4c8d828`; in progress: [Actions #35](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43456230829)
-- **On-device status:** `4c8d828` not tested yet; no visual-success claim until user provides comparison.
-- **Next priority:** verify #313/#35; assess unified refraction on orange streak through 0 and vertical arms of 4/7, crispness, 1–0 / 4–7 pair spacing, beach wallpaper clarity and Solid parity.
+- **Latest renderer commit:** `d5816c05d0ed05aed1dbd2f7528919ca5605ad20` — “Keep latest spacing pass limited to requested 1–0 gap”
+- **Latest user-tested pair:** Production #313 / Digit Lab #35 succeeded from `4c8d828`; user's latest report asks for more visible 1–0 gap, more transmission blending so adjacent white wallpaper bands merge like iOS, and better unified colour blending at the 7 vertical terminal. User did NOT request a new 4–7 adjustment in this report.
+- **Spacing (current accepted):** 1–0 0.036em; 4–7 0.019em (restored from erroneous 0.017); 0–: 0.0355em; :–4 0.034em. Do not change 4–7.
+- **Shared transmission diffusion candidate:** 3.8px four-direction sample with 30–38% blend on refracted sample, same algorithm for every glyph/time; no per-digit rules.
+- **Latest unified refraction:** IOR 1.52; optical path 46px; edge pull 1.34; SDF normal sample 4.25px / gradient denominator 8.5; no glyph-specific branches.
+- **Superseded builds:** Production #314 and Digit Lab #36 from `f47ee08` have wrong 4–7 value 0.017em; do not use as the intended comparison build.
+- **New corrective source:** `d5816c0` restores 4–7 to 0.019 while retaining the requested 1–0 increase and shared diffusion. Verify new Actions runs from exact SHA.
+- **Protected Solid:** Solid/Frosted remains unchanged. Refracted sample is mixed back to original center for Solid mode; pair spacing is shared typography.
+- **On-device status:** d5816c0 not yet tested; do not call visual behavior complete.
+- **Next priority:** verify builds from d5816c0. Compare 1–0, ensure 4–7 unchanged, and inspect if adjacent white bands blend into a single soft transmission through all glyphs while retaining crystal clarity and beach wallpaper detail.
 
 ## New issue reported and root cause (13 Nov 2026)
 
