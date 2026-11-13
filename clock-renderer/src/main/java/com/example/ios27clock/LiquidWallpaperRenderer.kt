@@ -468,7 +468,7 @@ class LiquidWallpaperRenderer(
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
-            float diffusionRadius = mix(16.0, 22.0, bandContrast);
+            float diffusionRadius = mix(24.0, 34.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
@@ -492,15 +492,15 @@ class LiquidWallpaperRenderer(
                 uResolution
             )).rgb;
             float3 microfacetTransmission =
-                center * 0.16 +
-                (softNearA + softNearB) * 0.22 +
-                (softFarA + softFarB) * 0.20;
+                center * 0.08 +
+                (softNearA + softNearB) * 0.24 +
+                (softFarA + softFarB) * 0.22;
             float microfacetDiffusion = mix(
                 0.42,
-                0.86,
+                0.96,
                 bandContrast
             ) * mix(
-                0.92,
+                0.96,
                 1.0,
                 smoothstep(0.04, 0.32, glassProfileSlope)
             );
@@ -518,8 +518,8 @@ class LiquidWallpaperRenderer(
             // high-contrast wallpaper bands after the common diffusion pass.
             // The adjustment is image-driven and identical for every glyph.
             float glassTransmissionSaturation = mix(
-                1.48,
-                1.20,
+                1.42,
+                1.08,
                 bandContrast
             );
             float3 saturatedRefractedGlass = clamp(
@@ -567,7 +567,7 @@ class LiquidWallpaperRenderer(
             float scatterInLitGlass = smoothstep(0.10, 0.34, microfacetLuma);
             float scatterWhiteProtection = 1.0 -
                 0.42 * smoothstep(0.72, 0.94, microfacetLuma);
-            float glassVolumeScatter = 0.22 *
+            float glassVolumeScatter = 0.28 *
                 scatterInLitGlass *
                 scatterWhiteProtection *
                 smoothstep(0.12, 0.60, glassVolumeRegion);
