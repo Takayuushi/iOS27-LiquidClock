@@ -619,47 +619,42 @@ class LiquidWallpaperRenderer(
                 screenedGlassFace,
                 glassBounceStrength
             );
-            // A restrained volume-scatter contribution lifts and blends the
-            // transmitted colour in illuminated midtones. It is strongest
-            // where the local image contains useful light, but tapers on nearly
-            // white samples so bright wallpapers do not become milky/frosted.
-            float microfacetLuma = dot(
-                microfacetTransmission,
-                float3(0.2126, 0.7152, 0.0722)
-            );
-            float scatterInLitGlass = smoothstep(0.10, 0.34, microfacetLuma);
-            float scatterWhiteProtection = 1.0 -
-                0.42 * smoothstep(0.72, 0.94, microfacetLuma);
-            float glassVolumeScatter = 0.28 *
-                scatterInLitGlass *
-                scatterWhiteProtection *
-                smoothstep(0.12, 0.60, glassVolumeRegion);
+            // Treat transmission as one glass medium: a small directional
+            // microfacet component preserves optical refraction, while the
+            // isotropic wallpaper environment supplies the broad atmospheric
+            // in-scattering seen through hazy illuminated glass.
             float3 volumeScatteredTransmission = clamp(
                 microfacetTransmission * 1.10 +
                     float3(0.016, 0.020, 0.028),
                 0.0,
                 1.0
             );
-            glassTransmitted = mix(
-                glassTransmitted,
-                volumeScatteredTransmission,
-                glassVolumeScatter
-            );
-            // A low-frequency, isotropic environmental veil gives the face
-            // the softly luminous haze of light travelling through glass.
-            // It is deliberately present across the whole glass volume rather
-            // than only at detected edges, and it uses local wallpaper colour
-            // instead of a neutral gray overlay.
             float glassAtmosphericCoverage = smoothstep(
                 0.10,
                 0.60,
                 glassVolumeRegion
             );
+            // A slightly longer optical path through the glyph's interior
+            // increases scattering smoothly toward the centre of every stroke.
+            // The same distance field and response are used for all numerals.
+            float glassOpticalPath = mix(
+                0.90,
+                1.0,
+                smoothstep(1.0, 22.0, insideDistance)
+            );
             float glassAtmosphericScatter =
-                0.46 * glassAtmosphericCoverage;
+                0.62 * glassAtmosphericCoverage * glassOpticalPath;
+            // Keep a restrained directional component inside the otherwise
+            // broad volume scatter so the face stays liquid and image-aware,
+            // rather than becoming a flat frosted overlay.
+            float3 glassVolumeInScatter = mix(
+                volumeScatteredTransmission,
+                frostedWallpaper,
+                0.82
+            );
             glassTransmitted = mix(
                 glassTransmitted,
-                frostedWallpaper,
+                glassVolumeInScatter,
                 glassAtmosphericScatter
             );
             // Bright-pass bloom is screen-composited at low strength so
@@ -699,9 +694,23 @@ class LiquidWallpaperRenderer(
             );
             float glassFaceReflectivity =
                 glassVolumeFresnel * 0.64 * reflectionHighlightProtection;
+            // Convolve a portion of the environment reflection with the same
+            // local wallpaper volume. The broad reflection blends into the
+            // transmitted haze while the later key/fill glints preserve crisp
+            // glass contours and specular definition.
+            float glassReflectionRoughness = mix(
+                0.22,
+                0.30,
+                smoothstep(0.08, 0.48, glassProfileSlope)
+            );
+            float3 glassSoftEnvironmentReflection = mix(
+                chromaticEnvironmentReflection,
+                frostedWallpaper,
+                glassReflectionRoughness
+            );
             float3 glassFace = mix(
                 refracted,
-                chromaticEnvironmentReflection,
+                glassSoftEnvironmentReflection,
                 glassFaceReflectivity
             );
             float innerGlassTint = smoothstep(0.0, 12.0, insideDistance) *
