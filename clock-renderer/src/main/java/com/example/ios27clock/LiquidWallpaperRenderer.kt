@@ -82,6 +82,7 @@ class LiquidWallpaperRenderer(
         private const val MAX_COMMITTED_WIDTH_FRACTION = 0.94f
         private const val SDF_RANGE_PX = 24f
         private const val SDF_PADDING_PX = 28
+        private const val GLASS_LIGHT_WRAP_RADIUS_PX = 18f
         private const val SDF_CARDINAL_COST = 5
         private const val SDF_DIAGONAL_COST = 7
 
@@ -105,7 +106,17 @@ class LiquidWallpaperRenderer(
 
         half4 main(float2 p) {
             float coverage = uGlyphMask.eval(p).a;
-            if (coverage < 0.002) {
+
+            // The padded signed-distance field extends beyond the glyph mask.
+            // Keep a small outside region active so bright wallpaper light can
+            // wrap softly around the glass edge instead of being hard-clipped.
+            float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
+            float sdf = uGlyphSdf.eval(sdfPoint).a;
+            float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
+            float solidMode = clamp(uFrosted, 0.0, 1.0);
+            float outsideDistance = max(-signedDistance, 0.0);
+            if (coverage < 0.002 &&
+                (solidMode > 0.5 || outsideDistance > 18.0)) {
                 return half4(0.0);
             }
             float colonCoverage = uColonMask.eval(p - uColonOrigin).a;
@@ -114,9 +125,6 @@ class LiquidWallpaperRenderer(
             // The liquid-glass surface is a lens, not a raised text bevel.
             // A wider distance profile lets refraction travel through the
             // translucent face while its narrow Fresnel rim catches light.
-            float2 sdfPoint = (p - uSdfOrigin) * uSdfScale;
-            float sdf = uGlyphSdf.eval(sdfPoint).a;
-            float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
             // A slightly wider finite-difference baseline filters single-pixel
             // SDF stair-steps before they become visible as fractured refraction.
             float2 sampleStep = float2(4.25, 4.25) * uSdfScale;
@@ -130,7 +138,6 @@ class LiquidWallpaperRenderer(
             float2 normal = -gradient / max(gradientLength, 0.0005);
             float2 refractionNormal = normal * normalConfidence;
 
-            float solidMode = clamp(uFrosted, 0.0, 1.0);
             float insideDistance = max(signedDistance, 0.0);
 
             // Glass has a gently curved optical face and a broader, softer
@@ -219,12 +226,18 @@ class LiquidWallpaperRenderer(
             float glassProfileSlope = length(
                 float2(heightGradientX, heightGradientY)
             );
-            float glassProfileCoverage = 1.0 -
-                smoothstep(
+            float glassInteriorGate = smoothstep(
+                -0.65,
+                0.75,
+                signedDistance
+            );
+            float glassProfileCoverage = (
+                1.0 - smoothstep(
                     glassProfileRadius * 0.78,
                     glassProfileRadius,
                     insideDistance
-                );
+                )
+            ) * glassInteriorGate;
             float3 glassSurfaceNormal = normalize(float3(
                 -heightGradientX,
                 -heightGradientY,
@@ -921,7 +934,7 @@ class LiquidWallpaperRenderer(
             float glassOpacity = 1.0;
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
-            float alpha = clamp(
+            float bodyAlpha = clamp(
                 coverage * (
                     bodyOpacity +
                     edgeBand * mix(0.31, 0.10, solidMode) +
@@ -931,8 +944,48 @@ class LiquidWallpaperRenderer(
                 1.0
             );
 
-            // RuntimeShader outputs use premultiplied alpha.
-            float3 premultipliedColour = clamp(colour, 0.0, 1.0) * alpha;
+            // A restrained chromatic light-wrap sits OUTSIDE the glyph mask.
+            // It is driven by nearby bright wallpaper colour, not a neutral
+            // white outline or a cast shadow, and fades over a short distance.
+            // It is intentionally Liquid-Glass-only; Frosted remains unchanged.
+            float glassWrapDistance = exp(-outsideDistance / 7.5) *
+                (1.0 - smoothstep(12.0, 18.0, outsideDistance));
+            float glassWrapEnergy = max(
+                glassBrightBloom.r,
+                max(glassBrightBloom.g, glassBrightBloom.b)
+            );
+            float glassWrapActivation = smoothstep(
+                0.06,
+                0.24,
+                glassWrapEnergy
+            );
+            float glassWrapOutsideMask = 1.0 -
+                smoothstep(0.0, 1.0, coverage);
+            float glassLightWrapAlpha =
+                0.14 *
+                glassWrapDistance *
+                glassWrapActivation *
+                glassWrapOutsideMask *
+                (1.0 - solidMode);
+            float3 glassLightWrapColour = clamp(
+                glassBrightBloom * 0.72 +
+                    microfacetTransmission * 0.28,
+                0.0,
+                1.0
+            );
+            float alpha = clamp(
+                bodyAlpha + glassLightWrapAlpha * (1.0 - bodyAlpha),
+                0.0,
+                1.0
+            );
+
+            // RuntimeShader outputs use premultiplied alpha. The halo is
+            // composited as a separate low-alpha light contribution so it
+            // blends with the original wallpaper rather than replacing it.
+            float3 premultipliedColour =
+                clamp(colour, 0.0, 1.0) * bodyAlpha +
+                glassLightWrapColour *
+                    glassLightWrapAlpha * (1.0 - bodyAlpha);
             return half4(premultipliedColour, alpha);
         }
     """.trimIndent()
@@ -1297,7 +1350,13 @@ class LiquidWallpaperRenderer(
             PorterDuff.Mode.SRC_IN
         )
         clockLayerBounds.set(glyphBounds)
-        clockLayerBounds.inset(-shadowOffset * 2f, -shadowOffset * 2f)
+        val glassWrapPadding = if (glassMode) {
+            GLASS_LIGHT_WRAP_RADIUS_PX * max(previewScaleX, previewScaleY)
+        } else {
+            0f
+        }
+        val layerPadding = max(shadowOffset * 2f, glassWrapPadding)
+        clockLayerBounds.inset(-layerPadding, -layerPadding)
         clockLayerBounds.intersect(
             0f,
             0f,
@@ -1341,7 +1400,14 @@ class LiquidWallpaperRenderer(
                         glyphBaseBounds.centerY() / height.toFloat()
                     )
                     shaderPaint.shader = shader
-                    canvas.drawRect(glyphBaseBounds, shaderPaint)
+                    val shaderDrawBounds = RectF(glyphBaseBounds)
+                    if (glassMode) {
+                        shaderDrawBounds.inset(
+                            -GLASS_LIGHT_WRAP_RADIUS_PX,
+                            -GLASS_LIGHT_WRAP_RADIUS_PX
+                        )
+                    }
+                    canvas.drawRect(shaderDrawBounds, shaderPaint)
                     shaderPaint.shader = null
                     shaderDrawn = true
                 } catch (exception: RuntimeException) {
