@@ -127,6 +127,11 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - This is shared `:clock-renderer` typography and therefore affects both production Glass and Solid plus both Digit Lab options.
 - Production build #303 and Digit Lab build #25 were triggered from `71a36ce`; CI and device verification pending.
 - User plans to test the original production app after this final micro-adjustment. If it behaves correctly, they expect to declare the project done. Do not start additional visual redesigns unless the user reports a specific regression.
+### Clarification: hour pair vs. hour-to-colon gap (13 Nov 2026)
+- User corrected the interpretation of the previous spacing request: **the `10` pair itself is NOT too tight**. The issue is that the complete hour pair `10` sits too close to the colon, specifically the visible gap between `0` and `:`. Do not change the `1–0` gap based on that feedback.
+- The previous commit `71a36ce` incorrectly changed `hourPairGapEm` 0.024em→0.021em. Commit `b44c11c734e7d96ec50cede1c35f3a91e014d6b5` restores it to 0.024em and instead increases only `hourToColonGapEm` from 0.016em to 0.024em.
+- Keep `minutePairGapEm` (4–7) at the user's requested slight increase of 0.021em. Keep `colonToMinuteGapEm` at 0.030em. No font, material, glyph profile, or colon geometry changes.
+- Production #304 and Digit Lab #26 have been triggered from `b44c11c`; CI/device verification pending.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -235,15 +240,13 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `71a36ce6a93b4ffa011d832bdf0f712956da6ab8` — “Fine-tune hour and minute pair gaps”
-- **Latest user-tested build pair:** Production #302 and Digit Lab #24 succeeded from `9cc30ea`; user says almost there.
-- **Latest shared spacing:** `1–0` hour pair 0.021em; `4–7` minute pair 0.021em; hour-to-colon 0.016em; colon-to-minute 0.030em. Only first two values changed in `71a36ce`; colon spacing is deliberately unchanged. Applies to Glass and Solid in production and both Digit Lab materials.
-- **Glass material:** retains the `9cc30ea` state: reduced glow, horizontal shoulder highlight control, sharp wallpaper-derived face reflection. Do not alter this pass unless user reports a specific material regression.
-- **Solid material:** approved/protected; no shader values changed in typography commits.
-- **Colon:** retain its current Glass 3.2px optical profile and Solid 20px profile; no changes in `71a36ce`.
-- **Current production build:** #303, run ID `43415035765`, from `71a36ce`; in progress: [Actions #303](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415035765)
-- **Current Digit Lab build:** #25, run ID `43415035655`, from `71a36ce`; in progress: [Actions #25](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415035655)
-- **Next user step:** test #303/#25, then test the original production app. If the original app works and visual spacing is accepted, treat this project as complete; do not invent further improvements.
+- **Latest renderer source commit:** `b44c11c734e7d96ec50cede1c35f3a91e014d6b5` — “Correct spacing between hour pair and colon”
+- **Corrected shared visible-outline spacing:** `1–0` remains 0.024em (restored; do not change); `0–:` is now 0.024em (opened from 0.016em); `:–4` stays 0.030em; `4–7` stays 0.021em. User's clarification was that the hour pair as a whole sits too close to the colon, not that 1 and 0 are too close.
+- **Other rendering:** no changes in this correction. Preserve Glass optical candidate and approved Solid material.
+- **Previous build #303:** Production succeeded from `71a36ce`; Digit Lab #25 succeeded from `71a36ce`.
+- **Current production build:** #304, run ID `43415350836`, from `b44c11c`; running: [Actions #304](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415350836)
+- **Current Digit Lab build:** #26, run ID `43415350817`, from `b44c11c`; running: [Actions #26](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415350817)
+- **Next user step:** verify #304/#26 and compare `10 :` spacing. Do not change the internal 1–0 pair. After acceptance, user intends to verify original production app.
 
 ## New issue reported and root cause (13 Nov 2026)
 
