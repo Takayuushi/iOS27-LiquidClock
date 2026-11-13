@@ -170,6 +170,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Solid protection: Glass face lighting is mixed to exactly 1.0 for Solid; bounce is selected out by the existing solidMode mix; environment blur is 38px in Solid; face reflection contribution is gated by (1-solidMode); horizontal glass highlight affects only Glass terms. The approved Solid material is untouched.
 - Production #307 and Digit Lab #29 were triggered from 25893a9; CI and on-device verification pending.
 
+### Beach frosting and same-wallpaper comparison correction (13 Nov 2026, ~19:29 IST)
+- User tested Production #307 and Digit Lab #29 from `25893a9`. Latest screenshots include the beach wallpaper preview, the diagonal streak wallpaper preview, and the iOS reference clock over the same diagonal wallpaper. User says ours is still not at iOS brightness/vibrancy and the beach version reads almost like Frosted Glass.
+- Source diagnosis: #307 stacked multiple full-luminance reflection contributions (`glassFaceReflectivity = Fresnel * 0.88`, a 5.5–24% screen blend of two directional environment samples, and a further 22% Fresnel mix) plus a 42px blurred sample contributing up to 38% internal bounce. On bright pink/blue beach sky this can wash the face into a pale layer; on the high-contrast diagonal wallpaper the same reflections pick up vivid streak colours and look better.
+- Commit `686220caa878bc7b92516206bed190434868c93d` — “Prevent beach frosting with luminance-aware chromatic reflections”:
+  - reduces Glass blur radius from 42px to 22px; Solid remains 38px.
+  - reduces bounce maximum from 38% to 20%, tightens darkness gate to luma 0.08–0.24, requires nearby illumination at luma 0.10–0.32, and reduces blurred sample gain/bias.
+  - caps Fresnel reflection multiplier at 0.64 (from 0.88) and attenuates it for high-luminance environment samples. Reflection colour is separated into luma/chroma; chroma gets a small 1.18x boost.
+  - removes the broad screen-blend reflection. Replaces it with chroma pickup from directional wallpaper samples and only a small luminance lift on genuinely dark glyph-face regions. Horizontal-surface limiter remains active.
+  - reduces the final stacked Fresnel reflection from 22% full-colour mix to 12% chroma-only contribution.
+  - spacing, glyph geometry, official SF Pro axes, colon geometry and white rim values unchanged.
+- Solid/Frosted protection: blur stays 38px under `solidMode`; new bounce is mixed to the original solid source; face reflectivity is used only to form the Glass face before the Solid/Frosted `body` selection; directional chroma pickup and final Fresnel contribution are explicitly gated by `(1.0 - solidMode)`. Approved Solid renderer remains unchanged.
+- Production #308 and Digit Lab #30 were triggered from `686220c`; CI and on-device validation pending.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -277,19 +289,17 @@ Changes:
 
 ## Status snapshot
 
-- **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer source commit:** 25893a9e8888d8e457f91327b64865b477e90d14 — “Increase Liquid Glass inner colour and confine reflections to curved bevels”
-- **Latest user-tested build pair:** Production #306 and Digit Lab #28 succeeded from cc4719c. User says Glass is still dull/dim vs iOS; horizontal bars on 4 and 7 appear too wide.
-- **Latest Glass-only tuning (25893a9):** base face lighting 0.82 + 0.30 key + 0.16 fill; adaptive internal bounce max 38% and local blur radius 42px; horizontal shoulder highlight factor reduces to 0.58; face reflection now uses screen blend, 5.5–24% based on surface slope, gated by horizontal highlight.
-- **Glyph geometry / font axes:** no changes in cc4719c or 25893a9. User is previewing with weight 757 and compressed width. On latest screenshot Digit Lab clock is roughly 20% taller and 10% wider than native reference; mention this transparently when discussing absolute pixel widths.
-- **Latest spacing:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Preserve.
-- **Glass colon:** 3.2px optical profile; Solid colon 20px.
-- **Protected Solid:** no approved Solid settings changed. Solid continues 38px blur, original face and original material values. Shared typography unchanged.
-- **Previous candidate builds:** #306 and #28 passed from cc4719c.
-- **Current production build:** #307, run ID 43432874153, from 25893a9; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43432874153
-- **Current Digit Lab build:** #29, run ID 43432873884, from 25893a9; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43432873884
-- **On-device status:** 25893a9 not yet tested. Await fresh same-wallpaper comparison; no visual-success claim until user acceptance.
-- **Primary next priority:** verify #307/#29 CI; compare after matching Digit Lab clock bounds to the native reference. Judge whole-stroke color/brightness, beach detail retention, 4/7 bar thickness, and Solid parity.
+- **Active branch:** `feature/live-wallpaper-big-clock`
+- **Latest renderer source commit:** `686220caa878bc7b92516206bed190434868c93d` — “Prevent beach frosting with luminance-aware chromatic reflections”
+- **Latest user-tested builds:** Production #307 and Digit Lab #29 succeeded from `25893a9`. The user reports the diagonal image remains dimmer/less vivid than iOS and the beach image looks almost frosted.
+- **Latest Glass fix:** 22px blurred capture (Solid 38px); internal bounce max 20% and gated to genuinely dark refracted pixels; Fresnel blend reduced and high-luminance samples attenuated; full screen-blend removed; directional reflections are chroma-first with only a small dark-face luminance lift; last Fresnel contribution is 12% chroma-only.
+- **Typography:** hour pair 0.024em; hour-to-colon 0.027em; colon-to-minute 0.033em; minute pair 0.021em. Preserve.
+- **Glass colon:** 3.2px profile. Solid remains 20px.
+- **Protected Solid:** blur remains 38px; new bounce, chromatic reflections and face updates are gated/mixed out. No approved Solid/Frosted values changed.
+- **Current production build:** #308, run ID `43439831696`, from `686220c`; in progress at last check: [Actions #308](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43439831696)
+- **Current Digit Lab build:** #30, run ID `43439831647`, from `686220c`; in progress at last check: [Actions #30](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43439831647)
+- **On-device status:** `686220c` not yet tested. Await new same-wallpaper and beach screenshots; don't claim visually fixed from source changes or successful CI alone.
+- **Primary next priority:** verify #308/#30; compare iOS diagonal reference and beach preview for colourful internal reflections, clear wallpaper detail and no frosted veil; verify Solid parity.
 
 ## New issue reported and root cause (13 Nov 2026)
 
