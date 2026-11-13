@@ -250,8 +250,8 @@ class LiquidWallpaperRenderer(
             // receive a white fill across the whole face.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                7.0
-            ) * 0.64 * smoothstep(0.08, 0.48, glassProfileSlope) * glassHorizontalHighlight;
+                5.5
+            ) * 0.52 * smoothstep(0.08, 0.48, glassProfileSlope) * glassHorizontalHighlight;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 42.0
@@ -468,7 +468,7 @@ class LiquidWallpaperRenderer(
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
-            float diffusionRadius = mix(14.0, 20.0, bandContrast);
+            float diffusionRadius = mix(16.0, 22.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
@@ -492,9 +492,9 @@ class LiquidWallpaperRenderer(
                 uResolution
             )).rgb;
             float3 microfacetTransmission =
-                center * 0.22 +
-                (softNearA + softNearB) * 0.21 +
-                (softFarA + softFarB) * 0.18;
+                center * 0.16 +
+                (softNearA + softNearB) * 0.22 +
+                (softFarA + softFarB) * 0.20;
             float microfacetDiffusion = mix(
                 0.42,
                 0.86,
