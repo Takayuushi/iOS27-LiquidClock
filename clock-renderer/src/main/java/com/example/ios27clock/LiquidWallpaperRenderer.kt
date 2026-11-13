@@ -143,7 +143,9 @@ class LiquidWallpaperRenderer(
             // plate with an embossed perimeter. The SDF measures distance
             // inward from either side of the stroke; an elliptical cap turns
             // that distance into a continuous optical surface normal.
-            float GLASS_PROFILE_RADIUS = 13.0;
+            // A wider cap gives each stroke a visibly rounded front surface,
+            // rather than reducing the entire material to a narrow contour.
+            float GLASS_PROFILE_RADIUS = 20.0;
             float profileDistance = clamp(
                 insideDistance,
                 0.0,
@@ -161,7 +163,7 @@ class LiquidWallpaperRenderer(
             );
             float glassProfileCoverage = 1.0 -
                 smoothstep(
-                    GLASS_PROFILE_RADIUS * 0.72,
+                    GLASS_PROFILE_RADIUS * 0.78,
                     GLASS_PROFILE_RADIUS,
                     insideDistance
                 );
@@ -176,13 +178,13 @@ class LiquidWallpaperRenderer(
             float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);
             float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
             float fillDiffuse3D = max(dot(glassSurfaceNormal, fillLight3D), 0.0);
-            // Specular response is concentrated on the curved shoulder.
-            // Keep the face itself clear; strong highlights belong to the
-            // rounded glass cross-section, not a white fill over every glyph.
+            // The broad reflection also responds to the front-facing surface.
+            // It is deliberately weaker than the shoulder glints, but it must
+            // remain present across the face or the digit reads as an outline.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                13.0
-            ) * 0.24 * glassProfileCoverage;
+                5.0
+            ) * 0.20;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 38.0
@@ -210,17 +212,13 @@ class LiquidWallpaperRenderer(
             float waveA = sin(p.y * 0.0038 + uTime * 0.10);
             float waveB = cos(p.x * 0.0028 - uTime * 0.09);
 
-            // SDF lens refraction: maximum displacement sits at the glyph
-            // contour and falls smoothly toward the centre of each stroke.
-            // This follows the glyph's real curves instead of filling them
-            // with a broad translucent/white overlay.
-            float lensDepth = 1.0 -
-                smoothstep(0.0, 40.0, insideDistance);
-            float lensCurve = 1.0 - sqrt(max(
-                1.0 - lensDepth * lensDepth,
-                0.0
-            ));
-            float glassDisplacement = lensCurve * 38.0;
+            // Refraction uses the derivative of the same rounded cross-section
+            // that supplies the surface normal. This keeps distortion tied to
+            // the glass curvature and avoids the broad, wavy 38px displacement.
+            float glassDisplacement = min(
+                glassProfileSlope * 8.0,
+                22.0
+            );
             float solidDisplacement =
                 1.5 + solidEdge * 6.0 + solidBevel * 1.1;
 
@@ -317,11 +315,20 @@ class LiquidWallpaperRenderer(
             );
             milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
 
-            // Keep the main face as a clear refracted view of the wallpaper.
-            // Environment reflection is applied later only where the SDF
-            // normal turns toward a grazing angle (Fresnel), not across the
-            // entire glyph face.
-            float3 glassFace = refracted;
+            // Clear glass still reflects its environment. Mix a restrained
+            // wallpaper-coloured reflection into the face, then increase it
+            // toward the curved shoulder using Fresnel. This gives the front
+            // surface a visible optical body without a white/frosted overlay.
+            float glassFaceReflectivity = clamp(
+                0.18 + glassVolumeFresnel * 0.72,
+                0.18,
+                0.52
+            );
+            float3 glassFace = mix(
+                refracted,
+                environmentReflection,
+                glassFaceReflectivity
+            );
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
                 milkyFrost,
@@ -367,16 +374,16 @@ class LiquidWallpaperRenderer(
             colour += uAccentColor *
                 solidFillSpecular * 0.15 * solidMode;
 
-            // Reflected wallpaper and specular highlights are restricted to
-            // the curved glass shoulder. This produces the bright optical rim
-            // while leaving the central face transparent and undiffused.
+            // Fresnel adds the stronger grazing-angle reflection on top of
+            // the subtler face reflection. The broad specular remains visible
+            // on the front cap; tight glints stay confined to its shoulder.
             colour = mix(
                 colour,
                 environmentReflection,
-                glassVolumeFresnel * 0.32 * (1.0 - solidMode)
+                glassVolumeFresnel * 0.22 * (1.0 - solidMode)
             );
             colour += float3(0.92, 0.97, 1.0) *
-                glassAreaReflection * (1.0 - solidMode) * 1.05;
+                glassAreaReflection * (1.0 - solidMode) * 0.92;
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.20;
             colour += float3(0.68, 0.82, 1.0) *
@@ -787,7 +794,15 @@ class LiquidWallpaperRenderer(
         val mask = glyphMask ?: return
         if (glyphBounds.isEmpty) return
 
-        val shadowOffset = max(2f, height * 0.0015f)
+        val shadowOffset = if (glassMode) {
+            max(4f, height * 0.0022f)
+        } else {
+            max(2f, height * 0.0015f)
+        }
+        shadowPaint.colorFilter = PorterDuffColorFilter(
+            Color.argb(if (glassMode) 58 else 38, 3, 9, 22),
+            PorterDuff.Mode.SRC_IN
+        )
         clockLayerBounds.set(glyphBounds)
         clockLayerBounds.inset(-shadowOffset * 2f, -shadowOffset * 2f)
         clockLayerBounds.intersect(
