@@ -140,7 +140,7 @@ class LiquidWallpaperRenderer(
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 1.15) / 6.2);
+            float glassRim = exp(-abs(signedDistance - 1.15) / 4.8);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             // Model each digit stroke as a rounded glass rod, not a flat
@@ -154,11 +154,10 @@ class LiquidWallpaperRenderer(
             // normal, refraction and lighting all describe the same surface.
             // The colon uses a shallower lens cap in Liquid Glass only.
             // Solid/Frosted always retains the original 20px profile.
-            float glassDigitRadius = mix(
-                20.0,
-                24.0,
-                (1.0 - solidMode) * (1.0 - colonFlag)
-            );
+            // Keep the Glass digit silhouette at the original cap width.
+            // The previous 24px cap made the bright shoulder look too broad,
+            // especially around the SF Pro 4 and 7.
+            float glassDigitRadius = 20.0;
             float glassProfileRadius = mix(
                 glassDigitRadius,
                 3.2,
@@ -250,15 +249,15 @@ class LiquidWallpaperRenderer(
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 7.0
-            ) * 0.82 * smoothstep(0.08, 0.48, glassProfileSlope);
+            ) * 0.64 * smoothstep(0.08, 0.48, glassProfileSlope);
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 42.0
-            ) * 1.18;
+            ) * 0.88;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
                 30.0
-            ) * 0.72;
+            ) * 0.56;
             float glassSideShadow = glassProfileCoverage *
                 max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
             float outerLip = 1.0 -
@@ -506,13 +505,13 @@ class LiquidWallpaperRenderer(
             float glassRimLighting = glassRim *
                 pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35);
             colour += float3(0.92, 0.97, 1.0) *
-                glassAreaReflection * (1.0 - solidMode) * 1.12;
+                glassAreaReflection * (1.0 - solidMode) * 0.96;
             colour += float3(0.98, 0.99, 1.0) *
-                glassKeyGlint * (1.0 - solidMode) * 1.55;
+                glassKeyGlint * (1.0 - solidMode) * 1.22;
             colour += float3(0.68, 0.82, 1.0) *
-                glassFillGlint * (1.0 - solidMode) * 1.02;
+                glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.96, 0.98, 1.0) *
-                glassRimLighting * (1.0 - solidMode) * 0.34;
+                glassRimLighting * (1.0 - solidMode) * 0.23;
 
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             // These perimeter strokes belong only to Frosted Glass; applying
