@@ -15,19 +15,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Digit Lab must also download the same official Apple DMG. Its digit-only subset is acceptable only when it retains and validates both `wght` and `wdth` axes. GitHub is the CI/source-code host, not the font provider.
 
 ### Production / Digit Lab relationship — test bench only
-- **The production iOS 27 Liquid Clock app is the only product being developed and maintained.** Digit Lab is a disposable, separate testing APK used only to inspect all digits/material effects without waiting for the real clock to tick.
-- Do not treat Digit Lab as a second app/product, create a parallel feature roadmap, or spend ongoing maintenance effort polishing its UI or architecture.
-- When the user is actively using Digit Lab to validate a production renderer change, refresh its copied renderer from the current production `LiquidWallpaperRenderer.kt` so the test result is meaningful. Then retain only the test-only fixed-time override (`setTestTimeOverride` / `currentTimeText` hook) needed by the harness.
-- The parity requirement is **for valid test sessions**, not a standing requirement to keep the test APK continuously maintained. Do not let Digit Lab changes drive production design; production remains the source of truth.
-- Keep its separate package ID, isolated image/preferences storage and no-`WallpaperManager` behaviour so it cannot alter the real app or installed wallpaper.
-- Do not add Digit Lab test controls or fixed-time hooks to the production app.
+- **The production iOS 27 Liquid Clock app is the only product being developed and maintained.** Digit Lab is a separate disposable APK used to inspect digits and material effects without waiting for the real clock to tick.
+- Do not treat Digit Lab as a second product or create a parallel feature roadmap.
+- **Renderer architecture was unified in commit `466b7a287e514a62ad550b7e91e2b77c969fae71`.** Production includes `:clock-renderer`; `digit-lab/settings.gradle.kts` includes the exact same module from `../clock-renderer`. Both APKs compile the same `LiquidWallpaperRenderer.kt` and AGSL source. Do not describe Digit Lab as using a copied/stale renderer or attempt manual file sync while this shared-module arrangement remains in place.
+- Digit Lab's test-only text source is injected by `DigitLabActivity` through `RendererClockTextSource`; do not add fixed-time test hooks or controls to production.
+- Keep Digit Lab's separate package ID, isolated files/preferences and no-`WallpaperManager` behaviour so it cannot alter the real app or installed wallpaper.
 
 ### Current work to resume after a new chat
-- User reported the production clock's `0` still has a false white light band and a cracked upper inner curve; the `1` still has a badly wrong silhouette. The user has previously seen the `7` drawn correctly, so do not blindly redesign glyphs or assume the official font changed.
-- A source audit found production renderer SHA `98f49dd9240378918b96e65957f1537c21f7f6ee` and Digit Lab renderer SHA `53b4c54ff02e215ae7ccbd9fdf1dd785d2650541`. They are **not byte-identical**; Digit Lab is an older renderer snapshot plus its test-time hook. Sync the production renderer into Digit Lab before treating it as a trustworthy test of current glyph geometry.
-- Main branch for active work: `feature/live-wallpaper-big-clock`.
-- The user's immediate request is to build both the production APK and the separate Digit Lab APK correctly with Apple's official SF Pro assets/axes. Do not substitute the GitHub mirror, and do not add test functionality to the production app.
-- Before handing over APKs, verify each workflow's build SHA, font-install log, variable-axis validation, APK compile result and uploaded artifact. A successful workflow run for an earlier SHA is not proof for the current source.
+- **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
+- The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
+- Commit `54679f0` changes the Liquid Glass stroke profile to a rounded SDF-derived glass-rod cross-section and introduces a broad face reflection plus tighter glints. It deliberately removes the previous independent outline/caustic strokes to avoid embossed text. This is a new visual pass, **not yet confirmed as a fix on the user's device**.
+- Do not reopen old reports about individual glyphs, pinch behaviour, or wallpaper isolation unless the user reports a regression. Preserve the existing fixes and verify renderer parity/gesture behaviour when testing the latest APKs.
+- Official Apple SF Pro variable font and Display faces, extracted from Apple's official `SF-Pro.dmg`, remain mandatory. Preserve both real `wght` and `wdth` axes.
 
 ## Project identity and working rules
 
@@ -97,56 +96,41 @@ Changes:
 
 ## Current state: what is done vs. what is not
 
-### Implemented in the latest commit
-- Stronger liquid-glass specular/edge lighting and layered reflections.
-- Horizontal clock width pinch with a separate saved width scale.
-- Existing vertical height pinch retained.
-- Matching gesture support in both the wallpaper service and in-app wallpaper preview.
-- CI build #264 succeeded and uploaded the debug APK.
+### Implemented in the current source
+- Production and Digit Lab now share the same `:clock-renderer` Gradle library; both build the same LiquidWallpaperRenderer and AGSL shader.
+- Independent horizontal width pinch and vertical height pinch are implemented in the wallpaper service and in-app preview.
+- Candidate/preview wallpaper and composition data are isolated from the applied live wallpaper; only the explicit Apply action commits them.
+- The renderer uses official Apple SF Pro variable font assets, with real `wght` and `wdth` axes retained and validated by CI.
+- The 13 Nov shader iterations introduced SDF-derived 3D glyph normals and then a rounded glass-rod surface profile.
 
-### Still needs testing or fixing
-1. **Visual shine — highest priority**
-   - Install/test build #264 and compare the same clock/wallpaper framing against the first screenshot reference.
-   - Check that the new highlights look like polished reflective glass, not a white outline, chrome embossing, rainbow fringe, or opaque frosting.
-   - Tune AGSL in small controlled changes; retain wallpaper-derived reflections and the depth effect.
-2. **Horizontal pinch — not device-verified yet**
-   - Test horizontal spreading/pinching changes width independently of height.
-   - Test vertical spreading/pinching still changes height independently of width.
-   - Confirm the clock remains centred, does not distort or jump, does not exceed the viewport, and the selected foreground object still occludes the clock correctly.
-   - Confirm width persists after releasing the gesture, leaving/reopening Clock Studio, and reloading the wallpaper.
-   - Test gestures both in the in-app wallpaper preview and on the installed live wallpaper.
-3. **Preview/install parity**
-   - Confirm the exact same material, clock proportions and depth/object masking in the in-app preview and installed wallpaper. Do not treat these as unrelated visual implementations.
-4. **Memory pressure / OOM — known outstanding issue**
-   - A supplied `crash-report.txt` from app version `1.0.243-debug` on Android 17 / Samsung SM-S936B records repeated `OutOfMemoryError` during font/weight changes in Clock Studio.
-   - One failure occurs in `LiquidWallpaperRenderer.typefaceFor()` while `Typeface.Builder` allocates an approximately 21.4 MB direct buffer; the path goes through `rebuildGlyphMask()` / `reloadAppearance()`.
-   - Another occurs during `createGlyphSdf()` / `rebuildGlyphSdf()` while the process has very little free heap.
-   - Investigate font allocation/caching and SDF/bitmap lifetime before adding more memory-heavy rendering work. Avoid repeated Typeface construction, avoid duplicate large buffers, release retired masks/SDFs safely, and preserve the last valid preview on allocation failure.
-   - The latest commit did not fix these OOM issues.
-5. **Regression checks**
-   - Ensure horizontal width changes do not alter the existing vertical scale or reset clock position.
-   - Ensure date, wallpaper, foreground-depth occlusion, device tilt, and current font/material selections remain intact.
-   - Ensure the Solid material mode remains usable and is not unintentionally affected by Glass-only shader tuning.
+### Current visual issue
+- The latest user screenshots show Liquid Glass looking too transparent and outline-dominant, especially on low-detail or dark wallpaper regions. The face needs more visible optical volume and environmental reflection without becoming opaque/frosted or returning to a crude all-around white bevel.
+- Screenshots were captured before commit `54679f0154a1a70d8d52796153a07f13a279f0b4`; install and visually evaluate the newer builds before judging that pass.
+- Keep Liquid Glass and Frosted Glass separate. Do not weaken Frosted/Solid while tuning Liquid Glass.
+
+### Existing regression priorities (verify, do not assume broken)
+- Horizontal pinch must change width independently of height; vertical pinch must retain its previous behaviour. Check centring, persistence and bounds in both preview and installed wallpaper.
+- Preserve foreground-object occlusion, date, wallpaper source isolation, device tilt, selected font/material settings and explicit Apply workflow.
+- The historical Typeface/SDF OutOfMemory reports remain worth monitoring, but do not add memory-heavy rendering work without profiling and a controlled test.
+- Do not declare a visual fix from a successful CI build alone. Compilation/artifact upload and on-device appearance are separate verification steps.
 
 ## How to continue next session
 
-1. Read this file first, then inspect the current branch head and the latest Actions run. Do not assume the saved SHA or build status is still current.
-2. Stay on `feature/live-wallpaper-big-clock`; do not switch branches without the user's instruction.
-3. Test the successful build #264 on-device before making speculative visual changes, if that APK is still available.
-4. Compare against the user's first supplied image for shine and the third supplied image for current lock-screen composition.
-5. Make focused changes in the shared `LiquidWallpaperRenderer` and keep the preview/service gesture handlers in sync.
-6. After each code commit, update this file with the commit SHA, exact changes, actual CI run/build number and result, tests performed, unresolved bugs and next priorities.
+1. Read this file, inspect the current head of `feature/live-wallpaper-big-clock`, and check the latest Actions runs before making changes.
+2. Do not switch to `main` or another branch unless the user explicitly asks.
+3. The current code SHA is `54679f0154a1a70d8d52796153a07f13a279f0b4`. Production build #290 and Digit Lab build #12 both succeeded from that exact SHA.
+4. First obtain on-device feedback for that post-screenshot rounded-profile shader pass. Keep the same wallpaper, sample, material, width, weight and approximate clock scale when comparing production and Digit Lab.
+5. If the latest pass still looks like an outline, redesign the face/environment reflection contribution in the shared `clock-renderer` AGSL rather than merely increasing edge brightness. Keep wallpaper refraction, bevel normals and alpha/body response coherent.
+6. After each source-code commit, update this file with the exact change, SHA, actual CI run/result, on-device verification and remaining issues. A documentation-only update does not establish a visual fix.
 
 ## Status snapshot
 
-- **Last known active branch:** `feature/live-wallpaper-big-clock`
-- **Last code commit:** `1d3aba3030cfa74a16cc5025376bac17392ce230`
-- **Last verified CI build:** #275 — success
-- **Build artifact:** `iOS27-LiquidClock-Android17-debug`, artifact ID `13983737589`
-- **Build run:** [GitHub Actions #275](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43306023366)
-- **On-device verification of repeated-digit fix and shader refinement:** pending
-- **Top next priorities:** verify `2:20` and other repeated-two times; evaluate white-band and curved-surface smoothing; compare the `7` silhouette against the iOS reference; preserve wallpaper preview/applied isolation and controller/gesture behaviour; investigate known Typeface/SDF memory failures.
-
+- **Active branch:** `feature/live-wallpaper-big-clock`
+- **Latest code commit:** `54679f0154a1a70d8d52796153a07f13a279f0b4` — “Replace embossed digit edges with a rounded liquid-glass surface”
+- **Latest production build:** #290 — completed/success from the latest code SHA; artifact `iOS27-LiquidClock-Android17-debug`, ID `14019043376`: [GitHub Actions #290](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387166002)
+- **Latest Digit Lab build:** #12 — completed/success from the same code SHA; artifact `liquid-clock-digit-lab-debug`, ID `14019535593`: [GitHub Actions #12](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387165956)
+- **On-device verification of commit 54679f0:** pending
+- **Primary next priority:** establish whether the rounded profile and broad face reflection restore a convincing liquid-glass body. If not, fix the shader's interior/environment reflection contribution rather than adding a brighter perimeter outline.
 
 ## New issue reported and root cause (13 Nov 2026)
 
@@ -381,41 +365,20 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 
 ## Standalone Digit Lab APK requested (13 Nov 2026)
 
-### User clarified scope
-- User explicitly requested a separate APK, not a page, option, test mode or feature added to the production app.
-- Do not add Digit Lab controls, test-time hooks, manifest entries, dependencies or runtime code to the production `:app` module.
+### Scope and architecture
+- Digit Lab is a separate APK, not a production-app page, option or test mode.
+- Separate application ID: `com.example.ios27clock.digitlab`; it can be installed alongside production.
+- It has its own app files/preferences, no wallpaper service and no calls to `WallpaperManager`.
+- **Current renderer implementation is shared, not copied.** The standalone `digit-lab/settings.gradle.kts` includes `:clock-renderer` from `../clock-renderer`, so production and Digit Lab compile the same renderer source and AGSL.
+- `DigitLabActivity` injects a test-only clock text source so arbitrary digit strings can be rendered; production has no Digit Lab controls or fixed-time testing code.
+- Features include image selection, custom digit/colon input, material selection, width/weight adjustment, dragging and independent horizontal/vertical pinch.
+- Its workflow `.github/workflows/digit-lab.yml` obtains the official Apple SF-Pro.dmg directly from Apple's CDN and subsets the official variable font to digits/colon while preserving real `wght` and `wdth` axes.
 
-### Separate project implemented
-- Independent Gradle root under `digit-lab/`; it is not included by the production root `settings.gradle.kts`.
-- Separate application ID: `com.example.ios27clock.digitlab`; can be installed alongside the production app.
-- Uses a copied snapshot of `LiquidWallpaperRenderer`, its SDF glyph mask and AGSL shader. Only the copied renderer has a test-only fixed-time override.
-- Own app package/files/preferences. No wallpaper service and no calls to `WallpaperManager`; it renders only inside its own full-screen preview.
-- Features: choose image, enter any 1–10 character digit/colon sample, presets for all digits and repeated digits, switch Liquid Glass/Frosted Glass, change font width and weight, drag/pinch clock.
-- Dedicated workflow `.github/workflows/digit-lab.yml` builds and uploads a separate `liquid-clock-digit-lab-debug` APK. It downloads **the official Apple SF-Pro.dmg directly from Apple's CDN**, then subsets Apple's variable SF Pro font to digits/colon at build time while retaining its real `wght` and `wdth` axes. It does not use the GitHub font mirror.
-- Production app source, manifest, Gradle settings and runtime behaviour are unchanged.
-
-### Build and verification
-- Initial project commit: `33817d94e83a560b9723891657da461db152d440`.
-- Follow-up Kotlin fix commit: `3437c376d0963a6a7924568e892f32bb14e0b639`.
-- Standalone Digit Lab GitHub Actions run #2 completed successfully: [run #2](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43308081024).
-- APK artifact: `liquid-clock-digit-lab-debug`, ID `13985425247`, 5.36 MB; expires 12 Dec 2026.
-- The first run #1 failed only because the pinch enum was nested inside an inner View class; the enum was moved to the Activity scope and run #2 passed compilation and artifact upload.
-- This verifies APK compilation and upload, not yet on-device UI or rendering behaviour.
-- After install, use the same wallpaper and inspect `0123456789`, `00:00`, `11:11`, `22:22`, `55:55`, `88:88`, `99:99` in both materials.
-- If the production renderer changes later, sync it into the Digit Lab snapshot, keeping only the test-time override as a harness addition.
-
-
-### Initial Digit Lab build correction (13 Nov 2026)
-- First standalone build run #1 reached Kotlin compilation but failed with `Enum class is prohibited here`: the pinch-axis enum had been declared inside the inner preview View class.
-- Moved the enum to the enclosing Activity scope. No renderer, production app or preview behaviour changed.
-- The follow-up standalone Digit Lab build is pending.
-
-
-### Standalone Digit Lab current handover
-- Latest standalone lab source SHA: `3437c376d0963a6a7924568e892f32bb14e0b639`.
-- Latest verified Digit Lab APK build: run #2 — success; artifact ID `13985425247`.
-- On-device installation and visual quality checks remain pending.
-
+### Build history and current artifacts
+- Initial standalone project and its first compile correction are historical; the current workflow is built from the shared renderer module.
+- Digit Lab run #12 completed successfully from commit `54679f0154a1a70d8d52796153a07f13a279f0b4`: [GitHub Actions run #12](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43387165956).
+- Artifact: `liquid-clock-digit-lab-debug`, ID `14019535593`, created 13 Nov 2026 07:39:45 UTC; expires 13 Dec 2026 07:39:44 UTC.
+- CI success verifies build and artifact upload only. The visual appearance of this latest rounded-profile shader has not yet been confirmed on the user's device.
 
 ## CRITICAL — Official Apple SF Pro source and exact switch build (verified from Actions logs)
 
