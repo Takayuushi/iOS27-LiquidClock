@@ -450,9 +450,12 @@ class LiquidWallpaperRenderer(
             float2 diffusionAxis = wallpaperGradient /
                 max(wallpaperContrast, 0.0001);
             float bandContrast = smoothstep(0.025, 0.18, wallpaperContrast);
-            float diffusionRadius = mix(4.8, 7.6, bandContrast);
+            // The previous radius did not span the separation between the
+            // bright wallpaper bands in the reference. Widen the symmetric
+            // sampling footprint so the two streaks merge through the glass.
+            float diffusionRadius = mix(6.8, 10.8, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
-            float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.34;
+            float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
                 samplePoint - nearDiffusionOffset,
                 float2(0.0),
@@ -474,15 +477,15 @@ class LiquidWallpaperRenderer(
                 uResolution
             )).rgb;
             float3 microfacetTransmission =
-                center * 0.34 +
-                (softNearA + softNearB) * 0.21 +
-                (softFarA + softFarB) * 0.12;
+                center * 0.28 +
+                (softNearA + softNearB) * 0.20 +
+                (softFarA + softFarB) * 0.16;
             float microfacetDiffusion = mix(
-                0.22,
-                0.58,
+                0.25,
+                0.72,
                 bandContrast
             ) * mix(
-                0.82,
+                0.90,
                 1.0,
                 smoothstep(0.04, 0.32, glassProfileSlope)
             );
