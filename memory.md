@@ -34,6 +34,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - New follow-up commit `869692f763ddccef54944f52638b8ab0febf5e40` widens the rounded cap radius from 13 to 20 px; derives refraction displacement from that same cap's slope (capped at 22 px) rather than the mismatched 38 px distance curve; adds a restrained wallpaper-coloured environment reflection across the face with stronger Fresnel toward the shoulder; restores a weak broad specular across the front cap; and increases the Glass-only lift shadow.
 - The Solid/Frosted path is protected: its positive SDF-normal warp, displacement, tilt, blur, face, opacity, sheen and shadow values are selected unchanged when `solidMode == 1`. All new face/reflection/refraction contributions are Glass-only.
 - Build #293 and Digit Lab #15 (commit `d2dec8b`) both succeeded. New workflows #294 and #16 are now running from `869692f`; the visual result has not yet been tested.
+### Latest visual assessment and height-map implementation (13 Nov 2026)
+- User tested production #294 / Digit Lab #16 from commit `869692f`. The output still looked like a bright outer rim surrounding the old flat/transparent interior. User explicitly rejected it as an acceptable Liquid Glass result.
+- User supplied a Gemini rendering pipeline: render glyph mask; generate a smooth height field; calculate 3D normals from its gradient; refract and disperse RGB background samples; add directional specular rim lighting.
+- Current implementation commit `e195e17d9c3e52f7d074153675bffe9abe0aacda` follows that pipeline in the shared renderer:
+  - Builds a convex dome height field analytically from SDF distance: `h(d)=sqrt(2*R*d-d*d)`, with a 20px profile radius.
+  - Samples the height field at neighbouring SDF texels and derives the 3D surface normal from its finite-difference gradient.
+  - Uses Snell refraction for air/glass IOR 1.50 and a 30px optical thickness.
+  - Adds restrained chromatic dispersion by sampling red and blue at opposite ~1.8px ray offsets while green remains on the central refracted ray.
+  - Computes local environment reflection by reflecting the view vector about the same 3D normal, then applies Schlick Fresnel.
+  - Uses the height-map normal for directional diffuse and specular lighting; removes the arbitrary screen-space reflection strips from Liquid Glass.
+- The approved Solid/Frosted renderer remains protected. `solidWarp` preserves its original positive SDF-normal displacement, displacement expression and 0.68 tilt; Solid still uses its prior blurred wallpaper, face, 0.78 opacity, solid bevel/specular/sheen, and unmodified non-Glass shadow. All new height-map, Snell, dispersion and reflection contributions are selected only by Liquid Glass.
+- New build workflows #295 (Production) and #17 (Digit Lab) were triggered from `e195e17`; their completion and the on-device appearance are pending. This is the first implementation that follows the complete height-map/refraction/dispersion sequence; do not claim success before compilation and the user's screenshot comparison.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -142,15 +154,15 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `869692f763ddccef54944f52638b8ab0febf5e40` — “Give Liquid Glass a rounded face reflection and profile-matched refraction”
-- **Latest renderer change:** radius 20 px; profile-slope-driven refraction capped at 22 px; image-derived reflection across the face with increased Fresnel at curved shoulders; broad front-cap specular; a stronger Glass-only lift shadow.
-- **Material guard:** production Solid / Digit Lab Frosted Glass remains protected. The current source keeps its previous positive SDF-normal warp, solid displacement, 0.68 tilt, frosted diffusion/face/0.78 opacity/sheens and old shadow values when `solidMode == 1`.
-- **Latest completed production build:** #293 — success from `d2dec8b`: [Actions #293](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43392850222)
-- **Latest completed Digit Lab build:** #15 — success from `d2dec8b`: [Actions #15](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43392850181)
-- **New production build:** #294, run ID `43397321465`, from `869692f`; pending at time of writing: [Actions #294](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321465)
-- **New Digit Lab build:** #16, run ID `43397321484`, from `869692f`; pending at time of writing: [Actions #16](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321484)
-- **On-device status:** `d2dec8b` still looked flat/outline-like and distorted the wallpaper into wavy bands. `869692f` is not yet built or device-tested.
-- **Primary next priority:** test #294/#16 on the same two wallpapers. Look for visible front-face reflections and convex surface depth without white frosting, and confirm Solid looks identical.
+- **Latest renderer source commit:** `e195e17d9c3e52f7d074153675bffe9abe0aacda` — “Build Liquid Glass from SDF height map, Snell refraction and dispersion”
+- **Latest implementation:** 20px SDF-derived convex height map; finite-difference 3D normals; Snell refraction (IOR 1.50, optical thickness 30px); restrained red/blue dispersion; normal-driven environment reflection/Fresnel; height-normal diffuse/specular lighting.
+- **Material guard:** only production Glass / Digit Lab Liquid Glass changes. Production Solid / Digit Lab Frosted Glass remains approved and protected; its old warp, blur, face, opacity, bevel, satin sheen and shadow are preserved.
+- **Latest completed production build:** #294 — success from `869692f`: [Actions #294](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321465)
+- **Latest completed Digit Lab build:** #16 — success from `869692f`: [Actions #16](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321484)
+- **Current production build:** #295, run ID `43399830056`, from `e195e17`; pending at time of writing: [Actions #295](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830056)
+- **Current Digit Lab build:** #17, run ID `43399830010`, from `e195e17`; pending at time of writing: [Actions #17](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43399830010)
+- **On-device status:** #294 still appeared as an outer frosted rim plus flat/old interior. The `e195e17` height-map pass has not yet been built or device-tested.
+- **Primary next priority:** verify #295/#17 compile and upload; then evaluate convex surface depth, continuously refracted wallpaper, subtle RGB dispersion and directional specular reflections on both supplied wallpapers. Confirm Solid remains visually unchanged.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
