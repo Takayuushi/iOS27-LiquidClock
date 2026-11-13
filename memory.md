@@ -21,6 +21,13 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Digit Lab's test-only text source is injected by `DigitLabActivity` through `RendererClockTextSource`; do not add fixed-time test hooks or controls to production.
 - Keep Digit Lab's separate package ID, isolated files/preferences and no-`WallpaperManager` behaviour so it cannot alter the real app or installed wallpaper.
 
+### Material scope guard — do not regress Solid
+- The app's production **Solid** material is already approved by the user and must be treated as finished/protected. Digit Lab labels the corresponding option **Frosted Glass**; these are the same material path under different UI labels.
+- The only material currently being developed is production **Glass** / Digit Lab **Liquid Glass**. Do not tune, redesign, retune, or otherwise change Solid/Frosted Glass while working on Liquid Glass.
+- Keep every new Liquid Glass-only shader contribution behind `(1.0 - solidMode)` or in a separately computed Glass path. Preserve the Solid path's wallpaper sampling, positive SDF-normal displacement direction, `1.5 + solidEdge * 6.0 + solidBevel * 1.1` displacement, `0.68) tilt contribution, blur, face, opacity (`0.78`), edge lighting and sheen.
+- Renderer commit `da687bb` accidentally put the new negative refraction direction into the shared warp expression. Commit `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` corrects this by splitting `glassWarp` and `solidWarp`; at `solidMode == 1`, the Solid warp again matches the previous implementation exactly. Never collapse these paths into one direction-sensitive expression again.
+- Before each future shader commit, explicitly review all output-affecting expressions at `solidMode == 1` and compare them with the last user-approved Solid implementation. Do not infer safety merely because a variable is named `glass*`.
+
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -129,13 +136,13 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `da687bb4e8a1196c9f3cc8d0a409e565078ab8b1` — “Use glyph SDF refraction and edge-only glass reflections”
-- **Latest renderer documentation:** this file records the failure of `a4db737` on-device and the intent of `da687bb`.
-- **Latest completed production build:** #291 — success from `a4db737`, artifact ID `14021000833`: [Actions #291](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706317)
-- **Latest completed Digit Lab build:** #13 — success from `a4db737`, artifact ID `14019584418`: [Actions #13](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43390706515)
-- **Build status for `da687bb`:** pending; new renderer commit should trigger production and Digit Lab workflows.
-- **On-device status:** `a4db737` visibly failed the Liquid Glass target by appearing frosted/opaque. `da687bb` has not yet been built or device-tested.
-- **Primary next priority:** verify `da687bb` compiles, then test the same wallpapers and font settings. Assess actual wallpaper bending through curves, clear face detail, and edge-only reflections.
+- **Latest renderer source commit:** `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` — “Isolate new refraction to Liquid Glass and preserve Solid”
+- **Latest code change:** separates the SDF refraction into `glassWarp` and `solidWarp`; the Solid path has its former positive normal displacement and 0.68 tilt restored exactly when `solidMode == 1`.
+- **Prior build for renderer commit `da687bb`:** pending at the time of initial handover; check Actions before assuming result.
+- **Builds for `d2dec8b`:** not yet verified. Check the new production and Digit Lab Actions runs associated with this commit.
+- **On-device status:** commit `a4db737` was tested and rejected as frosted/opaque. Commit `da687bb` was not yet device-tested at the time of the Solid-scope correction.
+- **Material scope:** only production Glass / Digit Lab Liquid Glass may change. Production Solid / Digit Lab Frosted Glass is approved and protected.
+- **Primary next priority:** build/test the isolated Liquid Glass refraction without altering Solid; compare the same wallpaper and verify both materials independently.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
@@ -385,8 +392,10 @@ This explains why simply importing/selecting a new wallpaper for preview could r
 - CI success verifies build and artifact upload only. The visual appearance of this latest rounded-profile shader has not yet been confirmed on the user's device.
 - The user installed and tested the #291 / Digit Lab #13 build from commit `a4db737bbf63359258cb9abacdb003fd31bff54f` (13 Nov 2026, approximately 13:46 IST). The result was judged frosted/opaque white typography, not Liquid Glass. This pass is a visual failure despite both APK builds succeeding.
 - Root cause in that pass: it combined near-opaque face output with an environment-reflection blend across the face and broad softbox/ribbon highlights. The wallpaper refraction remained too weak to compensate, so the face looked painted/frosted.
-- Follow-up commit `da687bb4e8a1196c9f3cc8d0a409e565078ab8b1` changes the material model: edge-driven SDF refraction using a curved lens-depth profile and up to 38 px displacement; removes Glass face blur and broad face-wide white/environment fill; keeps the face RGB as the refracted wallpaper; moves environmental reflection/specular contribution to the curved SDF shoulder; leaves Frosted Glass diffusion and sheen on their separate path. Liquid Glass uses full mask alpha because the shader composites refracted backdrop pixels rather than layering translucent white paint.
-- Build and on-device verification for `da687bb` are pending. Do not call it a successful visual fix until the user compares it on both wallpapers.
+- Follow-up commit `da687bb4e8a1196c9f3cc8d0a409e565078ab8b1` changes only the intended Liquid Glass material model: edge-driven SDF refraction using a curved lens-depth profile and up to 38 px displacement; removes Glass face blur and broad face-wide white/environment fill; keeps face RGB as refracted wallpaper; moves environment reflection/specular contribution to the curved SDF shoulder. The positive/negative warp sign in that commit was inadvertently shared with Solid and is corrected below.
+- User clarified on 13 Nov 2026 that production Solid / Digit Lab Frosted Glass is already perfect and must not be changed. Only Glass / Liquid Glass is in scope.
+- Commit `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` splits the warp into separate `glassWarp` and `solidWarp` paths. At `solidMode == 1`, it restores the previous Solid normal direction, displacement and tilt exactly; Liquid Glass alone uses the new negative-direction SDF lens warp. The remaining Solid output path stays selected by `solidMode` and retains its prior blur, face, opacity and sheen values.
+- Build and on-device verification for `d2dec8b` are pending. Do not call it a successful visual fix until the user tests Liquid Glass and confirms Solid/Frosted remains unchanged.
 ## CRITICAL — Official Apple SF Pro source and exact switch build (verified from Actions logs)
 
 This is a must-preserve project fact. Do not call the font a GitHub font, a community SF font, or a generic SF Pro download.
