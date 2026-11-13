@@ -544,13 +544,13 @@ class LiquidWallpaperRenderer(
             float scatterInLitGlass = smoothstep(0.12, 0.38, microfacetLuma);
             float scatterWhiteProtection = 1.0 -
                 0.42 * smoothstep(0.72, 0.94, microfacetLuma);
-            float glassVolumeScatter = 0.085 *
+            float glassVolumeScatter = 0.14 *
                 scatterInLitGlass *
                 scatterWhiteProtection *
                 smoothstep(0.08, 0.42, glassProfileCoverage);
             float3 volumeScatteredTransmission = clamp(
-                microfacetTransmission * 1.06 +
-                    float3(0.006, 0.008, 0.014),
+                microfacetTransmission * 1.07 +
+                    float3(0.014, 0.018, 0.024),
                 0.0,
                 1.0
             );
@@ -742,7 +742,7 @@ class LiquidWallpaperRenderer(
                 0.66,
                 glassProfileCoverage
             );
-            float ambientScatter = 0.52 *
+            float ambientScatter = 0.70 *
                 ambientDarkness *
                 ambientInteriorMask *
                 (1.0 - solidMode);
@@ -1452,7 +1452,7 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val hourPairGapEm = 0.040f
+        val hourPairGapEm = 0.044f
         val minutePairGapEm = 0.019f
         val hourToColonGapEm = 0.038f
         val colonToMinuteGapEm = 0.034f
