@@ -243,21 +243,23 @@ class LiquidWallpaperRenderer(
             float viewCosine = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float glassVolumeFresnel = 0.04 +
                 0.96 * pow(1.0 - viewCosine, 5.0);
+            float horizontalShoulder = smoothstep(0.52, 0.88, abs(glassSurfaceNormal.y));
+            float glassHorizontalHighlight = mix(1.0, 0.74, horizontalShoulder);
             // Keep the broad softbox reflection on the rounded shoulder.
             // A front-facing normal has little Fresnel curvature and must not
             // receive a white fill across the whole face.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 7.0
-            ) * 0.64 * smoothstep(0.08, 0.48, glassProfileSlope);
+            ) * 0.64 * smoothstep(0.08, 0.48, glassProfileSlope) * glassHorizontalHighlight;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 42.0
-            ) * 0.88;
+            ) * 0.88 * glassHorizontalHighlight;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
                 30.0
-            ) * 0.56;
+            ) * 0.56 * glassHorizontalHighlight;
             float glassSideShadow = glassProfileCoverage *
                 max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
             float outerLip = 1.0 -
@@ -317,6 +319,8 @@ class LiquidWallpaperRenderer(
                 uResolution
             );
             float3 environmentReflection = uWallpaper.eval(reflectionPoint).rgb;
+            float2 keyEnvironmentPoint = clamp(p - keyLight3D.xy * 34.0, float2(0.0), uResolution);
+            float3 keyEnvironmentReflection = uWallpaper.eval(keyEnvironmentPoint).rgb;
 
             // Reuse the eight-direction blur below for both materials:
             // Glass gets a tighter optical diffusion, while Solid retains its
@@ -480,8 +484,10 @@ class LiquidWallpaperRenderer(
                 keyDiffuse3D * 0.34 +
                 fillDiffuse3D * 0.18;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
+            float glassFaceReflectionAmount = mix(0.035, 0.11, smoothstep(0.08, 0.48, glassProfileSlope));
+            colour = mix(colour, keyEnvironmentReflection, glassFaceReflectionAmount * (1.0 - solidMode));
             colour -= float3(0.12, 0.15, 0.22) *
-                glassSideShadow * (1.0 - solidMode) * 0.16;
+                glassSideShadow * (1.0 - solidMode) * 0.22;
             colour *= mix(0.985, 1.025, glassLens);
             colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
 
@@ -503,7 +509,7 @@ class LiquidWallpaperRenderer(
                 glassVolumeFresnel * 0.22 * (1.0 - solidMode)
             );
             float glassRimLighting = glassRim *
-                pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35);
+                pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35) * glassHorizontalHighlight;
             colour += float3(0.92, 0.97, 1.0) *
                 glassAreaReflection * (1.0 - solidMode) * 0.96;
             colour += float3(0.98, 0.99, 1.0) *
@@ -1213,8 +1219,10 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val digitPairGapEm = 0.018f
-        val colonAdjacentGapEm = 0.016f
+        val hourPairGapEm = 0.024f
+        val minutePairGapEm = 0.018f
+        val hourToColonGapEm = 0.016f
+        val colonToMinuteGapEm = 0.030f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
 
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
@@ -1257,8 +1265,15 @@ class LiquidWallpaperRenderer(
             if (glyphs.isEmpty()) return origins
             origins[0] = -bounds[0].first
             for (index in 1 until glyphs.size) {
-                val digitPair = glyphs[index - 1] != ":" && glyphs[index] != ":"
-                val gap = size * if (digitPair) digitPairGapEm else colonAdjacentGapEm
+                val previousGlyph = glyphs[index - 1]
+                val currentGlyph = glyphs[index]
+                val gapEm = when {
+                    previousGlyph == ":" -> colonToMinuteGapEm
+                    currentGlyph == ":" -> hourToColonGapEm
+                    glyphs.take(index).contains(":") -> minutePairGapEm
+                    else -> hourPairGapEm
+                }
+                val gap = size * gapEm
                 val previousRight = origins[index - 1] + bounds[index - 1].second
                 origins[index] = previousRight + gap - bounds[index].first
             }
