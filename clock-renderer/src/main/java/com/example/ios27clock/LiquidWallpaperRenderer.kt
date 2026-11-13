@@ -453,31 +453,39 @@ class LiquidWallpaperRenderer(
                 float2(0.0),
                 uResolution
             )).rgb;
-            float probeLeftLuma = dot(probeLeft, float3(0.2126, 0.7152, 0.0722));
-            float probeRightLuma = dot(probeRight, float3(0.2126, 0.7152, 0.0722));
-            float probeTopLuma = dot(probeTop, float3(0.2126, 0.7152, 0.0722));
-            float probeBottomLuma = dot(probeBottom, float3(0.2126, 0.7152, 0.0722));
-            float2 luminanceGradient = float2(
-                probeRightLuma - probeLeftLuma,
-                probeBottomLuma - probeTopLuma
+            // A full-RGB structure tensor finds the dominant local colour-edge
+            // normal. Unlike luminance-gradient signs, its eigenvector remains
+            // stable on saturated blue/black transitions and mixed-colour bands.
+            // The principal direction is the cross-band sampling axis.
+            float3 colourGradientX = probeRight - probeLeft;
+            float3 colourGradientY = probeBottom - probeTop;
+            float tensorXX = dot(colourGradientX, colourGradientX);
+            float tensorYY = dot(colourGradientY, colourGradientY);
+            float tensorXY = dot(colourGradientX, colourGradientY);
+            float tensorDiscriminant = sqrt(max(
+                (tensorXX - tensorYY) * (tensorXX - tensorYY) +
+                    4.0 * tensorXY * tensorXY,
+                0.0
+            ));
+            float tensorLambda = 0.5 *
+                (tensorXX + tensorYY + tensorDiscriminant);
+            float2 tensorVectorX = float2(
+                tensorXY,
+                tensorLambda - tensorXX
             );
-            // Luminance alone under-detects saturated transitions such as
-            // electric blue against black. Measure RGB edge energy per axis,
-            // then retain the luminance gradient signs to orient the same
-            // cross-band filter. This keeps chromatic edges from bypassing
-            // diffusion without introducing a glyph- or colour-specific path.
-            float2 wallpaperColourGradient = float2(
-                length(probeRight - probeLeft),
-                length(probeBottom - probeTop)
+            float2 tensorVectorY = float2(
+                tensorLambda - tensorYY,
+                tensorXY
             );
-            float2 diffusionGradient = float2(
-                sign(luminanceGradient.x) * wallpaperColourGradient.x,
-                sign(luminanceGradient.y) * wallpaperColourGradient.y
+            float2 diffusionDirection = mix(
+                tensorVectorX,
+                tensorVectorY,
+                step(tensorYY, tensorXX)
             );
-            float wallpaperContrast = length(wallpaperColourGradient);
-            float diffusionGradientLength = length(diffusionGradient);
-            float2 diffusionAxis = diffusionGradient /
+            float diffusionGradientLength = length(diffusionDirection);
+            float2 diffusionAxis = diffusionDirection /
                 max(diffusionGradientLength, 0.0001);
+            float wallpaperContrast = sqrt(max(tensorLambda, 0.0));
             float bandContrast = smoothstep(0.08, 0.55, wallpaperContrast);
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
@@ -768,6 +776,13 @@ class LiquidWallpaperRenderer(
                 float3(0.21, 0.24, 0.30),
                 ambientVertical
             );
+            // Keep the dark-area lift chromatic instead of laying a neutral
+            // gray veil over dark blue wallpaper visible through the glass.
+            float3 ambientEnvironment = mix(
+                ambientGradient,
+                microfacetTransmission,
+                0.55
+            );
             float ambientFaceLuma = dot(
                 colour,
                 float3(0.2126, 0.7152, 0.0722)
@@ -779,13 +794,13 @@ class LiquidWallpaperRenderer(
                 0.62,
                 glassVolumeRegion
             );
-            float ambientScatter = 0.70 *
+            float ambientScatter = 0.42 *
                 ambientDarkness *
                 ambientInteriorMask *
                 (1.0 - solidMode);
             colour = mix(
                 colour,
-                ambientGradient,
+                ambientEnvironment,
                 ambientScatter
             );
 
