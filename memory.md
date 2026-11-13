@@ -76,6 +76,16 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - flattens only the Liquid Glass colon to a 3.2px profile; Solid/Frosted colon remains at 20px.
 - Production Solid / Digit Lab Frosted Glass remains protected. All added shader response is Glass-only; radius selection resolves to 20px at `solidMode == 1`, blur radius remains 38px, existing Solid specular/frosted response remains selected, and the shared typography tracking applies by user request.
 - Production build #298 and Digit Lab build #20 were triggered from `a17e2ac`; CI and on-device results pending. Do not claim the optical changes solve the issue until the user's next side-by-side screenshots.
+### Latest user screenshot assessment and spacing/bounce correction (13 Nov 2026, ~15:44 IST)
+- The user explicitly confirms the beach and diagonal wallpaper screenshots are from the latest successful builds #298/#20 (commit `a17e2ac`). Do not question the test recency or imply the user tested an older build.
+- User rejected the result: the beach wallpaper became nearly frosted/opaque due to excessive internal light bounce, even though the dark diagonal wallpaper benefited. Digit spacing remained too wide, especially `4–7` (minutes), and spacing around the colon was also too loose.
+- Cause of beach frosting: the previous Glass path used a fixed 30% screen blend of `frostedWallpaper * 1.55 + bias`, independent of the underlying pixel luminance.
+- Commit `08d5b9529300f349592b234db630935bbf23d14f` changes:
+  - Replaces the fixed 30% bounce with a luminance-adaptive contribution: `glassBounceStrength = 0.18 * (1 - smoothstep(0.16, 0.42, refractedLuma))`. Bright beach/sky pixels now get almost no internal haze; genuinely dark pixels can still receive a modest lift. The blur source multiplier is reduced from 1.55 to 1.28 and bias reduced to (0.012, 0.014, 0.020).
+  - Replaces nominal font advances/tracking with actual SF Pro outline-to-outline layout. Each glyph's `getTextPath` bounds (after the same optical width transform) are measured, and the next glyph origin is positioned so the visible outline gap is exactly controlled. Target gaps: 0.018em for digit pairs and 0.016em on each side of the colon. This applies to both production Glass and Solid, and both Digit Lab material options because layout is shared.
+  - Colon is positioned by its actual dot centre with a visual-bound diameter based on the same `COLON_DOT_RADIUS_EM`; the existing 3.2px Glass-only flattened optical profile is retained. Solid keeps its 20px profile.
+- The approved Solid/Frosted material path remains protected: new bounce is selected into the Glass RGB before the existing `mix(..., center, solidMode)`, and the Glass-only 3.2/24px profile returns to 20px at `solidMode == 1`. The outline-based kerning is intentionally global per user's request and is not a material shader change.
+- Production build #299 and Digit Lab build #21 are running from `08d5b95`; compile/artifact and on-device verification are pending. Do not claim the brighter dark-wallpaper balance is solved until the user compares both wallpapers.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -184,16 +194,17 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `a17e2ac048041b252cbff0e53539643851e2cf6a` — “Brighten Liquid Glass internally and strengthen optical rim”
-- **Latest optical changes:** digit profile 24px for Glass; shallow 3.2px colon disc for Glass; stronger directional rim/specular; Snell thickness 34px plus edge pull; 22px blurred brightness-boosted environment screen blend; 1.35x saturation; slope-dependent RGB separation (2.4–4.2px).
-- **Latest typography:** adjacent numeral tracking now 0.02x TRACKING_EM; colon-adjacent tracking and colon advance unchanged.
-- **Protected Solid:** production Solid / Digit Lab Frosted Glass remains approved. Its 20px profile, 38px blur, positive SDF warp, existing frosted face, opacity, solid specular/sheen and old shadow remain preserved. Only digit-pair spacing changes globally by request.
-- **Latest completed production build:** #297 — success from `3b8383c`, artifact ID `14026910695`: [Actions #297](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014475)
-- **Latest completed Digit Lab build:** #19 — success from `3b8383c`, artifact ID `14026337618`: [Actions #19](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43404014416)
-- **Current production build:** #298, run ID `43405958300`, from `a17e2ac`; in progress at last check: [Actions #298](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43405958300)
-- **Current Digit Lab build:** #20, run ID `43405958529`, from `a17e2ac`; in progress at last check: [Actions #20](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43405958529)
-- **On-device status:** screenshots from #297/#19 show remaining optical-light and rim weaknesses; the #298/#20 pass has not yet been tested.
-- **Primary next priority:** check #298/#20 builds; compare on bright beach and dark diagonal wallpapers. Confirm brighter inner bounce without frosting, thicker directional highlights, visible colour dispersion, tighter numeral pairs, flatter colon, and unchanged Solid.
+- **Latest renderer source commit:** `08d5b9529300f349592b234db630935bbf23d14f` — “Kerning by visible glyph bounds and make glass bounce adaptive”
+- **Latest material correction:** Glass internal bounce is luminance-adaptive (0–18%), with reduced blurred environment multiplier 1.28; bright beach/sky receives near-zero extra haze.
+- **Latest typography correction:** shared outline-to-outline kerning uses actual SF Pro text-path bounds; target visible gaps 0.018em between digits and 0.016em on either side of colon. This applies to both Glass and Solid and Digit Lab, as requested. The font's real variable axes are not changed.
+- **Latest colon treatment:** Glass remains a shallow 3.2px optical profile; Solid/Frosted remains 20px.
+- **Protected Solid:** preserve Solid's approved blur, face, opacity, reflections and shadow; the only global change allowed is user-requested glyph spacing.
+- **Latest completed builds:** Production #298 and Digit Lab #20 succeeded from `a17e2ac`; artifacts are available in their Actions runs.
+- **Current production build:** #299, run ID `43408400012`, from `08d5b95`; running at last check: [Actions #299](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43408400012)
+- **Current Digit Lab build:** #21, run ID `43408400019`, from `08d5b95`; running at last check: [Actions #21](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43408400019)
+- **On-device status:** #298/#20 were tested and show excessive whitening on beach wallpaper plus excessive visible gaps. #299/#21 have not yet been tested.
+- **Primary next priority:** ensure #299/#21 build successfully; compare visible outline-to-outline gaps for `10`, `47`, and both colon neighbors against the top reference clock; check bright beach clarity and dark-wallpaper bounce; verify Solid material unchanged.
+
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
