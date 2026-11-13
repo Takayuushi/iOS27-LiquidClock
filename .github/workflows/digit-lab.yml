@@ -1,18 +1,6 @@
 name: Liquid Clock Digit Lab APK
 
 on:
-  push:
-    branches: ['feature/**']
-    paths:
-      - 'clock-renderer/**'
-      - 'digit-lab/app/src/main/java/com/example/ios27clock/DigitLabActivity.kt'
-      - 'digit-lab/app/src/main/java/com/example/ios27clock/ClockDiagnostics.kt'
-      - 'digit-lab/app/src/main/java/com/example/ios27clock/WallpaperStorage.kt'
-      - 'digit-lab/app/build.gradle.kts'
-      - 'digit-lab/build.gradle.kts'
-      - 'digit-lab/settings.gradle.kts'
-      - '.github/scripts/prepare-digit-lab-fonts.sh'
-      - '.github/workflows/digit-lab.yml'
   workflow_dispatch:
 
 permissions:
