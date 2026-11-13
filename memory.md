@@ -216,6 +216,20 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Production build #311 and Digit Lab #33 triggered from `566df1c`; CI and on-device testing pending.
 - Current spacing remains: 1–0 0.026em; 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve.
 - User wants continued same-wallpaper comparison until it matches. Do not claim the beach or ambient-light issue is resolved until tested on device; specifically inspect black-background parts of 1/0, rim softness and refraction blur, plus beach wallpaper clarity.
+### Correct colon spacing and restore crystal-clear refraction (13 Nov 2026, ~20:50 IST)
+- User tested Production #311 / Digit Lab #33 from commit `566df1c`. Gemini's suggestions resulted in an overly soft / blurry read: the orange diagonal streak through `0` and the vertical arms of `4` and `7` should bend as a clear crystal lens, not look locally blurred or merely transparent.
+- User also observed the colon gaps remain wrong: increase the `0–:` gap; increase `:–4` only a tiny amount, and ensure the visible `:–4` gap is still smaller than the `0–:` gap. Do not change `1–0` or `4–7`.
+- Source values before correction were `hourToColonGapEm=0.027` and `colonToMinuteGapEm=0.033`, meaning the :–4 gap was numerically larger. New commit `10726db00956273b65800e83885c14e16aa120ac` (“Restore crystal-clear refraction and balance colon spacing”) changes them to:
+  - 1–0 remains 0.026em.
+  - 0–: increases 0.027→0.0355em.
+  - :–4 changes 0.033→0.034em (tiny increase, now lower than 0–:).
+  - 4–7 remains 0.021em.
+- Removes the entire four-tap 2px local diffusion kernel introduced in `566df1c`; no local blur remains in the refracted color sample.
+- Strengthens actual Snell refraction rather than adding blur: Glass IOR 1.50→1.52; optical thickness 34px→42px; curved edge-pull multiplier 1.22→1.30. Existing surface-normal / SDF lens geometry, dispersion and wallpaper sample stay otherwise unchanged.
+- The commit diff has been checked: only these typography spacing constants, Snell IOR/thickness/edge pull, and deletion of local diffusion changed. No glyph paths, font source/axes, colon geometry, Solid warp or Solid shader path changed.
+- Production #312 run ID `43452031296` and Digit Lab #34 run ID `43452031200` are both running from `10726db`; CI/device verification pending.
+- All earlier ambient scatter, soft rim and lower-terminal cap improvements remain from parent commits.
+- Do not claim the refraction is fixed until the user compares the orange streak through 0 and vertical arms of 4/7 on the exact same wallpaper. Also verify 0–: is now wider than :–4, with 1–0 and 4–7 unchanged.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -324,17 +338,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `566df1cc84e4fe379af41c959d7441276e459156` — “Add adaptive ambient scatter and soften Liquid Glass rim”
-- **Latest tested pair:** Production #310 / Digit Lab #32 succeeded from `0b3789d`; same-wallpaper comparison shows close color/refraction, but dark regions of 1/0 are too black, rim too thin/sharp, and transmitted streaks too crisp.
-- **Latest Glass refinement:** dark-only vertical ambient silver-blue gradient gated by luma 0.025–0.20 and interior stroke mask (max blend 0.52, output on black around 0.11–0.19); Glass rim width 6.2px with output 0.18; local 2px four-direction diffusion mixed at 10–15% on refracted image only.
-- **Solid protection:** ambient, local diffusion and new Glass rim are all excluded from Solid; original Solid/Frosted blur and rim values unchanged.
-- **Latest typography spacing:** 1–0 0.026em; 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve.
-- **Glass colon:** 3.2px profile.
-- **Previous completed builds:** Production #310 and Digit Lab #32 succeeded from `0b3789d`.
-- **Current production build:** #311, run ID `43448052310`, from `566df1c`; in progress: [Actions #311](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43448052310)
-- **Current Digit Lab build:** #33, run ID `43448052304`, from `566df1c`; in progress: [Actions #33](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43448052304)
-- **On-device status:** `566df1c` not yet tested. Do not claim visual parity or beach clarity until screenshots confirm.
-- **Primary next priority:** verify #311/#33; same-wallpaper compare black portions of 1/0, broadened soft rim, and diffused streaks; test beach wallpaper for no frosted regression; ensure Solid unchanged.
+- **Latest renderer commit:** `10726db00956273b65800e83885c14e16aa120ac` — “Restore crystal-clear refraction and balance colon spacing”
+- **Latest tested builds:** Production #311 and Digit Lab #33 succeeded from `566df1c`; user reports too much local softness and insufficient crystal-like refraction through 0/4/7.
+- **Latest visible spacing:** 1–0 0.026em (unchanged); 0–: 0.0355em (increased); :–4 0.034em (tiny increase and now smaller than 0–:); 4–7 0.021em (unchanged).
+- **Latest clear-glass correction:** remove 2px 4-direction local diffusion completely; Snell IOR 1.52; optical thickness 42px; edge pull 1.30. No extra blur introduced.
+- **Existing optical improvements retained:** dark-only silver-blue ambient scatter, 6.2px softer Glass rim with peak 0.18, adaptive colour bounce, corrected lower-right 7 end-cap highlight.
+- **Protected Solid:** no changes to Solid/Frosted rendering; new Snell constants belong to Glass path, Solid warp unchanged.
+- **Current production build:** #312, run ID `43452031296`, from `10726db`; in progress: [Actions #312](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43452031296)
+- **Current Digit Lab build:** #34, run ID `43452031200`, from `10726db`; in progress: [Actions #34](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43452031200)
+- **On-device status:** `10726db` not tested yet. No visual success claim until user's next screenshots.
+- **Primary next priority:** verify #312/#34; compare orange streak curvature through 0, 4 and 7 arms; check : gap hierarchy; ensure no blur or Solid regression.
 
 ## New issue reported and root cause (13 Nov 2026)
 
