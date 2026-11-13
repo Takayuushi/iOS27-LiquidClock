@@ -274,8 +274,8 @@ class LiquidWallpaperRenderer(
 
             // Snell refraction through the convex height-map surface.
             // Incoming view ray travels toward the glyph; eta is air/glass.
-            const float GLASS_IOR = 1.50;
-            const float GLASS_THICKNESS_PX = 34.0;
+            const float GLASS_IOR = 1.52;
+            const float GLASS_THICKNESS_PX = 42.0;
             float eta = 1.0 / GLASS_IOR;
             float cosIncident = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float refractK = max(
@@ -287,7 +287,7 @@ class LiquidWallpaperRenderer(
                 glassSurfaceNormal * refractFactor;
             float glassEdgePull = mix(
                 1.0,
-                1.22,
+                1.30,
                 smoothstep(0.10, 0.55, glassProfileSlope)
             );
             float2 glassRefractionOffset =
@@ -410,43 +410,6 @@ class LiquidWallpaperRenderer(
                 glassRedSample.r,
                 center.g,
                 glassBlueSample.b
-            );
-            // The reference glass gently diffuses high-frequency wallpaper
-            // streaks through its thickness. Use a tiny 2px local kernel and
-            // retain most of the sharp refracted image so detail stays clear.
-            float2 diffusionRadius = float2(2.0, 2.0);
-            float3 diffusionA = uWallpaper.eval(clamp(
-                samplePoint + float2(diffusionRadius.x, 0.0),
-                float2(0.0),
-                uResolution
-            )).rgb;
-            float3 diffusionB = uWallpaper.eval(clamp(
-                samplePoint - float2(diffusionRadius.x, 0.0),
-                float2(0.0),
-                uResolution
-            )).rgb;
-            float3 diffusionC = uWallpaper.eval(clamp(
-                samplePoint + float2(0.0, diffusionRadius.y),
-                float2(0.0),
-                uResolution
-            )).rgb;
-            float3 diffusionD = uWallpaper.eval(clamp(
-                samplePoint - float2(0.0, diffusionRadius.y),
-                float2(0.0),
-                uResolution
-            )).rgb;
-            float3 localDiffusion = (
-                diffusionA + diffusionB + diffusionC + diffusionD
-            ) * 0.25;
-            float refractionDiffusionStrength = mix(
-                0.10,
-                0.15,
-                smoothstep(0.10, 0.48, glassProfileSlope)
-            );
-            refractedGlass = mix(
-                refractedGlass,
-                localDiffusion,
-                refractionDiffusionStrength
             );
             float refractedLuma = dot(
                 refractedGlass,
@@ -1395,8 +1358,8 @@ class LiquidWallpaperRenderer(
         // nominal advances. This removes built-in side-bearing gaps directly.
         val hourPairGapEm = 0.026f
         val minutePairGapEm = 0.021f
-        val hourToColonGapEm = 0.027f
-        val colonToMinuteGapEm = 0.033f
+        val hourToColonGapEm = 0.0355f
+        val colonToMinuteGapEm = 0.034f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
 
         val sizingPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
