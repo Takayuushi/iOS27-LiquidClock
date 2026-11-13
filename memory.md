@@ -299,6 +299,26 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Production #318 run ID `43466827742` and Digit Lab #40 run ID `43466827587` started from exact SHA `daf9df4`; CI and device validation pending.
 - User confirms current spacing is acceptable; don't change any spacing on this optical pass. Current values: 1–0 0.040em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em.
 - Next test: on the diagonal wallpaper compare whether 0's two white bands now merge more closely to reference and whether 7's blue/white transmission boundary becomes softer without losing crystal clarity. Recheck beach wallpaper stays as good as prior candidate. No spacing or Solid changes.
+### Final polish from Gemini review: ambient sheen, internal scattering and 1–0 gap (13 Nov 2026, ~22:55 IST)
+- User shared Gemini's assessment of candidate build #318 / Digit Lab #40 and additional same-wallpaper screenshots. Gemini considers color/refraction, colon lenses and rim bevel very close (~95% visual parity; this is Gemini's estimate, not an objective measurement). Remaining optical details:
+  1. The left half/stem and top hook of the 1 need a continuous brushed-silver ambient sheen over dark wallpaper. Our current luma-gated ambient fill leaves a dark horizontal break and gray/dark hook.
+  2. Internal body scattering in 4 and 7 is still too sharp/high-contrast compared with Apple's softer, more translucent/milky glass.
+  3. User also repeats that 1–0 remains too close in Solid/Frosted mode and asks for a tiny extra gap.
+- Reviewed the exact screenshots:
+  - Digit Lab diagonal wallpaper: Screenshot_20261113_222832.jpg (945×2048, clock 10:47, Liquid Glass selected).
+  - Solid/Frosted beach preview: Screenshot_20261113_223346.jpg (945×2048, Solid/Frosted selected).
+  - Liquid Glass beach preview: Screenshot_20261113_221640(1).jpg (945×2048, Liquid Glass selected).
+  - Actual iOS reference: RDT_20261112_1627083837676783770026508(20261113-164744).jpg (944×2048).
+- Previous candidate #318 / #40 from daf9df4 was confirmed successful. Same-size crop comparison confirms iOS 1 has a more continuous silver body in its dark left stem and top hook; iOS 4/7 have softer internal body scattering while retaining recognizable wallpaper.
+- New commit b6a159d586da63e070a4338851d85197feb80e27 — “Refine dark ambient sheen and internal glass scattering”:
+  - 1–0 shared gap 0.040→0.044em. Tiny ~one-to-two pixel-scale increment. All other gaps unchanged: 4–7 0.019em; 0–: 0.038em; :–4 0.034em. This is role-based layout and affects Solid and Glass.
+  - Dark-region ambient scatter multiplier 0.52→0.70. With the current top gradient 0.34/0.37/0.43, this raises the fully dark interior contribution by roughly +0.06 per channel; it remains gated by local darkness, glyph interior and (1.0-solidMode). No constant overlay on bright beach wallpaper and no Solid material changes.
+  - Shared volume scatter 0.085→0.14. Existing near-white protection 1 - 0.42*smoothstep(0.72,0.94,luma) remains, so the contribution is at most about 8.1% on near-white highlights, and about 14% at lit midtones. Internal scatter target is slightly brighter/cooler: microfacetTransmission*1.07 + RGB(0.014,0.018,0.024).
+  - No changes to the accepted directional band diffusion from daf9df4 (radius 6.8–10.8px, blend 0.25–0.72), reflections, rim, IOR, spacing roles besides 1–0, fonts, glyphs or Solid shader.
+- Production #319 run ID 43469911731 and Digit Lab #41 run ID 43469912000 started from exact SHA b6a159d; CI pending.
+- Solid/Frosted preservation: ambient scatter is Glass-only via (1.0-solidMode); new volume-scatter path blends into Glass transmitted sample and is bypassed by existing Solid center-sample mix. The shared 1–0 kerning change intentionally affects both materials.
+- User has said beach implementation is improved; preserve it. After new build test, examine the beach Liquid Glass screenshot again to ensure the higher internal scatter does not make it milky.
+- Next check: compare dark left side and hook of 1 against reference; examine softer body scatter in 4/7; confirm the tiny 1–0 gap in both Solid/Frosted and Liquid Glass; check beach remains clear. Do not adjust other gaps.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -406,19 +426,20 @@ Changes:
 
 ## Status snapshot
 
-- **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `daf9df4297db1f44311c533d2047924cea601048` — “Increase shared Liquid Glass band blending against iOS reference”
-- **Latest tested pair:** Production #317 / Digit Lab #39 succeeded from `dd7eca1`; user tested and says beach wallpaper is improved/acceptable, but diagonal reference still has two white bands too distinct inside 0 and blue/white transition too hard through 7.
-- **Current spacing (accepted):** 1–0 0.040em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Do not change in current optical pass.
-- **Current shared band diffusion:** contrast-gradient-aligned sampling; adaptive radius 6.8–10.8px; near taps 0.62× radius; far taps 1.38× radius; weights center 0.28, near 0.20 each, far 0.16 each; diffusion mix 0.25–0.72 with SDF slope gate 0.90–1.0. Intended to merge the two high-contrast wallpaper bands through all glass glyphs.
-- **Illumination unchanged:** volume scatter remains max 8.5%; ambient scatter and all reflection/rim values unchanged.
-- **Beach handling:** prior `dd7eca1` beach result is acceptable per user; preserve it and test for regressions after widening only the directional band diffusion.
-- **Protected Solid:** unchanged; Solid still uses original center wallpaper sample after Glass transmission path.
-- **Previous completed builds:** Production #317 / Digit Lab #39 succeeded from `dd7eca1`.
-- **Current production build:** #318, run ID `43466827742`, from `daf9df4`; in progress: [Actions #318](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43466827742)
-- **Current Digit Lab build:** #40, run ID `43466827587`, from `daf9df4`; in progress: [Actions #40](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43466827587)
-- **On-device status:** `daf9df4` not yet tested; do not claim optical target met until new screenshots.
-- **Next priority:** verify #318/#40; compare 0's adjacent white bands and 7's blue/white transmission boundary against same iOS reference; verify beach remains acceptable. No spacing changes.
+- **Active branch:** feature/live-wallpaper-big-clock
+- **Latest renderer commit:** b6a159d586da63e070a4338851d85197feb80e27 — “Refine dark ambient sheen and internal glass scattering”
+- **Latest completed test pair:** Production #318 / Digit Lab #40 succeeded from daf9df4; user's latest screenshots show the dark left stem/top hook of 1 still lack continuous silver ambient sheen, and 4/7 need a little more internal milky scattering. Beach result is improved.
+- **Current spacing:** 1–0 0.044em (tiny increase from 0.040); 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Only 1–0 changed in latest commit.
+- **Current band diffusion:** shared contrast-gradient-directed transmission from daf9df4: radius 6.8–10.8px; near taps 0.62×, far taps 1.38×; weights center 0.28, near 0.20 each, far 0.16 each; mix 0.25–0.72. Preserve unless user specifically reports bands still not blended enough.
+- **Current ambient sheen:** multiplier 0.70 (was 0.52), dark-region luma gate 0.025–0.20, interior mask 0.12–0.66, gradient RGB top 0.34/0.37/0.43 to bottom 0.21/0.24/0.30, Glass-only. Expected fully dark lift +~0.06 in each channel.
+- **Current inner body scatter:** multiplier 0.14 (was 0.085), near-white protection unchanged, so high-luminance contribution max ~8.1%; scatter target uses microfacetTransmission*1.07 + RGB(0.014,0.018,0.024).
+- **Glass refraction:** IOR 1.52; optical path 46px; edge pull 1.34; SDF normal step 4.25px / denominator 8.5; shared bevel and soft rim retained.
+- **Protected Solid:** ambient and volume scatter are Glass-only. 1–0 spacing is shared layout and intentionally affects both modes. No Solid renderer values changed.
+- **Previous completed builds:** Production #318 / Digit Lab #40 succeeded from daf9df4.
+- **Current production build:** #319, run ID 43469911731, from b6a159d; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43469911731
+- **Current Digit Lab build:** #41, run ID 43469912000, from b6a159d; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43469912000
+- **On-device status:** b6a159d not tested yet. Do not claim the last 5% is closed until user compares.
+- **Next priority:** verify #319/#41; test the dark 1 stem/hook ambient gradient, 4/7 internal scattering, tiny 1–0 increase in both Glass and Solid, and beach Liquid Glass clarity. No other spacing changes.
 
 ## New issue reported and root cause (13 Nov 2026)
 
