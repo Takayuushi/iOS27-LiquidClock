@@ -630,6 +630,13 @@ Changes:
 - Candidate workflows triggered from `f576082`: Production #331 run ID `43499977167`; Digit Lab #54 run ID `43499976917`. Both were queued at time of memory update. Check completion and artifact IDs before sharing download links.
 - On-device verification remains pending. Compare #54 against #53 and the exact same iOS reference. Judge uniform haze over all glyphs, especially the dark and blue areas, and ensure the result remains transparent/reflective rather than milky/frosted. Do not claim a visual improvement until tested.
 
+### Clarification on visual evaluation method (14 Nov 2026, after #54 candidate)
+- User clarified that “pixel-level difference” was a figure of speech, not a request to produce literal per-pixel metrics or tables. Use visual judgement and image-analysis tools to inspect the actual difference; do not over-focus on MAE/RMSE or region error percentages unless the user explicitly asks for quantified image analysis.
+- The key visual delta to target remains: Apple's reference has a broader, more continuous, naturally hazy luminous body and soft light spread inside the numerals. Our rendering still reads more like crisp transparent refraction with sharper wallpaper streaks and more pronounced bright edge/bevel definition.
+- The latest screenshot still shows 01:39 in the status bar, which predates the #54 candidate workflow completion; treat it as the #53 visual baseline, not as on-device confirmation of #54.
+- #54 / #331 from `f576082` is the next controlled candidate: 36px Liquid Glass environmental blur, 38% atmospheric blend, 22% bright bloom, threshold softened to 0.18–0.60. Both CI builds succeeded (Digit Lab artifact 14072628649; Production artifact 14072479622). Await a genuine post-install #54 comparison before another major shader pass.
+- Continue avoiding digit-specific adjustments and preserve approved Solid/Frosted, spacing and gestures.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
