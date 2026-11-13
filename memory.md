@@ -703,16 +703,29 @@ Changes:
 - Workflow correction commit `2940ecbacd8cadd2202c58b8c156b21c16552598` restores the previous automatic push paths plus manual dispatch. Do not make Digit Lab manual-only again unless user explicitly requests it.
 - This correction changes only `.github/workflows/digit-lab.yml`; no renderer change. It may itself trigger a Digit Lab run because the workflow file is in the push path filter.
 
+### Digit Lab #57 comparison: continuous haze coverage and polished edge correction (14 Nov 2026, ~02:26 IST)
+- User supplied Digit Lab #57 screenshot plus full/cropped iOS reference images. Key visual findings: haze appears unevenly present across glyphs; `1` and `0` have lost/weak atmospheric light wrap, `4` has a blue tint but less polished edge reflection than iOS, orange/white bending around `1` is weak/artificial, and `7` lacks continuous full-body haze (some effect is isolated to its upper arm). The `0` should softly blend surrounding orange/white light, not show only separate sharp streaks.
+- Important: the user is not requesting digit-specific fixes. Every material response must stay shared across all glyphs and times.
+- Source diagnosis: `glassVolumeRegion` combined `glassEdgeVolume` and `glassCoreVolume` with `max()`. Where both masks are partially active, this creates a coverage trough. Since the volume masks are derived from SDF/edge profile, stroke widths and local shapes expose the trough at different places, producing patchy haze even with one shared shader.
+- Renderer commit `463fd43de8c2a0409978eb1d130f62676cba4c34` — “Unify glass volume coverage and broaden softbox edge reflection”:
+  - Replaces `max(edgeVolume, coreVolume)` with the smooth union `1 - (1-edgeVolume)*(1-coreVolume)`, removing the valley where both masks are partially active. This should make atmospheric scattering reach all stroke bodies more consistently without character/coordinate-specific conditions.
+  - Broadens the shared area/softbox reflection by lowering its power exponent from 5.5 to 4.5 and increasing coefficient from 0.52 to 0.58. This targets a more polished continuous reflection edge rather than a tighter isolated glint. Existing sharp key/fill glints remain.
+  - Retains #57 colour-preserving directional volume scatter (28%), shared 46% wallpaper-derived haze, 30% bright-pass bloom, 44px Liquid Glass / 38px Solid blur split and original chromatic environment reflection.
+  - Static checks passed: smooth union present; broadened area reflection present; shared haze/bloom and directional colour retained; Solid selection and 0.78 opacity retained; no digit-specific branches.
+  - No glyph geometry, typography, kerning/spacing, positioning, pinch/drag or wallpaper-isolation changes.
+- Candidate CI from this commit: Digit Lab #59 run `43508138603`; Production #335 run `43508138426`. Both were in progress when recorded. Verify build outcomes and artifacts before linking.
+- This pass is intended to fix mask continuity rather than blindly increase blur. User testing is required to verify that `1`, `0`, `4`, and `7` gain a consistent natural haze, the orange/white and blue colours remain rich, the `4` edge looks more polished, and the result does not become frosted/opaque.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `8c80a942aaa2b62b35543e7ffcdabb3ccdf71c37` — “Restore colour-preserving Liquid Glass scattering”
+- **Latest renderer commit:** `463fd43de8c2a0409978eb1d130f62676cba4c34` — “Unify glass volume coverage and broaden softbox edge reflection”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
 - **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
-- **Latest candidate builds:** Production #334 (run `43505174252`) and Digit Lab #57 (run `43505174420`), both from `8c80a94`; queued when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
+- **Latest candidate builds:** Production #335 (run `43508138426`) and Digit Lab #59 (run `43508138603`), both from `463fd43`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
