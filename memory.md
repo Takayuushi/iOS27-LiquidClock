@@ -353,6 +353,23 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Both workflows for `a6e3825` completed successfully: Production #321 (run ID `43475347682`) and Digit Lab #43 (run ID `43475347715`). Both use the same shared renderer module.
 - Keep Solid/Frosted protected. Shared spacing update has now been visually accepted across the two materials; no material-specific spacing.
 ### Current work to resume after a new chat
+### Liquid Glass optical pass — interior scattering and wallpaper-band blending (13 Nov 2026, ~23:45 IST)
+- **Reference image order is explicit:** first image supplied in the 13 Nov 2026 turn is Apple's original iOS clock; second image is our Digit Lab #43 result. Always treat image 1 as the target and image 2 as our current output. Do not reverse them.
+- User's spacing acceptance stands: shared typography values are frozen at 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Do not touch kerning unless user reports a new issue.
+- User asked to move on to Liquid Glass blending/scattering for iOS visual parity. Solid / Digit Lab Frosted remains approved and protected. Production Glass / Digit Lab Liquid Glass is the only material being tuned.
+- Source inspection of the renderer from #43 revealed `interiorVolume` was calculated from SDF depth but not used; both `glassVolumeScatter` and `ambientInteriorMask` were limited to `glassProfileCoverage`, which describes the rounded edge shoulder and falls off after ~20px. Thus the silver-blue ambient body fill and volume scattering mostly faded before reaching the centre of wider glyph strokes.
+- New commit `5ee517eea0cc8c33d9deff2a4356670d7ef862ec` — “Extend Liquid Glass scattering through shared glyph volume”:
+  - Combines edge coverage and core depth into one glyph-independent `glassVolumeRegion` using `max(edgeMask, interiorVolume * 0.72)`.
+  - Uses that region for both transmitted volume scattering and dark-area silver-blue ambient fill, so the optical body continues into the stroke interior.
+  - Widens directional wallpaper-band sampling from 6.8–10.8px to 10–15px (far taps reach about 20.7px) and strengthens high-contrast microfacet blending from 0.25–0.72 to 0.36–0.80. Diffusion is oriented across local wallpaper luminance gradients, and strength remains contrast-adaptive.
+  - Raises the Glass volume scatter factor from 0.14 to 0.22 and slightly increases the volume-transmitted lift.
+  - No digit identity, glyph location, or per-character logic is added; the same mask and image-gradient model applies to every digit and colon.
+  - No typography values changed.
+- **Solid safety check:** `solidMode == 1` still selects `center` for transmission, the original 38px blur, the original Solid opacity/lighting/bevel path; ambient scatter remains multiplied by `(1-solidMode)`. The new Glass transmission changes are blended out of the Solid path. Explicit static checks passed.
+- **Current Production workflow:** #322, run ID `43480428529`, commit `5ee517e`, in progress: [Actions #322](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428529)
+- **Current Digit Lab workflow:** #44, run ID `43480428502`, commit `5ee517e`, in progress: [Actions #44](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43480428502)
+- These builds are for comparison only. Do not claim iOS parity or a visual improvement until both build successfully and the user compares on-device against the first iOS reference image using the same diagonal wallpaper. Also inspect the beach wallpaper afterwards to ensure the adaptive diffusion has not made it frosted/cloudy.
+- Current renderer file: `clock-renderer/src/main/java/com/example/ios27clock/LiquidWallpaperRenderer.kt`.
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
 - Commit `54679f0` changes the Liquid Glass stroke profile to a rounded SDF-derived glass-rod cross-section and introduces a broad face reflection plus tighter glints. It deliberately removes the previous independent outline/caustic strokes to avoid embossed text. This is a new visual pass, **not yet confirmed as a fix on the user's device**.
@@ -460,18 +477,16 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `a6e3825cacc855180f9b62441c12e38b2d21d653` — “Fine-tune shared 1–0 spacing by a fraction”
-- **Latest tested builds:** Production #321 and Digit Lab #43 both succeeded from `a6e3825`.
-- **Latest user assessment:** User says the 1–0 gap now looks perfect. Multiple times (10:47, 04:14, 02:59, 07:23, 06:33, 01:50, etc.) were tested to demonstrate consistent rendering as glyphs change. User explicitly approves the uniformity/no digit-specific treatment. Freeze spacing at current values unless user reports another issue.
-- **Current shared typography gaps (accepted):** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. All flow through common `visualGlyphOrigins()` and apply equally to Liquid Glass and Solid/Frosted. No material-specific kerning.
-- **Global user requirement:** one shared visible-bounds typography layout and one glyph-independent optical model; no digit-identity special cases. Both materials share typography; their approved optical/material appearance paths remain distinct where required.
-- **Optical status:** Still unresolved against iOS reference. User deliberately did not assess glass blending/scattering in this build because `a6e3825` changed spacing only. Prior shader adjustments were not noticeably different to the user's eye. Do not claim optical improvement until a shader-changing build has been compared on the same wallpaper. Trace actual transmission/scattering through the final composite before arbitrary value changes.
-- **Diagnostic note:** current `interiorVolume` mask is calculated but unused; `glassVolumeScatter` mixes a slightly brighter version of `microfacetTransmission` into `glassTransmitted` before reflection/tint/final composite. Investigate whether the volume contribution meaningfully changes output.
-- **Protected result:** production Solid / Digit Lab Frosted is approved and protected. Latest set's main timing examples are on diagonal wallpaper; do not infer a new beach Liquid Glass assessment from this set.
-- **Latest Production:** #321, run ID `43475347682`, succeeded: [Actions #321](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347682)
-- **Latest Digit Lab:** #43, run ID `43475347715`, succeeded: [Actions #43](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43475347715)
-- **On-device status:** `a6e3825` spacing is accepted. Optical shader not changed in this build and still awaits focused iteration.
-- **Next priority:** work only on the shared Liquid Glass optical response, preserving the accepted spacing and Solid path. Make one well-founded shader change at a time and use same-wallpaper before/after screenshots. Do not reopen kerning or add per-digit logic.
+- **Latest renderer commit:** `5ee517eea0cc8c33d9deff2a4356670d7ef862ec` — “Extend Liquid Glass scattering through shared glyph volume”
+- **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
+- **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and has tested varied times for cross-glyph consistency.
+- **Current test builds:** Production #322 run ID `43480428529` and Digit Lab #44 run ID `43480428502`, both from `5ee517e`, still building.
+- **Image order rule for the latest comparison:** first supplied screenshot is Apple's iOS reference; second supplied screenshot is our #43 Digit Lab. Use the first as the visual target.
+- **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. Do not touch accepted typography or Solid/Frosted.
+- **Latest shader change:** a shared glyph-independent `glassVolumeRegion` now combines the rounded edge profile with SDF-derived `interiorVolume`; it drives core volume scattering and the dark-area silver-blue ambient fill. Directional wallpaper diffusion widened from 6.8–10.8px to 10–15px and its high-contrast blend strengthened from 0.25–0.72 to 0.36–0.80; volume scatter factor 0.14→0.22. Commit `5ee517e`.
+- **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Confirm with device screenshot after installation.
+- **Next visual checks:** compare same diagonal wallpaper against iOS reference. Inspect black/dark parts of 1 and 0 for silver-blue body, 0's horizontal bands for softened merging, and 4/7 for coherent refraction. Then test the beach wallpaper to catch accidental frosted/cloudy output.
+- **Do not claim visual parity from CI alone.** CI only proves compile/artifact creation; wait for user's on-device comparison.
 
 ## New issue reported and root cause (13 Nov 2026)
 
