@@ -180,8 +180,8 @@ class LiquidWallpaperRenderer(
             // face; tighter glints sit on the same physically curved shoulder.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                7.0
-            ) * 0.42;
+                5.0
+            ) * 0.58;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 68.0
@@ -233,6 +233,22 @@ class LiquidWallpaperRenderer(
             );
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
+
+            // A glass object reflects its surroundings as well as refracting
+            // what is directly behind it. Sample the opposite side of the
+            // clock as a compact screen-space environment map. This makes the
+            // face visibly reflective without introducing a fixed colour ramp.
+            float2 clockRelative = p - uClockCenter * uResolution;
+            float2 reflectedOffset = float2(
+                -clockRelative.x * 0.16,
+                -clockRelative.y * 1.12
+            );
+            float2 reflectionPoint = clamp(
+                p + reflectedOffset + tilt * 2.0,
+                float2(0.0),
+                uResolution
+            );
+            float3 environmentReflection = uWallpaper.eval(reflectionPoint).rgb;
 
             // Reuse the eight-direction blur below for both materials:
             // Glass gets a tighter optical diffusion, while Solid retains its
@@ -291,13 +307,13 @@ class LiquidWallpaperRenderer(
             );
             milkyFrost = mix(milkyFrost, uAccentColor, 0.07);
 
-            // Glass borrows its colour from the refracted wallpaper. The
-            // accent is also wallpaper-derived and only colours the glancing
-            // reflection; no permanent lavender or white overlay is applied.
-            float3 glassFace = mix(refracted, center, 0.08);
-            // The selected accent is sampled from this wallpaper, not a fixed
-            // lavender material. A little more of it gives the transparent
-            // surface a legible body without turning it opaque or frosted.
+            // The face combines direct refraction with a reflected view of
+            // the surrounding wallpaper. The source remains image-derived,
+            // but unlike alpha-blending the original image over itself this
+            // gives the glass a distinct optical body on both bright and dark
+            // backgrounds.
+            float3 glassFace = mix(refracted, environmentReflection, 0.26);
+            glassFace = mix(glassFace, center, 0.10);
             glassFace = mix(glassFace, uAccentColor, 0.045);
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
@@ -347,7 +363,7 @@ class LiquidWallpaperRenderer(
             // Broad reflection is visible across the front face. Two tighter
             // glints track the actual rounded cap on the light-facing sides.
             colour += float3(0.92, 0.97, 1.0) *
-                glassAreaReflection * (1.0 - solidMode) * 1.18;
+                glassAreaReflection * (1.0 - solidMode) * 1.38;
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.20;
             colour += float3(0.68, 0.82, 1.0) *
@@ -367,17 +383,32 @@ class LiquidWallpaperRenderer(
             colour += float3(1.0, 1.0, 1.0) *
                 solidRim * 0.25 * solidMode;
 
-            // A moving, soft studio reflection makes the lens readable on
-            // low-detail wallpapers without creating a raised all-around bevel.
-            float2 clockRelative = p - uClockCenter * uResolution;
+            // Directional environment reflections span the glass face,
+            // not just its perimeter. A broad softbox gives the rounded lens
+            // a continuous reflection while a narrower ribbon supplies the
+            // crisp highlight visible in polished optical glass.
             float reflectionAxis = clockRelative.x * -0.42 +
                 clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
-            // Do not paint studio reflection ribbons across the glyph.
-            // Liquid Glass should reveal the sampled wallpaper; its lighting
-            // comes from the actual refracted image and contour Fresnel only.
+            float glassSoftbox = exp(
+                -pow((reflectionAxis - 18.0) / 76.0, 2.0)
+            ) * glassLens;
+            float glassRibbon = exp(
+                -pow((reflectionAxis + 28.0) / 19.0, 2.0)
+            ) * glassLens;
+            float3 environmentLight = mix(
+                environmentReflection,
+                float3(0.96, 0.98, 1.0),
+                0.48
+            );
+            colour = mix(
+                colour,
+                environmentLight,
+                glassSoftbox * 0.24 * (1.0 - solidMode)
+            );
+            colour += float3(0.92, 0.97, 1.0) *
+                glassRibbon * 0.28 * (1.0 - solidMode);
 
-            // The frosted material gets a broad satin highlight rather than
-            // the sharp glass caustic, so it reads as polished rather than flat.
+            // Frosted Glass keeps its separate, subdued satin highlight.
             float solidSheen = exp(
                 -pow((reflectionAxis - 18.0) / 66.0, 2.0)
             ) * glassLens;
@@ -387,7 +418,12 @@ class LiquidWallpaperRenderer(
             // Keep Liquid Glass genuinely transparent: the wallpaper is
             // the dominant face colour, with a restrained body and contour rim.
             // Frosted Glass retains its separate, intentionally denser opacity.
-            float glassOpacity = mix(0.35, 0.46, glassLens);
+            // The sampled image is already the wallpaper beneath the
+            // glyph. Low alpha simply composites nearly identical pixels and
+            // erases the refraction/reflection, leaving only a faint outline.
+            // Near-opaque premultiplied output is appropriate here because
+            // the face colour itself is the refracted/reflected environment.
+            float glassOpacity = mix(0.88, 0.95, glassLens);
             float solidOpacity = 0.78;
             float bodyOpacity = mix(glassOpacity, solidOpacity, solidMode);
             float alpha = clamp(
