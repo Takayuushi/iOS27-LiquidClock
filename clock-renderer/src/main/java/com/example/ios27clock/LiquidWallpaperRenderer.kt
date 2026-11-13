@@ -675,26 +675,39 @@ class LiquidWallpaperRenderer(
                 volumeScatteredTransmission,
                 glassVolumeScatter
             );
-            // Keep the broad atmospheric veil from #55, whose lower-frequency
-            // wallpaper haze was visibly closer to the iOS reference without
-            // erasing the direct chromatic transmission.
+            // Use a two-scale in-scattering target: broad isotropic wallpaper
+            // haze supplies atmospheric softness, while the cross-band
+            // microfacet sample preserves the local orange/blue light path.
+            // This avoids the colour wash from a blur-only target and avoids
+            // the overly sharp direct-only result.
+            float3 glassDiffuseTransport = mix(
+                frostedWallpaper,
+                microfacetTransmission,
+                0.32
+            );
             float glassAtmosphericCoverage = smoothstep(
                 0.10,
                 0.60,
                 glassVolumeRegion
             );
+            // Increase the common diffuse transport only where the wallpaper
+            // contains strong local bands. The same image-driven response is
+            // used by every stroke, independent of glyph identity or width.
+            float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
             float glassAtmosphericScatter =
-                0.46 * glassAtmosphericCoverage;
+                mix(0.46, 0.58, glassBandHaze) *
+                glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
-                frostedWallpaper,
+                glassDiffuseTransport,
                 glassAtmosphericScatter
             );
-            // Bright-pass bloom is screen-composited at low strength so
-            // illuminated regions spread softly without turning the complete
-            // face into a white or gray frosted layer.
+            // Let bright colour energy spread slightly farther through
+            // high-contrast regions, while retaining the direct chromatic
+            // transmission and the external light-wrap added in #61.
             float glassAtmosphericBloom =
-                0.30 * glassAtmosphericCoverage;
+                mix(0.30, 0.38, glassBandHaze) *
+                glassAtmosphericCoverage;
             glassTransmitted = 1.0 -
                 (1.0 - glassTransmitted) *
                 (1.0 - glassBrightBloom * glassAtmosphericBloom);
