@@ -257,6 +257,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Builds #314 and Digit Lab #36 from `f47ee08` were triggered but are now superseded for testing because their 4–7 value is 0.017em. Do not hand these builds to the user as the corrected final candidate.
 - New builds from `d5816c0` must be identified by exact head SHA and offered instead. CI/device test pending.
 - Do not claim the optical blend is complete until user verifies same-wallpaper comparison.
+### Reference-measured spacing audit and micro-adjustment (13 Nov 2026, ~21:45 IST)
+- User explicitly authorizes the assistant to identify very small spacing differences by comparing the project's clock against the actual iOS lock-screen reference; do not blindly keep user-approved spacing if a measurable mismatch remains. The user also said the 4–7 gap currently looks perfect, but gives permission to adjust tiny amounts only when comparison evidence supports it.
+- Compared the exact reference capture `RDT_20261112_1627083837676783770026508(10).jpg` (944x2048, iOS 10:47 over diagonal wallpaper) with the latest Digit Lab capture `Screenshot_20261113_212940.jpg` (945x2048, same wallpaper / 10:47). They are close in overall scale and composition; a wallpaper-based alignment plus enlarged clock crops was used to inspect glyph boundaries rather than judging by memory or a different image.
+- Assessment: 4–7 is already very close to reference; leave at 0.019em. :–4 also appears close; leave at 0.034em. Two subtle under-spacing differences remain: 1–0 is just a little too tight, and 0–: is slightly too tight. Make small, not large, changes.
+- New commit `39ad2b6b7bf4be6f17929ce33022c98a34c464da` — “Micro-tune shared 1–0 and 0–colon spacing against iOS reference”:
+  - `hourPairGapEm` (1–0 / all hour digit pairs): 0.036→0.040em.
+  - `hourToColonGapEm` (0–: / all hour-to-colon pairs): 0.0355→0.038em.
+  - `minutePairGapEm` (4–7 / all minute digit pairs) stays exactly 0.019em.
+  - `colonToMinuteGapEm` (:–4) stays exactly 0.034em.
+- This remains role-based, shared typography layout, not digit-specific. All time values use the same pair-role logic. No font source/axes, glyph geometry, Solid rendering, or shader optical parameters changed.
+- Production #316 run ID `43461985770` and Digit Lab #38 run ID `43461986030` started from exactly `39ad2b6`; CI and device comparison pending.
+- User wants future spacing checks across any digits in the time string by reference comparison, but do not change a pair if already matching. Preserve 4–7 unless a future same-size comparison shows a clear mismatch.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -365,16 +377,18 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `d5816c05d0ed05aed1dbd2f7528919ca5605ad20` — “Keep latest spacing pass limited to requested 1–0 gap”
-- **Latest user-tested pair:** Production #313 / Digit Lab #35 succeeded from `4c8d828`; user's latest report asks for more visible 1–0 gap, more transmission blending so adjacent white wallpaper bands merge like iOS, and better unified colour blending at the 7 vertical terminal. User did NOT request a new 4–7 adjustment in this report.
-- **Spacing (current accepted):** 1–0 0.036em; 4–7 0.019em (restored from erroneous 0.017); 0–: 0.0355em; :–4 0.034em. Do not change 4–7.
-- **Shared transmission diffusion candidate:** 3.8px four-direction sample with 30–38% blend on refracted sample, same algorithm for every glyph/time; no per-digit rules.
-- **Latest unified refraction:** IOR 1.52; optical path 46px; edge pull 1.34; SDF normal sample 4.25px / gradient denominator 8.5; no glyph-specific branches.
-- **Superseded builds:** Production #314 and Digit Lab #36 from `f47ee08` have wrong 4–7 value 0.017em; do not use as the intended comparison build.
-- **New corrective source:** `d5816c0` restores 4–7 to 0.019 while retaining the requested 1–0 increase and shared diffusion. Verify new Actions runs from exact SHA.
-- **Protected Solid:** Solid/Frosted remains unchanged. Refracted sample is mixed back to original center for Solid mode; pair spacing is shared typography.
-- **On-device status:** d5816c0 not yet tested; do not call visual behavior complete.
-- **Next priority:** verify builds from d5816c0. Compare 1–0, ensure 4–7 unchanged, and inspect if adjacent white bands blend into a single soft transmission through all glyphs while retaining crystal clarity and beach wallpaper detail.
+- **Latest renderer / spacing commit:** `39ad2b6b7bf4be6f17929ce33022c98a34c464da` — “Micro-tune shared 1–0 and 0–colon spacing against iOS reference”
+- **Reference comparison:** compared actual iOS reference `RDT_20261112_1627083837676783770026508(10).jpg` with latest Digit Lab screenshot `Screenshot_20261113_212940.jpg`, both 10:47 over the same diagonal wallpaper.
+- **Current spacing:** 1–0 / hour digit pair 0.040em; 4–7 / minute digit pair 0.019em; 0–: 0.038em; :–4 0.034em.
+- **Reason for last adjustment:** 1–0 and 0–: had a small remaining under-spacing vs iOS reference, so only these were nudged. 4–7 and :–4 looked close and were preserved.
+- **Scope:** shared role-based layout; no digit-specific special cases. No glyph geometry, Apple font source/axes, Solid renderer, or optical shader values changed in `39ad2b6`.
+- **Latest optical candidate before spacing-only pass:** shared microfacet transmission diffusion 3.8px, 30–38% blend; unified SDF normal sampling 4.25px / gradient denominator 8.5; glass IOR 1.52; thickness 46px; edge pull 1.34; ambient scatter and soft bevel remain in parent commits. User feedback on this diffusion pass is still pending.
+- **Protected Solid:** unchanged.
+- **Previous completed builds:** Production #315 / Digit Lab #37 succeeded from `d5816c0`.
+- **Current production build:** #316, run ID `43461985770`, from `39ad2b6`; in progress: [Actions #316](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43461985770)
+- **Current Digit Lab build:** #38, run ID `43461986030`, from `39ad2b6`; in progress: [Actions #38](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43461986030)
+- **On-device status:** `39ad2b6` not yet tested; do not claim visual parity until user tests.
+- **Next priority:** verify #316/#38; compare all visible gap roles against the same iOS 10:47 reference (especially 1–0, 0–:, :–4 and 4–7) and inspect global optical diffusion across 0/4/7. Don't touch 4–7 unless a measured mismatch appears.
 
 ## New issue reported and root cause (13 Nov 2026)
 
