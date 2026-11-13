@@ -230,6 +230,23 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Production #312 run ID `43452031296` and Digit Lab #34 run ID `43452031200` are both running from `10726db`; CI/device verification pending.
 - All earlier ambient scatter, soft rim and lower-terminal cap improvements remain from parent commits.
 - Do not claim the refraction is fixed until the user compares the orange streak through 0 and vertical arms of 4/7 on the exact same wallpaper. Also verify 0–: is now wider than :–4, with 1–0 and 4–7 unchanged.
+### Unified optical model and pair-spacing refinement (13 Nov 2026, ~21:11 IST)
+- User tested Production #312 / Digit Lab #34 from commit `10726db`. Their new same-wallpaper screenshots say:
+  - The visible 1–0 pair still needs a little more gap; the previous 0.026em increase was too subtle/not apparent.
+  - 4–7 should be a little tighter.
+  - Some of the background appears improved, but the orange streak through 0 and the vertical arms of 4/7 still read as too transparent / blurry rather than a coherent crystal lens.
+  - User explicitly clarified that 0/4/7 are examples to direct attention to the optical blending, NOT a request for separate digit-specific shader tricks. The clock must use one shared material/refraction model, so future time changes preserve the effect without digit-specific tuning.
+- Existing source inspection found an explicit lower-right `7` terminal highlight lobe (hard-coded `terminalAxis` / `terminalCapSpecular`) from commit `9c06eb5`. This contradicted the user's unified-material requirement.
+- New commit `4c8d8286bd5c29160f0003d317d9ebb84c8044b7` — “Unify glyph refraction and refine shared clock spacing”:
+  - Shared pair gaps only: `hourPairGapEm` (1–0) 0.026→0.028em; `minutePairGapEm` (4–7) 0.021→0.019em. Colon gaps stay 0–: 0.0355em and :–4 0.034em.
+  - Removes the explicit 7-specific `terminalAxis`/`terminalCapSpecular` block.
+  - Adds one common `glassBevelSpecular`, derived from the same `glassSurfaceNormal`, `keyHalfVector`, `glassProfileSlope` and `normalConfidence` used for every glyph. Applies to all glyphs equally; no numeral ID, coordinate, or one-off digit branching.
+  - Tightens finite-difference SDF normal sampling from 5.25px to 4.25px and changes height-gradient denominator 10.5→8.5 to match, to produce a sharper shared surface normal.
+  - Increases shared Glass optical path thickness 42→46px and edge-pull 1.30→1.34; physical IOR remains 1.52. This strengthens actual Snell refraction uniformly rather than adding blur.
+  - No glyph paths, official font axes, colon profile, material Solid source/warp, or per-digit shaping code changed.
+- Production #313 run ID `43456230894` and Digit Lab #35 run ID `43456230829` triggered from `4c8d828`; CI pending at time of note.
+- Solid/Frosted remains protected: all new bevel terms are multiplied by `(1.0-solidMode)`; Solid warp is unchanged. Shared typography spacing naturally applies to both materials and both app modes.
+- User requests continued side-by-side same-wallpaper comparisons and explicitly says to use unified material logic, not per-digit patches. Next acceptance checks: 1–0 gap visible; 4–7 slightly tighter; orange streak is bent/reflected through the 0; vertical arms remain crisp/crystalline; no frosted beach regression; Solid unchanged.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -338,16 +355,18 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `10726db00956273b65800e83885c14e16aa120ac` — “Restore crystal-clear refraction and balance colon spacing”
-- **Latest tested builds:** Production #311 and Digit Lab #33 succeeded from `566df1c`; user reports too much local softness and insufficient crystal-like refraction through 0/4/7.
-- **Latest visible spacing:** 1–0 0.026em (unchanged); 0–: 0.0355em (increased); :–4 0.034em (tiny increase and now smaller than 0–:); 4–7 0.021em (unchanged).
-- **Latest clear-glass correction:** remove 2px 4-direction local diffusion completely; Snell IOR 1.52; optical thickness 42px; edge pull 1.30. No extra blur introduced.
-- **Existing optical improvements retained:** dark-only silver-blue ambient scatter, 6.2px softer Glass rim with peak 0.18, adaptive colour bounce, corrected lower-right 7 end-cap highlight.
-- **Protected Solid:** no changes to Solid/Frosted rendering; new Snell constants belong to Glass path, Solid warp unchanged.
-- **Current production build:** #312, run ID `43452031296`, from `10726db`; in progress: [Actions #312](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43452031296)
-- **Current Digit Lab build:** #34, run ID `43452031200`, from `10726db`; in progress: [Actions #34](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43452031200)
-- **On-device status:** `10726db` not tested yet. No visual success claim until user's next screenshots.
-- **Primary next priority:** verify #312/#34; compare orange streak curvature through 0, 4 and 7 arms; check : gap hierarchy; ensure no blur or Solid regression.
+- **Latest renderer commit:** `4c8d8286bd5c29160f0003d317d9ebb84c8044b7` — “Unify glyph refraction and refine shared clock spacing”
+- **Latest tested build pair:** Production #312 / Digit Lab #34 succeeded from `10726db`; user says 1–0 should open slightly more, 4–7 slightly tighter; refraction/colour blending through glass still lacks crystal-like bending. User explicitly wants one unified optical model, not per-digit patches.
+- **Latest shared spacing:** 1–0 0.028em; 4–7 0.019em; 0–: 0.0355em; :–4 0.034em. Preserve unless new comparison asks otherwise.
+- **Unified Glass refraction:** IOR 1.52; optical path thickness 46px; edge pull 1.34; SDF normal sample 4.25px with matching 8.5 gradient denominator. No local blur.
+- **Unified bevel reflection:** removed 7-specific terminal normal/lobe; shared `glassBevelSpecular` uses `glassSurfaceNormal`, key half-vector, slope and normal confidence for every numeral.
+- **Earlier Glass finish retained:** dark-only silver-blue ambient scatter, 6.2px soft rim at 0.18 peak, adaptive 24% colour bounce, 22px environment sample; high-luminance gating retained.
+- **Protected Solid:** Solid source/warp/material remains unchanged; new bevel reflection is Glass-only; no new Solid branch values.
+- **Latest completed builds:** Production #312 / Digit Lab #34 succeeded from `10726db`.
+- **Current production build:** #313, run ID `43456230894`, from `4c8d828`; in progress: [Actions #313](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43456230894)
+- **Current Digit Lab build:** #35, run ID `43456230829`, from `4c8d828`; in progress: [Actions #35](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43456230829)
+- **On-device status:** `4c8d828` not tested yet; no visual-success claim until user provides comparison.
+- **Next priority:** verify #313/#35; assess unified refraction on orange streak through 0 and vertical arms of 4/7, crispness, 1–0 / 4–7 pair spacing, beach wallpaper clarity and Solid parity.
 
 ## New issue reported and root cause (13 Nov 2026)
 
