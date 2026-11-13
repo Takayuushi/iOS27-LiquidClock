@@ -141,6 +141,21 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - `hourToColonGapEm` / `0–:`: 0.024em → 0.027em.
   - `colonToMinuteGapEm` / `:–4`: 0.030em → 0.033em.
 - The new commit cancels the in-progress #304/#26 workflows from parent `b44c11c`. The correct current candidate is Production #305 and Digit Lab #27 from `9f3a145`. Both are running; the on-device result has not yet been tested.
+### Fair lock-screen comparison and Liquid Glass vibrancy pass (13 Nov 2026, ~16:52 IST)
+- User supplied a level-playing-field comparison: Digit Lab clock over the exact diagonal light-streak wallpaper, beside the original iOS lock-screen clock on that same wallpaper. The user removed the original clock with Galaxy eraser before using the wallpaper for Digit Lab. Treat these screenshots as the latest visual comparison; do not question the user's test or compare against a different wallpaper.
+- Assessment: the iOS clock looks brighter, more vivid, jewel-like, with saturated warm/cool colour and luminous internal light across the whole glass stroke. Our output looks comparatively dull/dark, mostly transmitting the wallpaper with a thin perimeter effect. The missing quality is whole-volume coloured light transport, not simply more white edge glow.
+- Latest actual renderer commit: cc4719c5dd5f4c6f051190b5f8c2cdf48943947f — “Restore Liquid Glass vibrancy with adaptive coloured light”. Verified GitHub compare confirms it changes LiquidWallpaperRenderer.kt plus memory; the source blob SHA changed to f2d3e2d0661a1ef70b2103795d9c878eda0e0964.
+- Glass-only changes in cc4719c:
+  - Face illumination increased from baseline 0.54 + 0.34*key + 0.18*fill to 0.70 + 0.28*key + 0.14*fill, to keep the transmitted wallpaper lively rather than dark/cut-out.
+  - Adds paired key/fill wallpaper environment samples (42px key / 34px fill offsets), mixed 64/36, then raises sharp image-derived face reflection from 3.5–11% to 7.5–20% according to surface slope.
+  - Saturation of refracted image increased from 1.35x to 1.52x.
+  - Chromatic dispersion increased from 2.4–4.2px to 3.2–5.8px along the refracted ray.
+  - Blurred light-capture radius for Glass increased from 22px to 30px; Solid stays 38px.
+  - Internal screen-bounce now maxes at 28%, gated by BOTH pixel darkness and local blurred-neighbour luminance. This is intended to pull saturated light into dark wallpaper regions without causing the beach/sky to become frosted.
+  - White rim/glint intensities are not increased. Typography, outline kerning, colon spacing, font axes and material geometry are unchanged.
+- Solid/Frosted protection: all new optical values are selected by the existing Glass-vs-Solid mix/gate. Blur radius is 38px for Solid; glassFaceLighting is mixed to exactly 1.0 for Solid; new face reflection, refraction dispersion, and light bounce are mixed back to the original Solid source. No production Solid material settings are changed.
+- Production #306 and Digit Lab #28 workflows were triggered from cc4719c; status and on-device acceptance pending.
+- Earlier current spacing in source remains: 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Do not alter these as part of optical tuning.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -248,16 +263,19 @@ Changes:
 
 ## Status snapshot
 
-- **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `9f3a145641e685b3894fc298691c0c2ec8d6c5ae` — “Fine-tune spacing on both sides of colon”
-- **Latest spacing:** `1–0` 0.024em (unchanged); `0–:` 0.027em (increased slightly); `:–4` 0.033em (increased slightly); `4–7` 0.021em (unchanged). No other values changed in `9f3a145`.
-- **Feedback baseline clarification:** the earlier “almost there” opinion was based on the earlier screenshot, not latest #303/#25. Do not treat it as feedback on #303/#25.
-- **Current production build:** #305, run ID `43415570124`, from `9f3a145`; running: [Actions #305](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415570124)
-- **Current Digit Lab build:** #27, run ID `43415570101`, from `9f3a145`; running: [Actions #27](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43415570101)
-- **Superseded runs:** #304 and #26 from `b44c11c` were cancelled when `9f3a145` triggered new workflows. Do not share those as current artifacts.
-- **Latest completed pair before colon adjustment:** Production #303 and Digit Lab #25 succeeded from `71a36ce`.
-- **Next step:** wait for #305/#27 CI success, then use those builds for visual verification. The user has not yet supplied feedback on this latest spacing-only commit.
-
+- **Active branch:** feature/live-wallpaper-big-clock
+- **Latest renderer source commit:** cc4719c5dd5f4c6f051190b5f8c2cdf48943947f — “Restore Liquid Glass vibrancy with adaptive coloured light”
+- **Latest visual target:** same-wallpaper lock-screen comparison. Reference iOS clock has bright saturated internal light and jewel-like colour; our current output looked dull/dark with mostly a perimeter effect.
+- **Latest Glass material pass:** base face lighting 0.70 + 0.28 key + 0.14 fill; sharp image-derived key/fill reflections 7.5–20%; 1.52x saturation; 3.2–5.8px dispersion; 30px blurred capture radius; adaptive 0–28% internal bounce gated by local darkness and nearby-light luminance.
+- **White edge glow:** not increased. Keep the approved slimmer edge treatment.
+- **Latest spacing:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Do not change.
+- **Glass colon:** 3.2px optical radius. Solid colon remains 20px.
+- **Protected Solid:** no approved Solid material values changed. New blur still resolves to 38px for Solid; Glass-only face lighting/reflections/bounce/dispersion are gated/mixed out for Solid. Shared typography is unchanged.
+- **Previous builds #305 and #27:** success from 9f3a145; include only colon-spacing adjustments.
+- **Current production build:** #306, run ID 43417768322, from cc4719c; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43417768322
+- **Current Digit Lab build:** #28, run ID 43417768397, from cc4719c; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43417768397
+- **On-device status:** cc4719c not yet built/tested on device. Await the user's same-wallpaper side-by-side comparison; do not call the vibrancy issue fixed based on source changes alone.
+- **Primary next priority:** verify #306/#28 compile and upload; compare on this exact diagonal wallpaper and the beach wallpaper. Judge internal color/light pickup and clear detail; retain narrow rim and verify Solid unchanged.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
