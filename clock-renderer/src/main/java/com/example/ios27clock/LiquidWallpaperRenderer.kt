@@ -119,7 +119,7 @@ class LiquidWallpaperRenderer(
             float signedDistance = (sdf - 0.5) * 2.0 * uSdfRange;
             // A slightly wider finite-difference baseline filters single-pixel
             // SDF stair-steps before they become visible as fractured refraction.
-            float2 sampleStep = float2(5.25, 5.25) * uSdfScale;
+            float2 sampleStep = float2(4.25, 4.25) * uSdfScale;
             float sdfLeft = uGlyphSdf.eval(sdfPoint - float2(sampleStep.x, 0.0)).a;
             float sdfRight = uGlyphSdf.eval(sdfPoint + float2(sampleStep.x, 0.0)).a;
             float sdfTop = uGlyphSdf.eval(sdfPoint - float2(0.0, sampleStep.y)).a;
@@ -214,8 +214,8 @@ class LiquidWallpaperRenderer(
                     heightBottomDistance * heightBottomDistance,
                 0.0
             ));
-            float heightGradientX = (heightRight - heightLeft) / 10.5;
-            float heightGradientY = (heightBottom - heightTop) / 10.5;
+            float heightGradientX = (heightRight - heightLeft) / 8.5;
+            float heightGradientY = (heightBottom - heightTop) / 8.5;
             float glassProfileSlope = length(
                 float2(heightGradientX, heightGradientY)
             );
@@ -275,7 +275,7 @@ class LiquidWallpaperRenderer(
             // Snell refraction through the convex height-map surface.
             // Incoming view ray travels toward the glyph; eta is air/glass.
             const float GLASS_IOR = 1.52;
-            const float GLASS_THICKNESS_PX = 42.0;
+            const float GLASS_THICKNESS_PX = 46.0;
             float eta = 1.0 / GLASS_IOR;
             float cosIncident = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float refractK = max(
@@ -287,7 +287,7 @@ class LiquidWallpaperRenderer(
                 glassSurfaceNormal * refractFactor;
             float glassEdgePull = mix(
                 1.0,
-                1.30,
+                1.34,
                 smoothstep(0.10, 0.55, glassProfileSlope)
             );
             float2 glassRefractionOffset =
@@ -591,34 +591,20 @@ class LiquidWallpaperRenderer(
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.18;
 
-            // A narrow end-cap reflection is separate from the broad bar
-            // highlight limiter above. It catches the lower-left terminal
-            // direction of the 7's descending stroke without brightening
-            // its long sides or increasing the glyph's apparent thickness.
-            float2 terminalAxis = normalize(float2(0.28, 0.96));
-            float terminalNormalAlignment = pow(
-                max(dot(normal, terminalAxis), 0.0),
-                8.0
-            );
-            float terminalEdgeMask =
-                smoothstep(0.18, 0.52, glassProfileSlope) *
-                normalConfidence;
-            float3 terminalCapLight = normalize(
-                float3(0.32, 0.91, 0.48)
-            );
-            float3 terminalCapHalfVector = normalize(
-                terminalCapLight + viewDirection3D
-            );
-            float terminalCapSpecular = terminalNormalAlignment *
-                terminalEdgeMask *
-                pow(
-                    max(dot(glassSurfaceNormal, terminalCapHalfVector), 0.0),
-                    9.0
-                );
+            // Unified secondary bevel reflection: every glyph uses the same
+            // height-map normal, curvature gate and light/view half-vector.
+            // This naturally catches stroke ends and curved shoulders without
+            // hard-coded digit identities or position-specific highlight axes.
+            float glassBevelSpecular = pow(
+                max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
+                18.0
+            ) * smoothstep(0.08, 0.42, glassProfileSlope) *
+                normalConfidence *
+                mix(1.0, 0.72, horizontalShoulder);
             colour += environmentReflectionChroma *
-                terminalCapSpecular * 1.02 * (1.0 - solidMode);
-            colour += float3(0.78, 0.91, 1.0) *
-                terminalCapSpecular * 0.34 * (1.0 - solidMode);
+                glassBevelSpecular * 0.42 * (1.0 - solidMode);
+            colour += float3(0.80, 0.91, 1.0) *
+                glassBevelSpecular * 0.12 * (1.0 - solidMode);
 
             // Ambient glass scatter keeps digits legible over pure-black
             // wallpaper regions without laying a gray veil over bright images.
@@ -1356,8 +1342,8 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val hourPairGapEm = 0.026f
-        val minutePairGapEm = 0.021f
+        val hourPairGapEm = 0.028f
+        val minutePairGapEm = 0.019f
         val hourToColonGapEm = 0.0355f
         val colonToMinuteGapEm = 0.034f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
