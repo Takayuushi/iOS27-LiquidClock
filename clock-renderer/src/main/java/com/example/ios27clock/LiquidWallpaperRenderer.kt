@@ -591,6 +591,35 @@ class LiquidWallpaperRenderer(
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.23;
 
+            // A narrow end-cap reflection is separate from the broad bar
+            // highlight limiter above. It catches the lower-left terminal
+            // direction of the 7's descending stroke without brightening
+            // its long sides or increasing the glyph's apparent thickness.
+            float2 terminalAxis = normalize(float2(-0.28, 0.96));
+            float terminalNormalAlignment = pow(
+                max(dot(normal, terminalAxis), 0.0),
+                12.0
+            );
+            float terminalEdgeMask =
+                smoothstep(0.18, 0.52, glassProfileSlope) *
+                normalConfidence;
+            float3 terminalCapLight = normalize(
+                float3(-0.32, 0.91, 0.48)
+            );
+            float3 terminalCapHalfVector = normalize(
+                terminalCapLight + viewDirection3D
+            );
+            float terminalCapSpecular = terminalNormalAlignment *
+                terminalEdgeMask *
+                pow(
+                    max(dot(glassSurfaceNormal, terminalCapHalfVector), 0.0),
+                    12.0
+                );
+            colour += environmentReflectionChroma *
+                terminalCapSpecular * 0.82 * (1.0 - solidMode);
+            colour += float3(0.78, 0.91, 1.0) *
+                terminalCapSpecular * 0.24 * (1.0 - solidMode);
+
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             // These perimeter strokes belong only to Frosted Glass; applying
             // them to Liquid Glass made it look like embossed text.
