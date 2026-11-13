@@ -1219,8 +1219,8 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
-        val hourPairGapEm = 0.024f
-        val minutePairGapEm = 0.018f
+        val hourPairGapEm = 0.021f
+        val minutePairGapEm = 0.021f
         val hourToColonGapEm = 0.016f
         val colonToMinuteGapEm = 0.030f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
