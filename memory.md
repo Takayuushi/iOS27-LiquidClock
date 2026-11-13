@@ -283,6 +283,22 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - No changes to kerning, glyph outlines, official SF Pro source/axes, IOR, glass path length, or Solid/Frosted implementation.
 - Production #317 run ID `43464918499` and Digit Lab #39 run ID `43464918599` started from exact SHA `dd7eca1`; CI and device validation pending.
 - Next test should use same diagonal wallpaper and compare whether adjacent white bands become a continuous soft reflection within 0/4/7, especially 7 terminal, without erasing crystal transparency or making the beach wallpaper milky. Check Solid remains pixel-identical.
+### Follow-up: preserve beach improvement; strengthen diagonal wallpaper band blending only (13 Nov 2026, ~22:25 IST)
+- User supplied latest tests `Screenshot_20261113_221640.jpg` (beach wallpaper, 945×2048), `Screenshot_20261113_221545.jpg` (diagonal wallpaper Digit Lab, 945×2048), and exact iOS comparison `RDT_20261112_1627083837676783770026508(20261113-164744).jpg` (944×2048).
+- Visual inspection: the beach implementation from the previous pass is improved and the user explicitly says it is okay; preserve it. On the same diagonal wallpaper, the current `0` still shows the two white bands as distinct sharp stripes compared with the reference's more continuous, softly blended transmission. The `7` still has a harder blue/white boundary than the reference, especially through its diagonal stroke/terminal region. User says these are material observations, not requests for digit-specific handling.
+- Previous candidate `dd7eca1` was verified built successfully: Production #317 / Digit Lab #39 (both same SHA). The new screenshots are actual-device feedback on that build.
+- Latest commit `daf9df4297db1f44311c533d2047924cea601048` — “Increase shared Liquid Glass band blending against iOS reference”:
+  - Changes only the shared contrast-directed microfacet transmission diffusion.
+  - Adaptive sampling radius: 4.8–7.6px → 6.8–10.8px.
+  - Far tap distance: 1.34× → 1.38× radius.
+  - Normalized sample weights: center 0.34→0.28; near pair 0.21→0.20 each; far pair 0.12→0.16 each (sum remains 1.0).
+  - Diffusion mix range: 0.22–0.58 → 0.25–0.72; surface-slope gate floor 0.82→0.90.
+  - No changes to ambient/volume illumination (volume scatter remains 8.5%), glass reflections, edge lighting, wallpaper sampling outside this kernel, typography, spacing, fonts, or glyph geometry.
+  - Still one common, wallpaper-gradient-driven algorithm across every glyph/time; no digit-specific conditions.
+  - Solid remains unchanged: the Solid branch still mixes transmitted colour back to the original center wallpaper sample.
+- Production #318 run ID `43466827742` and Digit Lab #40 run ID `43466827587` started from exact SHA `daf9df4`; CI and device validation pending.
+- User confirms current spacing is acceptable; don't change any spacing on this optical pass. Current values: 1–0 0.040em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em.
+- Next test: on the diagonal wallpaper compare whether 0's two white bands now merge more closely to reference and whether 7's blue/white transmission boundary becomes softer without losing crystal clarity. Recheck beach wallpaper stays as good as prior candidate. No spacing or Solid changes.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -391,18 +407,18 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer commit:** `dd7eca11de80a70ec9b6421c6442deba4c21b76b` — “Strengthen shared Liquid Glass band diffusion and volume illumination”
-- **Latest accepted spacing:** 1–0 0.040em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. User says spacing is now set; do not change during the current optical pass.
-- **Latest reference pair:** iOS capture `RDT_20261112_1627083837676783770026508(10).jpg` vs Digit Lab `Screenshot_20261113_220238.jpg` / `Screenshot_20261113_220204.jpg`, diagonal wallpaper.
-- **Remaining optical mismatch:** our white/blue/black wallpaper bands remain distinctly separated inside glyphs; iOS spreads them into a softer continuous glass volume. Need stronger transmission diffusion and modestly stronger internal illumination. User explicitly requires unified material logic across all digits, no digit-specific tricks.
-- **Latest diffusion:** local image-gradient direction estimated from ±4px luma probes; blur follows high-contrast band normal. Radius 4.8–7.6px. Symmetric near/far taps at 0.62× / 1.34×. Weights center 0.34, near 0.21 each, far 0.12 each. Blend 0.22–0.58 based on contrast and shared SDF slope.
-- **Latest illumination:** shared volume-scatter blend max 8.5%, gated by microfacet luminance and interior glass coverage, with protection on near-white regions.
-- **Solid protection:** original Solid/Frosted rendering retained; `refracted = mix(glassTransmitted, center, solidMode)` sends Solid to its previous center sample. No Solid-specific parameters changed.
-- **Previous completed builds:** Production #316 / Digit Lab #38 succeeded from `39ad2b6`.
-- **Current production build:** #317, run ID `43464918499`, from `dd7eca1`; in progress: [Actions #317](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43464918499)
-- **Current Digit Lab build:** #39, run ID `43464918599`, from `dd7eca1`; in progress: [Actions #39](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43464918599)
-- **On-device status:** `dd7eca1` not tested yet. No claim that blur/illumination is fixed until the user compares.
-- **Next priority:** verify builds; compare same-wallpaper band blending and internal illumination against iOS; check the 7 terminal and beach clarity; ensure Solid remains unchanged. No spacing edits.
+- **Latest renderer commit:** `daf9df4297db1f44311c533d2047924cea601048` — “Increase shared Liquid Glass band blending against iOS reference”
+- **Latest tested pair:** Production #317 / Digit Lab #39 succeeded from `dd7eca1`; user tested and says beach wallpaper is improved/acceptable, but diagonal reference still has two white bands too distinct inside 0 and blue/white transition too hard through 7.
+- **Current spacing (accepted):** 1–0 0.040em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Do not change in current optical pass.
+- **Current shared band diffusion:** contrast-gradient-aligned sampling; adaptive radius 6.8–10.8px; near taps 0.62× radius; far taps 1.38× radius; weights center 0.28, near 0.20 each, far 0.16 each; diffusion mix 0.25–0.72 with SDF slope gate 0.90–1.0. Intended to merge the two high-contrast wallpaper bands through all glass glyphs.
+- **Illumination unchanged:** volume scatter remains max 8.5%; ambient scatter and all reflection/rim values unchanged.
+- **Beach handling:** prior `dd7eca1` beach result is acceptable per user; preserve it and test for regressions after widening only the directional band diffusion.
+- **Protected Solid:** unchanged; Solid still uses original center wallpaper sample after Glass transmission path.
+- **Previous completed builds:** Production #317 / Digit Lab #39 succeeded from `dd7eca1`.
+- **Current production build:** #318, run ID `43466827742`, from `daf9df4`; in progress: [Actions #318](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43466827742)
+- **Current Digit Lab build:** #40, run ID `43466827587`, from `daf9df4`; in progress: [Actions #40](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43466827587)
+- **On-device status:** `daf9df4` not yet tested; do not claim optical target met until new screenshots.
+- **Next priority:** verify #318/#40; compare 0's adjacent white bands and 7's blue/white transmission boundary against same iOS reference; verify beach remains acceptable. No spacing changes.
 
 ## New issue reported and root cause (13 Nov 2026)
 
