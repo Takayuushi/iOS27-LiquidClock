@@ -204,6 +204,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - no glyph outline geometry, official font source/axes, horizontal bar highlight limiter, colon geometry, or any Solid material settings changed.
 - Build #309 and Digit Lab #31 are confirmed successful from parent `9c06eb5`; these latest screenshots prove the original lower-left cap lobe was not sufficient. New builds for `0b3789d` have been triggered; run IDs to be verified.
 - Do not claim success until the user checks the new lower-right 7 terminal reflection and the tiny 1–0 spacing increase, plus the beach wallpaper for no frosted regression. Continue same-wallpaper side-by-side comparisons.
+### Gemini theory review and targeted refinement pass (13 Nov 2026, ~20:20 IST)
+- User provided Gemini's evaluation of the latest #310/#32 comparison over the same diagonal wallpaper. Gemini says the color/chromatic dispersion and jewel-like presence are now close; smooth interior refraction and colon dots are strong. Remaining differences: (1) the iOS reference maintains a subtle silver ambient body over pure-black wallpaper, while our 1 and upper-left 0 can go nearly black; (2) Apple's edge reflection is a wider, softer, directional bevel instead of our thin sharp rim; (3) our refracted white streaks are sharper than Apple's subtly diffused beams.
+- Assessment: all three observations are directionally credible. Do NOT apply Gemini's fixed `mix(finalColor, ambientGradient, 0.25)` indiscriminately. That could make the beach preview milky/frosted again. Use a dark-pixel-gated ambient floor, interior mask, and vertical gradient; keep bright areas fully image-derived. Likewise, widen but dim the rim to avoid a white drawn outline. Apply only a low-weight local diffusion kernel to the refraction sample, not a global wallpaper blur.
+- Latest tested builds before refinement: Production #310 and Digit Lab #32 succeeded from `0b3789d`; user screenshot `Screenshot_20261113_202033.jpg` (945x2048, 8:20 time, weight 619, compressed width) compared against `RDT_20261112_1627083837676783770026508(9).jpg` (944x2048) on the same diagonal wallpaper.
+- New commit `566df1cc84e4fe379af41c959d7441276e459156` — “Add adaptive ambient scatter and soften Liquid Glass rim”:
+  - Adds a vertical silver-blue ambient gradient inside the Glass glyph, but only where the final transmitted face is nearly black (luma gate 0.025–0.20) and inside the rounded stroke core (`glassProfileCoverage` mask). The gradient runs approximately RGB 0.34/0.37/0.43 to 0.21/0.24/0.30, blended at up to 52%, and is explicitly multiplied by `(1.0-solidMode)`. Its output over pure black is therefore a limited ~0.11–0.19 ambient lift, not a fixed whole-digit gray overlay. Bright beach sky/sand remain essentially unchanged.
+  - Widens Glass rim falloff from 4.8px to 6.2px and reduces peak output 0.23→0.18, retaining directional key-light and horizontal-shoulder gating. Solid rim is unchanged.
+  - Adds four local refraction taps at ±2px X/Y; their average is mixed into the chromatically refracted image at 10–15% based on surface slope. This softly diffuses harsh streak edges without globally blurring wallpaper or changing Solid (the Glass-transmitted branch is mixed back to original center for Solid).
+  - No changes to variable font source/axes, glyph paths, spacing, colon profile, terminal cap lobe, or Solid material.
+- Production build #311 and Digit Lab #33 triggered from `566df1c`; CI and on-device testing pending.
+- Current spacing remains: 1–0 0.026em; 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve.
+- User wants continued same-wallpaper comparison until it matches. Do not claim the beach or ambient-light issue is resolved until tested on device; specifically inspect black-background parts of 1/0, rim softness and refraction blur, plus beach wallpaper clarity.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -312,16 +324,17 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `0b3789d1d7645c8220382dd0fd82651892234c05` — “Aim 7 terminal highlight correctly and refine glass illumination”
-- **Latest tested pair:** Production #309 and Digit Lab #31 succeeded from `9c06eb5`; user still sees weak 7 terminal illumination and requests a tiny increase to 1–0.
-- **Latest terminal correction:** dedicated lower-right end-cap lobe now points along `(+0.28,+0.96)` with matching 3D light X +0.32; exponents 8/9; wallpaper chroma peak 1.02 and cyan-white core 0.34. Only Glass, no glyph geometry changes.
-- **Latest shared spacing:** 1–0 0.026em (from 0.024em); 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve these.
-- **Latest Glass colour refinement:** 22px blur retained; adaptive bounce max 24%; blurred sample gain 1.44; chroma reflection gains 1.28 / 1.34; final chromatic Fresnel 0.15. High-luminance and local-darkness gates retained.
-- **Protected Solid:** no Solid values changed; all new cap/colour contributions gated by Glass mode. Solid blur remains 38px.
-- **Latest completed builds:** Production #309 / Digit Lab #31 succeeded from `9c06eb5`.
-- **Current candidate:** commit `0b3789d`; verify Actions for matching Production and Digit Lab build numbers from this SHA.
-- **On-device status:** `0b3789d` not yet tested; user feedback pending.
-- **Primary next priority:** compare same wallpaper against iOS reference, specifically lower-right terminal of 7, overall transmitted illumination, beach clarity, and tiny 1–0 spacing. Do not alter other spacing or Solid.
+- **Latest renderer source commit:** `566df1cc84e4fe379af41c959d7441276e459156` — “Add adaptive ambient scatter and soften Liquid Glass rim”
+- **Latest tested pair:** Production #310 / Digit Lab #32 succeeded from `0b3789d`; same-wallpaper comparison shows close color/refraction, but dark regions of 1/0 are too black, rim too thin/sharp, and transmitted streaks too crisp.
+- **Latest Glass refinement:** dark-only vertical ambient silver-blue gradient gated by luma 0.025–0.20 and interior stroke mask (max blend 0.52, output on black around 0.11–0.19); Glass rim width 6.2px with output 0.18; local 2px four-direction diffusion mixed at 10–15% on refracted image only.
+- **Solid protection:** ambient, local diffusion and new Glass rim are all excluded from Solid; original Solid/Frosted blur and rim values unchanged.
+- **Latest typography spacing:** 1–0 0.026em; 4–7 0.021em; 0–: 0.027em; :–4 0.033em. Preserve.
+- **Glass colon:** 3.2px profile.
+- **Previous completed builds:** Production #310 and Digit Lab #32 succeeded from `0b3789d`.
+- **Current production build:** #311, run ID `43448052310`, from `566df1c`; in progress: [Actions #311](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43448052310)
+- **Current Digit Lab build:** #33, run ID `43448052304`, from `566df1c`; in progress: [Actions #33](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43448052304)
+- **On-device status:** `566df1c` not yet tested. Do not claim visual parity or beach clarity until screenshots confirm.
+- **Primary next priority:** verify #311/#33; same-wallpaper compare black portions of 1/0, broadened soft rim, and diffused streaks; test beach wallpaper for no frosted regression; ensure Solid unchanged.
 
 ## New issue reported and root cause (13 Nov 2026)
 
