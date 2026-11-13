@@ -156,6 +156,20 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Solid/Frosted protection: all new optical values are selected by the existing Glass-vs-Solid mix/gate. Blur radius is 38px for Solid; glassFaceLighting is mixed to exactly 1.0 for Solid; new face reflection, refraction dispersion, and light bounce are mixed back to the original Solid source. No production Solid material settings are changed.
 - Production #306 and Digit Lab #28 workflows were triggered from cc4719c; status and on-device acceptance pending.
 - Earlier current spacing in source remains: 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Do not alter these as part of optical tuning.
+### Same-wallpaper comparison: brightness and 4/7 apparent thickness (13 Nov 2026, ~18:47 IST)
+- User tested Production #306 / Digit Lab #28 from commit cc4719c and supplied three images: Digit Lab over the beach wallpaper, Digit Lab over the diagonal streak wallpaper, and the iOS lock-screen reference over the same diagonal wallpaper.
+- User assessment: our version is still substantially dimmer/duller than iOS; improved but not at the reference level. The horizontal strokes/caps on 4 and 7 also look wider in this build.
+- Image comparison notes: the Digit Lab clock in the screenshot is larger than the native iOS reference (roughly 20% taller and around 10% wider by visible digit bounds). This and the selected Digit Lab weight value 757 (a heavy setting) affect absolute pixel stroke thickness. The user should be told clearly, without implying their comparison is invalid. The same scale should be matched before pixel-width comparisons.
+- Renderer inspection: commit cc4719c did not change glyph paths, wght/wdth axes, glyphWidthProfile, glyphHeightFactor, or kerning. The horizontal bar apparent spread is likely a perceptual effect from (a) heavy user-selected wght=757, (b) larger Digit Lab clock scale, and (c) the new face reflection contribution that was not gated by horizontal shoulder orientation. The 4 glyph optical X profile remains 1.08; 7 remains 0.96; glyphHeightFactor for both is 0.985.
+- New commit 25893a9e8888d8e457f91327b64865b477e90d14 — “Increase Liquid Glass inner colour and confine reflections to curved bevels”:
+  - Glass horizontal highlight multiplier is reduced from 0.74 to 0.58 at strongly horizontal-facing shoulders.
+  - The face reflection is now screen-blended (colour-preserving, additive light pickup) rather than a straight linear mix, and multiplied by glassHorizontalHighlight so it follows curved shoulders instead of filling flat bars.
+  - Glass face lighting increases from 0.70 + 0.28*key + 0.14*fill to 0.82 + 0.30*key + 0.16*fill.
+  - Adaptive internal colour bounce increases from 28% to 38%, with blur capture radius 42px for Glass only (Solid remains 38px); blurred bounce sample multiplier rises to 1.52 and slight channel bias.
+  - No glyph geometry, font wght/wdth axis, line spacing, colon size/spacing, or explicit white rim/glint intensity changed.
+- Solid protection: Glass face lighting is mixed to exactly 1.0 for Solid; bounce is selected out by the existing solidMode mix; environment blur is 38px in Solid; face reflection contribution is gated by (1-solidMode); horizontal glass highlight affects only Glass terms. The approved Solid material is untouched.
+- Production #307 and Digit Lab #29 were triggered from 25893a9; CI and on-device verification pending.
+
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -264,18 +278,19 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer source commit:** cc4719c5dd5f4c6f051190b5f8c2cdf48943947f — “Restore Liquid Glass vibrancy with adaptive coloured light”
-- **Latest visual target:** same-wallpaper lock-screen comparison. Reference iOS clock has bright saturated internal light and jewel-like colour; our current output looked dull/dark with mostly a perimeter effect.
-- **Latest Glass material pass:** base face lighting 0.70 + 0.28 key + 0.14 fill; sharp image-derived key/fill reflections 7.5–20%; 1.52x saturation; 3.2–5.8px dispersion; 30px blurred capture radius; adaptive 0–28% internal bounce gated by local darkness and nearby-light luminance.
-- **White edge glow:** not increased. Keep the approved slimmer edge treatment.
-- **Latest spacing:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Do not change.
-- **Glass colon:** 3.2px optical radius. Solid colon remains 20px.
-- **Protected Solid:** no approved Solid material values changed. New blur still resolves to 38px for Solid; Glass-only face lighting/reflections/bounce/dispersion are gated/mixed out for Solid. Shared typography is unchanged.
-- **Previous builds #305 and #27:** success from 9f3a145; include only colon-spacing adjustments.
-- **Current production build:** #306, run ID 43417768322, from cc4719c; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43417768322
-- **Current Digit Lab build:** #28, run ID 43417768397, from cc4719c; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43417768397
-- **On-device status:** cc4719c not yet built/tested on device. Await the user's same-wallpaper side-by-side comparison; do not call the vibrancy issue fixed based on source changes alone.
-- **Primary next priority:** verify #306/#28 compile and upload; compare on this exact diagonal wallpaper and the beach wallpaper. Judge internal color/light pickup and clear detail; retain narrow rim and verify Solid unchanged.
+- **Latest renderer source commit:** 25893a9e8888d8e457f91327b64865b477e90d14 — “Increase Liquid Glass inner colour and confine reflections to curved bevels”
+- **Latest user-tested build pair:** Production #306 and Digit Lab #28 succeeded from cc4719c. User says Glass is still dull/dim vs iOS; horizontal bars on 4 and 7 appear too wide.
+- **Latest Glass-only tuning (25893a9):** base face lighting 0.82 + 0.30 key + 0.16 fill; adaptive internal bounce max 38% and local blur radius 42px; horizontal shoulder highlight factor reduces to 0.58; face reflection now uses screen blend, 5.5–24% based on surface slope, gated by horizontal highlight.
+- **Glyph geometry / font axes:** no changes in cc4719c or 25893a9. User is previewing with weight 757 and compressed width. On latest screenshot Digit Lab clock is roughly 20% taller and 10% wider than native reference; mention this transparently when discussing absolute pixel widths.
+- **Latest spacing:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em. Preserve.
+- **Glass colon:** 3.2px optical profile; Solid colon 20px.
+- **Protected Solid:** no approved Solid settings changed. Solid continues 38px blur, original face and original material values. Shared typography unchanged.
+- **Previous candidate builds:** #306 and #28 passed from cc4719c.
+- **Current production build:** #307, run ID 43432874153, from 25893a9; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43432874153
+- **Current Digit Lab build:** #29, run ID 43432873884, from 25893a9; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43432873884
+- **On-device status:** 25893a9 not yet tested. Await fresh same-wallpaper comparison; no visual-success claim until user acceptance.
+- **Primary next priority:** verify #307/#29 CI; compare after matching Digit Lab clock bounds to the native reference. Judge whole-stroke color/brightness, beach detail retention, 4/7 bar thickness, and Solid parity.
+
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
