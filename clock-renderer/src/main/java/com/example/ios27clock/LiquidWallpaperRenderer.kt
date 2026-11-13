@@ -343,7 +343,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(42.0, 38.0, solidMode);
+            float blurRadius = mix(22.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -432,12 +432,12 @@ class LiquidWallpaperRenderer(
                 frostedWallpaper,
                 float3(0.2126, 0.7152, 0.0722)
             );
-            float glassDarkness = 1.0 - smoothstep(0.12, 0.38, refractedLuma);
-            float glassNearbyLight = smoothstep(0.06, 0.30, blurredWallpaperLuma);
+            float glassDarkness = 1.0 - smoothstep(0.08, 0.24, refractedLuma);
+            float glassNearbyLight = smoothstep(0.10, 0.32, blurredWallpaperLuma);
             float glassBounceStrength =
-                0.38 * glassDarkness * glassNearbyLight;
+                0.20 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.52 + float3(0.020, 0.022, 0.034),
+                frostedWallpaper * 1.38 + float3(0.012, 0.014, 0.022),
                 0.0,
                 1.0
             );
@@ -462,10 +462,25 @@ class LiquidWallpaperRenderer(
             // wallpaper-coloured reflection into the face, then increase it
             // toward the curved shoulder using Fresnel. This gives the front
             // surface a visible optical body without a white/frosted overlay.
-            float glassFaceReflectivity = glassVolumeFresnel * 0.88;
+            float environmentReflectionLuma = dot(
+                environmentReflection,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float3 environmentReflectionChroma =
+                environmentReflection - float3(environmentReflectionLuma);
+            float reflectionHighlightProtection = 1.0 -
+                0.58 * smoothstep(0.42, 0.78, environmentReflectionLuma);
+            float3 chromaticEnvironmentReflection = clamp(
+                float3(environmentReflectionLuma) +
+                    environmentReflectionChroma * 1.18,
+                0.0,
+                1.0
+            );
+            float glassFaceReflectivity =
+                glassVolumeFresnel * 0.64 * reflectionHighlightProtection;
             float3 glassFace = mix(
                 refracted,
-                environmentReflection,
+                chromaticEnvironmentReflection,
                 glassFaceReflectivity
             );
             float innerGlassTint = smoothstep(0.0, 12.0, insideDistance) *
@@ -506,18 +521,39 @@ class LiquidWallpaperRenderer(
                 keyDiffuse3D * 0.30 +
                 fillDiffuse3D * 0.16;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
+            float directionalReflectionLuma = dot(
+                directionalEnvironmentReflection,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float3 directionalReflectionChroma =
+                directionalEnvironmentReflection -
+                    float3(directionalReflectionLuma);
+            float glassFaceLuma = dot(
+                colour,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float glassFaceDarkness =
+                1.0 - smoothstep(0.18, 0.52, glassFaceLuma);
             float glassFaceReflectionAmount = mix(
-                0.055,
-                0.24,
+                0.035,
+                0.20,
                 smoothstep(0.08, 0.48, glassProfileSlope)
             ) * glassHorizontalHighlight;
-            float3 glassScreenReflection = 1.0 -
-                (1.0 - clamp(colour, 0.0, 1.0)) *
-                (1.0 - clamp(directionalEnvironmentReflection, 0.0, 1.0));
-            colour = mix(
-                colour,
-                glassScreenReflection,
-                glassFaceReflectionAmount * (1.0 - solidMode)
+            float glassChromaPickup = smoothstep(
+                0.025,
+                0.16,
+                length(directionalReflectionChroma)
+            );
+            float glassReflectionLumaLift =
+                max(directionalReflectionLuma - glassFaceLuma, 0.0) *
+                glassFaceDarkness * glassFaceReflectionAmount * 0.18;
+            colour = clamp(
+                colour +
+                    directionalReflectionChroma *
+                        glassFaceReflectionAmount * glassChromaPickup * 1.20 +
+                    float3(glassReflectionLumaLift),
+                0.0,
+                1.0
             );
             colour -= float3(0.12, 0.15, 0.22) *
                 glassSideShadow * (1.0 - solidMode) * 0.22;
@@ -536,10 +572,13 @@ class LiquidWallpaperRenderer(
             // Fresnel adds the stronger grazing-angle reflection on top of
             // the subtler face reflection. The broad specular remains visible
             // on the front cap; tight glints stay confined to its shoulder.
-            colour = mix(
-                colour,
-                environmentReflection,
-                glassVolumeFresnel * 0.22 * (1.0 - solidMode)
+            float finalFresnelAmount =
+                glassVolumeFresnel * 0.12 * (1.0 - solidMode);
+            colour = clamp(
+                colour +
+                    environmentReflectionChroma * finalFresnelAmount * 0.72,
+                0.0,
+                1.0
             );
             float glassRimLighting = glassRim *
                 pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35) * glassHorizontalHighlight;
