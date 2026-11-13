@@ -718,11 +718,11 @@ class LiquidWallpaperRenderer(
             colour += float3(0.92, 0.97, 1.0) *
                 glassAreaReflection * (1.0 - solidMode) * 0.96;
             colour += float3(0.98, 0.99, 1.0) *
-                glassKeyGlint * (1.0 - solidMode) * 1.22;
+                glassKeyGlint * (1.0 - solidMode) * 1.28;
             colour += float3(0.68, 0.82, 1.0) *
                 glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.96, 0.98, 1.0) *
-                glassRimLighting * (1.0 - solidMode) * 0.18;
+                glassRimLighting * (1.0 - solidMode) * 0.20;
 
             // Unified secondary bevel reflection: every glyph uses the same
             // height-map normal, curvature gate and light/view half-vector.
