@@ -135,12 +135,12 @@ class LiquidWallpaperRenderer(
 
             // Glass has a gently curved optical face and a broader, softer
             // Fresnel transition. Solid keeps its already-approved tighter edge.
-            float glassEdge = exp(-abs(signedDistance) / 5.6);
+            float glassEdge = exp(-abs(signedDistance) / 8.0);
             float solidEdge = exp(-abs(signedDistance) / 3.4);
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 1.15) / 3.4);
+            float glassRim = exp(-abs(signedDistance - 1.15) / 6.2);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             // Model each digit stroke as a rounded glass rod, not a flat
@@ -154,9 +154,14 @@ class LiquidWallpaperRenderer(
             // normal, refraction and lighting all describe the same surface.
             // The colon uses a shallower lens cap in Liquid Glass only.
             // Solid/Frosted always retains the original 20px profile.
-            float glassProfileRadius = mix(
+            float glassDigitRadius = mix(
                 20.0,
-                8.0,
+                24.0,
+                (1.0 - solidMode) * (1.0 - colonFlag)
+            );
+            float glassProfileRadius = mix(
+                glassDigitRadius,
+                3.2,
                 colonFlag * (1.0 - solidMode)
             );
             float profileDistance = clamp(
@@ -241,16 +246,16 @@ class LiquidWallpaperRenderer(
                 0.96 * pow(1.0 - viewCosine, 5.0);
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                8.0
-            ) * 0.58;
+                7.0
+            ) * 0.82;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                48.0
-            ) * 0.82;
+                42.0
+            ) * 1.18;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
-                34.0
-            ) * 0.48;
+                30.0
+            ) * 0.72;
             float glassSideShadow = glassProfileCoverage *
                 max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
             float outerLip = 1.0 -
@@ -266,7 +271,7 @@ class LiquidWallpaperRenderer(
             // Snell refraction through the convex height-map surface.
             // Incoming view ray travels toward the glyph; eta is air/glass.
             const float GLASS_IOR = 1.50;
-            const float GLASS_THICKNESS_PX = 30.0;
+            const float GLASS_THICKNESS_PX = 34.0;
             float eta = 1.0 / GLASS_IOR;
             float cosIncident = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float refractK = max(
@@ -276,8 +281,13 @@ class LiquidWallpaperRenderer(
             float refractFactor = eta * cosIncident - sqrt(refractK);
             float3 refractedRay = float3(0.0, 0.0, -eta) +
                 glassSurfaceNormal * refractFactor;
+            float glassEdgePull = mix(
+                1.0,
+                1.22,
+                smoothstep(0.10, 0.55, glassProfileSlope)
+            );
             float2 glassRefractionOffset =
-                refractedRay.xy * GLASS_THICKNESS_PX;
+                refractedRay.xy * GLASS_THICKNESS_PX * glassEdgePull;
             float2 solidWarp =
                 refractionNormal *
                     (1.5 + solidEdge * 6.0 + solidBevel * 1.1) +
@@ -310,7 +320,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(8.0, 38.0, solidMode);
+            float blurRadius = mix(22.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -357,7 +367,12 @@ class LiquidWallpaperRenderer(
             // blue take tiny opposite offsets along the same optical path,
             // producing restrained chromatic dispersion rather than a broad
             // painted rainbow fringe.
-            float2 dispersionOffset = refractedRay.xy * 1.8;
+            float dispersionAmount = mix(
+                2.4,
+                4.2,
+                smoothstep(0.10, 0.48, glassProfileSlope)
+            );
+            float2 dispersionOffset = refractedRay.xy * dispersionAmount;
             float3 glassRedSample = uWallpaper.eval(clamp(
                 samplePoint + dispersionOffset,
                 float2(0.0),
@@ -373,8 +388,34 @@ class LiquidWallpaperRenderer(
                 center.g,
                 glassBlueSample.b
             );
+            float refractedLuma = dot(
+                refractedGlass,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float3 saturatedRefractedGlass = clamp(
+                mix(
+                    float3(refractedLuma),
+                    refractedGlass,
+                    1.35
+                ),
+                0.0,
+                1.0
+            );
+            float3 brightGlassBounce = clamp(
+                frostedWallpaper * 1.55 + float3(0.035, 0.040, 0.050),
+                0.0,
+                1.0
+            );
+            float3 screenedGlassFace = 1.0 -
+                (1.0 - saturatedRefractedGlass) *
+                (1.0 - brightGlassBounce);
+            float3 glassTransmitted = mix(
+                saturatedRefractedGlass,
+                screenedGlassFace,
+                0.30
+            );
             // Solid keeps its prior diffuse/frosted source path.
-            float3 refracted = mix(refractedGlass, center, solidMode);
+            float3 refracted = mix(glassTransmitted, center, solidMode);
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -391,6 +432,13 @@ class LiquidWallpaperRenderer(
                 refracted,
                 environmentReflection,
                 glassFaceReflectivity
+            );
+            float innerGlassTint = smoothstep(0.0, 12.0, insideDistance) *
+                (1.0 - smoothstep(26.0, 64.0, insideDistance));
+            glassFace = mix(
+                glassFace,
+                mix(uAccentColor, glassFace, 0.78),
+                innerGlassTint * 0.08
             );
             glassFace = mix(glassFace, uClockTint, uTintStrength);
             float3 frostedFace = mix(
@@ -448,12 +496,16 @@ class LiquidWallpaperRenderer(
                 environmentReflection,
                 glassVolumeFresnel * 0.22 * (1.0 - solidMode)
             );
+            float glassRimLighting = glassRim *
+                pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35);
             colour += float3(0.92, 0.97, 1.0) *
-                glassAreaReflection * (1.0 - solidMode) * 0.92;
+                glassAreaReflection * (1.0 - solidMode) * 1.12;
             colour += float3(0.98, 0.99, 1.0) *
-                glassKeyGlint * (1.0 - solidMode) * 1.20;
+                glassKeyGlint * (1.0 - solidMode) * 1.55;
             colour += float3(0.68, 0.82, 1.0) *
-                glassFillGlint * (1.0 - solidMode) * 0.76;
+                glassFillGlint * (1.0 - solidMode) * 1.02;
+            colour += float3(0.96, 0.98, 1.0) *
+                glassRimLighting * (1.0 - solidMode) * 0.34;
 
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             // These perimeter strokes belong only to Frosted Glass; applying
@@ -1155,7 +1207,7 @@ class LiquidWallpaperRenderer(
         val maxBaseHeight = min(height * MAX_GLYPH_HEIGHT_FRACTION, width * 0.90f)
         // Tighten only adjacent numeral pairs. The same shared layout is
         // used by both Glass and Solid; spacing around the colon is preserved.
-        val digitPairTrackingEm = TRACKING_EM * 0.20f
+        val digitPairTrackingEm = TRACKING_EM * 0.02f
         val colonAdjacentTrackingEm = TRACKING_EM * 0.55f
         val colonAdvanceEm = COLON_ADVANCE_EM * 1.55f
 
