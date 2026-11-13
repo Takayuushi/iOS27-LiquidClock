@@ -358,7 +358,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(30.0, 38.0, solidMode);
+            float blurRadius = mix(36.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -405,35 +405,35 @@ class LiquidWallpaperRenderer(
             // create a soft, low-frequency glow through the glass instead of
             // remaining only as sharp refracted lines.
             float brightA = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurA, float3(0.2126, 0.7152, 0.0722))
             );
             float brightB = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurB, float3(0.2126, 0.7152, 0.0722))
             );
             float brightC = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurC, float3(0.2126, 0.7152, 0.0722))
             );
             float brightD = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurD, float3(0.2126, 0.7152, 0.0722))
             );
             float brightE = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurE, float3(0.2126, 0.7152, 0.0722))
             );
             float brightF = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurF, float3(0.2126, 0.7152, 0.0722))
             );
             float brightG = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurG, float3(0.2126, 0.7152, 0.0722))
             );
             float brightH = smoothstep(
-                0.22, 0.68,
+                0.18, 0.60,
                 dot(blurH, float3(0.2126, 0.7152, 0.0722))
             );
             float3 glassBrightBloom = (
@@ -656,7 +656,7 @@ class LiquidWallpaperRenderer(
                 glassVolumeRegion
             );
             float glassAtmosphericScatter =
-                0.32 * glassAtmosphericCoverage;
+                0.38 * glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
                 frostedWallpaper,
@@ -666,7 +666,7 @@ class LiquidWallpaperRenderer(
             // illuminated regions spread softly without turning the complete
             // face into a white or gray frosted layer.
             float glassAtmosphericBloom =
-                0.18 * glassAtmosphericCoverage;
+                0.22 * glassAtmosphericCoverage;
             glassTransmitted = 1.0 -
                 (1.0 - glassTransmitted) *
                 (1.0 - glassBrightBloom * glassAtmosphericBloom);
