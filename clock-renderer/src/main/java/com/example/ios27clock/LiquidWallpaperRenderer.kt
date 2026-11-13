@@ -140,7 +140,7 @@ class LiquidWallpaperRenderer(
             float edgeBand = mix(glassEdge, solidEdge, solidMode);
             float glassLens = smoothstep(-2.0, 6.0, signedDistance) *
                 (1.0 - smoothstep(54.0, 118.0, signedDistance));
-            float glassRim = exp(-abs(signedDistance - 1.15) / 4.8);
+            float glassRim = exp(-abs(signedDistance - 1.15) / 6.2);
             float solidBevel = 1.0 -
                 smoothstep(0.8, 13.0, insideDistance);
             // Model each digit stroke as a rounded glass rod, not a flat
@@ -411,6 +411,43 @@ class LiquidWallpaperRenderer(
                 center.g,
                 glassBlueSample.b
             );
+            // The reference glass gently diffuses high-frequency wallpaper
+            // streaks through its thickness. Use a tiny 2px local kernel and
+            // retain most of the sharp refracted image so detail stays clear.
+            float2 diffusionRadius = float2(2.0, 2.0);
+            float3 diffusionA = uWallpaper.eval(clamp(
+                samplePoint + float2(diffusionRadius.x, 0.0),
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 diffusionB = uWallpaper.eval(clamp(
+                samplePoint - float2(diffusionRadius.x, 0.0),
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 diffusionC = uWallpaper.eval(clamp(
+                samplePoint + float2(0.0, diffusionRadius.y),
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 diffusionD = uWallpaper.eval(clamp(
+                samplePoint - float2(0.0, diffusionRadius.y),
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 localDiffusion = (
+                diffusionA + diffusionB + diffusionC + diffusionD
+            ) * 0.25;
+            float refractionDiffusionStrength = mix(
+                0.10,
+                0.15,
+                smoothstep(0.10, 0.48, glassProfileSlope)
+            );
+            refractedGlass = mix(
+                refractedGlass,
+                localDiffusion,
+                refractionDiffusionStrength
+            );
             float refractedLuma = dot(
                 refractedGlass,
                 float3(0.2126, 0.7152, 0.0722)
@@ -589,7 +626,7 @@ class LiquidWallpaperRenderer(
             colour += float3(0.68, 0.82, 1.0) *
                 glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.96, 0.98, 1.0) *
-                glassRimLighting * (1.0 - solidMode) * 0.23;
+                glassRimLighting * (1.0 - solidMode) * 0.18;
 
             // A narrow end-cap reflection is separate from the broad bar
             // highlight limiter above. It catches the lower-left terminal
@@ -619,6 +656,42 @@ class LiquidWallpaperRenderer(
                 terminalCapSpecular * 1.02 * (1.0 - solidMode);
             colour += float3(0.78, 0.91, 1.0) *
                 terminalCapSpecular * 0.34 * (1.0 - solidMode);
+
+            // Ambient glass scatter keeps digits legible over pure-black
+            // wallpaper regions without laying a gray veil over bright images.
+            // The vertical silver-blue gradient is strongest near the upper
+            // half, and is confined to the inner face rather than its rim.
+            float ambientClockY = p.y - uClockCenter.y * uResolution.y;
+            float ambientVertical = clamp(
+                0.5 + ambientClockY / max(uResolution.y * 0.17, 1.0),
+                0.0,
+                1.0
+            );
+            float3 ambientGradient = mix(
+                float3(0.34, 0.37, 0.43),
+                float3(0.21, 0.24, 0.30),
+                ambientVertical
+            );
+            float ambientFaceLuma = dot(
+                colour,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float ambientDarkness = 1.0 -
+                smoothstep(0.025, 0.20, ambientFaceLuma);
+            float ambientInteriorMask = smoothstep(
+                0.12,
+                0.66,
+                glassProfileCoverage
+            );
+            float ambientScatter = 0.52 *
+                ambientDarkness *
+                ambientInteriorMask *
+                (1.0 - solidMode);
+            colour = mix(
+                colour,
+                ambientGradient,
+                ambientScatter
+            );
 
             colour -= float3(0.13, 0.15, 0.21) * bevelShade;
             // These perimeter strokes belong only to Frosted Glass; applying
