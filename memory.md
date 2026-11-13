@@ -541,13 +541,28 @@ Changes:
 - Candidate CI from e3c555f: Production #326 run ID 43489806556; Digit Lab #49 run ID 43489806575. Both queued at 19:11:17 UTC on 13 Nov 2026. Check completion and artifacts before sharing APKs.
 - The user's #48 screenshot is evidence that commit f6e61bc alone did not sufficiently soften the interior transmission. The new pass is not visually verified yet. On device, compare the same diagonal wallpaper; the black/blue/white bands should blend smoothly across all glyphs while preserving the broad reflective glass body. Reject a cloudy/frosted look, loss of wallpaper colour or a uniform blur that ignores local wallpaper direction.
 
+### User comparison and chromatic-edge detection correction (14 Nov 2026, ~00:46 IST)
+- User supplied the next comparison after the #49 / #326 build pair. First image is our Digit Lab result; second image is Apple's iOS reference. The user confirms progress, but the same remaining defect persists: wallpaper bands through the glyph body are still too recognisable/sharp, while Apple's image blends black/blue/white into a smooth, continuous internal optical blur.
+- The screenshots use the same blue diagonal wallpaper and 10:47. Keep the comparison image order as supplied.
+- Source inspection of commit e3c555f identified a missed case in the shared cross-band detector: it measured edge contrast and direction only from RGB-to-luminance dot products. Saturated blue against black can have strong visible RGB contrast but relatively low luminance contrast, causing the shared diffusion to under-detect the blue/black boundary.
+- Follow-up renderer commit 7497fdf56eec29dbcb864623ee0f64233227b25f — “Detect chromatic wallpaper edges for Liquid Glass diffusion”:
+  - Retains the luminance gradient signs for the 2D edge-normal orientation (symmetric sampling means sign reversal has no impact, but relative component signs preserve diagonal direction).
+  - Measures horizontal/vertical edge energy using the full RGB difference magnitude, not only luminance.
+  - Drives bandContrast from the RGB edge-energy magnitude with smoothstep thresholds 0.08–0.55. Blue/black and other saturated transitions now activate the same existing 24–34px, high-strength diffusion path as bright white bands.
+  - Keeps all existing #49 diffusion kernel weights, 0.96 high-contrast blend, 1.08 high-contrast saturation and 0.28 volume scattering. No extra blur taps or larger radius were added in this pass; the objective is to fix detection before increasing blur magnitude again.
+  - No digit-ID, glyph-index, colour-specific or screen-region branch. The same RGB edge detector and optical response apply to every glyph and any time string.
+  - Solid/Frosted remains protected; the shared Glass transmission remains selected through mix(glassTransmitted, center, solidMode), and the Solid 38px blur path remains unchanged.
+- Static checks passed: RGB gradient magnitudes are used for edge energy; luminance signs remain for direction; existing strong diffusion constants remain; no glyph-specific branches; Solid selector and 38px blur remain.
+- CI for 7497fdf was triggered by the renderer change. Record exact Production/Digit Lab run IDs, results and artifacts after checking Actions. Do not call the chromatic detector visually fixed until the user compares the APK.
+- Next visual check: inspect all strokes, especially segments where saturated blue meets black as well as white/blue boundaries. The colour bands should be smooth like Apple's reference, but larger wallpaper colours and glass reflections should remain identifiable. Do not let the material become cloudy/opaque like Frosted Glass.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `e3c555f78b6d1098f397610dbdb5293c39cdd8eb` — “Increase shared Liquid Glass cross-band scattering”
+- **Latest renderer commit:** `7497fdf56eec29dbcb864623ee0f64233227b25f` — “Detect chromatic wallpaper edges for Liquid Glass diffusion”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** first image is our Digit Lab #48 rendering; second image is Apple's iOS reference. The user says bands inside the glyphs are still too sharp. Candidate follow-up builds are Production #326 / Digit Lab #49 from `e3c555f`.
+- **Latest submitted comparison:** first image is our Digit Lab #49 rendering; second image is Apple's iOS reference. The user says internal wallpaper bands remain too sharp, especially blue/black. Follow-up 7497fdf adds full-RGB edge detection so saturated boundaries activate the existing diffusion.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
