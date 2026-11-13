@@ -687,6 +687,16 @@ Changes:
 - Treat #55 as the approved visual baseline until #57 is tested. The aim is to regain its warm/cool colour transmission while preserving the broad atmospheric haze; do not add more global blur or neutral scatter without a screenshot proving benefit.
 - Rule #1 remains absolute: material response must be shared/glyph-independent for all digits and any time. No special cases for 0/1/4/7. Solid/Frosted is protected.
 
+### Restore #55 colour character after #56 artificial haze; Digit Lab workflow made manual-only (14 Nov 2026, ~02:13 IST)
+- User's #56 screenshot assessment: the orange scattering almost disappears from the 0, the 4 loses its blue hue, the earlier haze on the 1 is gone, and the 7's upper-arm haze looks artificial. #56 is a material regression despite successful compile.
+- Root cause in commit 62b26dd: the old colour-bearing directional volume scatter (28%) was removed and replaced with a much stronger 62% mix toward a target that was itself 82% isotropic blurred wallpaper. A second 22–30% convolution of the environment reflection blurred its chromatic colour cues. This over-averaged the face and washed out local orange/blue transmission.
+- Renderer rollback/correction commit `8c80a942aaa2b62b35543e7ffcdabb3ccdf71c37` restores the known-better #55 response: separate 28% gated directional microfacet scatter plus 46% isotropic atmospheric wallpaper blend; removes #56's optical-path scalar and reflection convolution; restores original chromatic environment reflection. It retains 44px Glass / 38px Solid blur and 30% bright-pass bloom. Static checks pass; no glyph-specific branches; Solid selector unchanged.
+- User instruction from earlier project context: do not automatically trigger Digit Lab builds for routine renderer changes; shared renderer updates flow into Production, and only build Digit Lab when explicitly requested. The Digit Lab workflow had a push trigger on clock-renderer changes, which caused #57 to queue automatically with the rollback commit.
+- To prevent future violations, workflow commit `fbe2b89f116b9f0a5ee87cdeef5f0e3143ebeff5` changes `.github/workflows/digit-lab.yml` to `workflow_dispatch` only. Digit Lab will no longer auto-build on renderer pushes; a user-requested/manual trigger is required. The already queued #57 (run `43505174420`) was started before this workflow change and is still running; no cancellation action is available in the current GitHub tool set. Be transparent if relevant.
+- Production #334 (run `43505174252`, commit `8c80a94`) was still in progress at last check. Digit Lab #57 run `43505174420` was already in progress due the old trigger. Check Production completion before claiming its APK is ready.
+- Visual baseline/rollback target is Digit Lab #55, not #56. Wait for user confirmation of restored warm orange in 0 and blue transmission in 4 before making another material pass. Avoid more global blur or neutral haze; preserve local chroma and build haze as a restrained shared in-scattering term.
+- Rule #1: one shared, glyph-independent material response for every numeral and time. No digit-specific adjustments. Solid/Frosted untouched.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
