@@ -319,6 +319,15 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Solid/Frosted preservation: ambient scatter is Glass-only via (1.0-solidMode); new volume-scatter path blends into Glass transmitted sample and is bypassed by existing Solid center-sample mix. The shared 1–0 kerning change intentionally affects both materials.
 - User has said beach implementation is improved; preserve it. After new build test, examine the beach Liquid Glass screenshot again to ensure the higher internal scatter does not make it milky.
 - Next check: compare dark left side and hook of 1 against reference; examine softer body scatter in 4/7; confirm the tiny 1–0 gap in both Solid/Frosted and Liquid Glass; check beach remains clear. Do not adjust other gaps.
+### User clarification: keep typography and optical rendering unified; latest build had no obvious optical delta (13 Nov 2026, ~23:20 IST)
+- User explicitly clarified: do not make the 1–0 spacing unique to Solid mode. The first rule remains: all digit layout/spacing must use the same shared layout calculation for both Liquid Glass and Solid/Frosted. Blending/refraction/illumination must also be a unified glyph-independent shader/material model, not special treatment for 0/1/4/7 or separate per-digit paths.
+- User says the latest #319/#41 build did not show a visible difference in blur/blending/illumination compared with the prior build; their human eye could not discern an improvement. Do not describe those parameter changes as a proven visual improvement. Treat the optical issue as unresolved and trace why changes are not perceptible before further parameter escalation.
+- Source inspection confirms `hourPairGapEm` is consumed by the common `visualGlyphOrigins()` layout function in `rebuildGlyphMask()`, before material selection/rendering. There is no `solidMode` condition in spacing. The same spacing applies to both materials and all hour digit pairs.
+- User says 1–0 still looks too close, particularly in Solid/Frosted mode (their screenshots make it easier to see), and wants a small additional increase. New commit `96011622909aa4e771753d146ccedf4f46f0d8ed` — “Increase shared 1–0 kerning for both glass materials” changes the one shared `hourPairGapEm` value from 0.044em to 0.050em. It changes both modes equally; no Solid-only branch or value was introduced.
+- All other spacing remains unchanged: 4–7 0.019em, 0–: 0.038em, :–4 0.034em.
+- Optical source at `b6a159d` still contains shared directional transmission blending (local wallpaper gradient, radius 6.8–10.8px, 0.25–0.72 mix), 14% max volume-scatter factor, and Glass-only dark ambient sheen 0.70. It is image-driven and glyph-independent; no per-digit special cases. However the user reports no clear visible delta between builds, so this implementation is NOT yet accepted as improved. Inspect final composition/weighting and confirm build path before adjusting again.
+- Current build runs from `9601162`: Digit Lab #42 run ID `43473115066` (in progress); Production #320 run ID `43473115188` (queued). Both share the same SHA.
+- Next: verify #42/#320; on-device compare 1–0 in both modes; confirm no difference in 4–7 or colon spacing. Then diagnose whether the shared transmission/volume scatter is actually contributing enough to final `body` after compositing, reflections, tint, and lighting. Preserve the improved beach implementation and Solid material; do not introduce a Solid-specific gap or digit-specific optical logic.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -427,19 +436,17 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** b6a159d586da63e070a4338851d85197feb80e27 — “Refine dark ambient sheen and internal glass scattering”
-- **Latest completed test pair:** Production #318 / Digit Lab #40 succeeded from daf9df4; user's latest screenshots show the dark left stem/top hook of 1 still lack continuous silver ambient sheen, and 4/7 need a little more internal milky scattering. Beach result is improved.
-- **Current spacing:** 1–0 0.044em (tiny increase from 0.040); 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Only 1–0 changed in latest commit.
-- **Current band diffusion:** shared contrast-gradient-directed transmission from daf9df4: radius 6.8–10.8px; near taps 0.62×, far taps 1.38×; weights center 0.28, near 0.20 each, far 0.16 each; mix 0.25–0.72. Preserve unless user specifically reports bands still not blended enough.
-- **Current ambient sheen:** multiplier 0.70 (was 0.52), dark-region luma gate 0.025–0.20, interior mask 0.12–0.66, gradient RGB top 0.34/0.37/0.43 to bottom 0.21/0.24/0.30, Glass-only. Expected fully dark lift +~0.06 in each channel.
-- **Current inner body scatter:** multiplier 0.14 (was 0.085), near-white protection unchanged, so high-luminance contribution max ~8.1%; scatter target uses microfacetTransmission*1.07 + RGB(0.014,0.018,0.024).
-- **Glass refraction:** IOR 1.52; optical path 46px; edge pull 1.34; SDF normal step 4.25px / denominator 8.5; shared bevel and soft rim retained.
-- **Protected Solid:** ambient and volume scatter are Glass-only. 1–0 spacing is shared layout and intentionally affects both modes. No Solid renderer values changed.
-- **Previous completed builds:** Production #318 / Digit Lab #40 succeeded from daf9df4.
-- **Current production build:** #319, run ID 43469911731, from b6a159d; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43469911731
-- **Current Digit Lab build:** #41, run ID 43469912000, from b6a159d; in progress: https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43469912000
-- **On-device status:** b6a159d not tested yet. Do not claim the last 5% is closed until user compares.
-- **Next priority:** verify #319/#41; test the dark 1 stem/hook ambient gradient, 4/7 internal scattering, tiny 1–0 increase in both Glass and Solid, and beach Liquid Glass clarity. No other spacing changes.
+- **Latest source commit:** `96011622909aa4e771753d146ccedf4f46f0d8ed` — “Increase shared 1–0 kerning for both glass materials”
+- **Latest user-tested build pair:** Production #319 / Digit Lab #41 succeeded from `b6a159d`. User says they could not see a perceptible improvement in blur/blending/illumination compared with the previous build. Do not claim the optical changes succeeded; diagnose the actual composite path.
+- **Current shared typography gaps:** 1–0 0.050em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Only 1–0 was increased, 0.044→0.050. The value is used by common `visualGlyphOrigins()` before material selection, so it applies equally to Liquid Glass and Solid/Frosted. Do not create a Solid-only value.
+- **User's global rule:** all spacing/layout and all material blending/refraction/illumination must remain unified across digits; no glyph-identity special cases. Solid and Liquid Glass may have their intended material paths, but typography layout is shared.
+- **Current optical source:** directional transmission diffusion from `daf9df4` (gradient-aligned 6.8–10.8px kernel, blend 0.25–0.72), volume scatter 0.14 max factor, Glass-only dark ambient scatter 0.70. These settings are present in source but their visible impact is not yet confirmed by the user.
+- **Protected beach/Solid:** user said beach result improved. Preserve. Solid material rendering remains as approved; shared kerning change affects both modes. No Solid-only spacing branch.
+- **Previous completed builds:** Production #319 / Digit Lab #41 succeeded from `b6a159d`.
+- **Current Production:** #320, run ID `43473115188`, source `9601162`, queued: [Actions #320](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43473115188)
+- **Current Digit Lab:** #42, run ID `43473115066`, source `9601162`, in progress: [Actions #42](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43473115066)
+- **On-device status:** `9601162` not tested. No claim of spacing acceptance or optical parity until actual comparison.
+- **Next priority:** verify #320/#42; inspect 1–0 gap in both modes. Then trace shared transmission and volume-scatter signal through final face/composite weighting to explain why recent parameter changes were not perceptible. Do not add per-digit or Solid-only tweaks.
 
 ## New issue reported and root cause (13 Nov 2026)
 
