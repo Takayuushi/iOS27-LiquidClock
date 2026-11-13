@@ -143,23 +143,67 @@ class LiquidWallpaperRenderer(
             // plate with an embossed perimeter. The SDF measures distance
             // inward from either side of the stroke; an elliptical cap turns
             // that distance into a continuous optical surface normal.
-            // A wider cap gives each stroke a visibly rounded front surface,
-            // rather than reducing the entire material to a narrow contour.
-            float GLASS_PROFILE_RADIUS = 20.0;
+            // Explicit rounded height map derived from the signed-distance
+            // field. The glyph stroke becomes a convex optical cap:
+            // h(d) = sqrt(2*R*d - d*d), with a flat centre after one radius.
+            // Its gradient is sampled from neighbouring SDF texels so the
+            // normal, refraction and lighting all describe the same surface.
+            const float GLASS_PROFILE_RADIUS = 20.0;
             float profileDistance = clamp(
                 insideDistance,
                 0.0,
                 GLASS_PROFILE_RADIUS
             );
-            float profileChord = sqrt(max(
+            float glassHeight = sqrt(max(
                 2.0 * GLASS_PROFILE_RADIUS * profileDistance -
                     profileDistance * profileDistance,
-                0.55
+                0.0
             ));
-            float glassProfileSlope = clamp(
-                (GLASS_PROFILE_RADIUS - profileDistance) / profileChord,
-                0.0,
-                2.8
+
+            float distanceLeft = max(
+                (sdfLeft - 0.5) * 2.0 * uSdfRange,
+                0.0
+            );
+            float distanceRight = max(
+                (sdfRight - 0.5) * 2.0 * uSdfRange,
+                0.0
+            );
+            float distanceTop = max(
+                (sdfTop - 0.5) * 2.0 * uSdfRange,
+                0.0
+            );
+            float distanceBottom = max(
+                (sdfBottom - 0.5) * 2.0 * uSdfRange,
+                0.0
+            );
+            float heightLeftDistance = min(distanceLeft, GLASS_PROFILE_RADIUS);
+            float heightRightDistance = min(distanceRight, GLASS_PROFILE_RADIUS);
+            float heightTopDistance = min(distanceTop, GLASS_PROFILE_RADIUS);
+            float heightBottomDistance = min(distanceBottom, GLASS_PROFILE_RADIUS);
+            float heightLeft = sqrt(max(
+                2.0 * GLASS_PROFILE_RADIUS * heightLeftDistance -
+                    heightLeftDistance * heightLeftDistance,
+                0.0
+            ));
+            float heightRight = sqrt(max(
+                2.0 * GLASS_PROFILE_RADIUS * heightRightDistance -
+                    heightRightDistance * heightRightDistance,
+                0.0
+            ));
+            float heightTop = sqrt(max(
+                2.0 * GLASS_PROFILE_RADIUS * heightTopDistance -
+                    heightTopDistance * heightTopDistance,
+                0.0
+            ));
+            float heightBottom = sqrt(max(
+                2.0 * GLASS_PROFILE_RADIUS * heightBottomDistance -
+                    heightBottomDistance * heightBottomDistance,
+                0.0
+            ));
+            float heightGradientX = (heightRight - heightLeft) / 10.5;
+            float heightGradientY = (heightBottom - heightTop) / 10.5;
+            float glassProfileSlope = length(
+                float2(heightGradientX, heightGradientY)
             );
             float glassProfileCoverage = 1.0 -
                 smoothstep(
@@ -168,7 +212,8 @@ class LiquidWallpaperRenderer(
                     insideDistance
                 );
             float3 glassSurfaceNormal = normalize(float3(
-                normal * glassProfileSlope,
+                -heightGradientX,
+                -heightGradientY,
                 1.0
             ));
             float3 keyLight3D = normalize(float3(-0.48, -0.66, 0.58));
@@ -178,28 +223,26 @@ class LiquidWallpaperRenderer(
             float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);
             float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
             float fillDiffuse3D = max(dot(glassSurfaceNormal, fillLight3D), 0.0);
-            // The broad reflection also responds to the front-facing surface.
-            // It is deliberately weaker than the shoulder glints, but it must
-            // remain present across the face or the digit reads as an outline.
+            // Schlick Fresnel from the actual height-map normal. The face
+            // stays transmissive at normal incidence and reflects strongly
+            // only as the curved surface turns toward grazing angles.
+            float viewCosine = clamp(glassSurfaceNormal.z, 0.0, 1.0);
+            float glassVolumeFresnel = 0.04 +
+                0.96 * pow(1.0 - viewCosine, 5.0);
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                5.0
-            ) * 0.20;
+                8.0
+            ) * 0.58;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                38.0
-            ) * glassProfileCoverage;
+                48.0
+            ) * 0.82;
             float glassFillGlint = pow(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
-                28.0
-            ) * glassProfileCoverage;
-            float glassVolumeFresnel = 0.04 +
-                0.96 * pow(
-                    1.0 - clamp(glassSurfaceNormal.z, 0.0, 1.0),
-                    5.0
-                ) * glassProfileCoverage;
+                34.0
+            ) * 0.48;
             float glassSideShadow = glassProfileCoverage *
-                max(-dot(normal, keyLight3D.xy), 0.0);
+                max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
             float outerLip = 1.0 -
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(
@@ -209,29 +252,27 @@ class LiquidWallpaperRenderer(
             );
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
-            float waveA = sin(p.y * 0.0038 + uTime * 0.10);
-            float waveB = cos(p.x * 0.0028 - uTime * 0.09);
 
-            // Refraction uses the derivative of the same rounded cross-section
-            // that supplies the surface normal. This keeps distortion tied to
-            // the glass curvature and avoids the broad, wavy 38px displacement.
-            float glassDisplacement = min(
-                glassProfileSlope * 8.0,
-                22.0
+            // Snell refraction through the convex height-map surface.
+            // Incoming view ray travels toward the glyph; eta is air/glass.
+            const float GLASS_IOR = 1.50;
+            const float GLASS_THICKNESS_PX = 30.0;
+            float eta = 1.0 / GLASS_IOR;
+            float cosIncident = clamp(glassSurfaceNormal.z, 0.0, 1.0);
+            float refractK = max(
+                1.0 - eta * eta * (1.0 - cosIncident * cosIncident),
+                0.0
             );
-            float solidDisplacement =
-                1.5 + solidEdge * 6.0 + solidBevel * 1.1;
-
-            // Keep the proven Solid/Frosted path byte-for-byte equivalent in
-            // its displacement direction and tilt. Only Liquid Glass uses
-            // the new SDF lens refraction profile.
-            float2 glassWarp =
-                -refractionNormal * glassDisplacement +
-                tilt * 1.8 +
-                float2(waveA * 0.12, waveB * 0.10);
+            float refractFactor = eta * cosIncident - sqrt(refractK);
+            float3 refractedRay = float3(0.0, 0.0, -eta) +
+                glassSurfaceNormal * refractFactor;
+            float2 glassRefractionOffset =
+                refractedRay.xy * GLASS_THICKNESS_PX;
             float2 solidWarp =
-                refractionNormal * solidDisplacement +
+                refractionNormal *
+                    (1.5 + solidEdge * 6.0 + solidBevel * 1.1) +
                 tilt * 0.68;
+            float2 glassWarp = glassRefractionOffset + tilt * 1.8;
             float2 warp = mix(glassWarp, solidWarp, solidMode);
             float2 samplePoint = clamp(
                 p + warp,
@@ -241,17 +282,15 @@ class LiquidWallpaperRenderer(
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
 
-            // A glass object reflects its surroundings as well as refracting
-            // what is directly behind it. Sample the opposite side of the
-            // clock as a compact screen-space environment map. This makes the
-            // face visibly reflective without introducing a fixed colour ramp.
-            float2 clockRelative = p - uClockCenter * uResolution;
-            float2 reflectedOffset = float2(
-                -clockRelative.x * 0.16,
-                -clockRelative.y * 1.12
-            );
+            // Reflect the view vector about the same height-map normal.
+            // This is a local image-based environment lookup, not an arbitrary
+            // mirrored clock-coordinate sample.
+            float3 incidentView = float3(0.0, 0.0, -1.0);
+            float3 reflectedView = incidentView -
+                2.0 * dot(incidentView, glassSurfaceNormal) *
+                    glassSurfaceNormal;
             float2 reflectionPoint = clamp(
-                p + reflectedOffset + tilt * 2.0,
+                p + reflectedView.xy * 30.0 + tilt * 2.0,
                 float2(0.0),
                 uResolution
             );
@@ -304,10 +343,28 @@ class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
-            // Liquid Glass preserves wallpaper detail. Refraction comes
-            // from the curved SDF warp above; Frosted Glass continues to use
-            // the separate eight-direction diffusion.
-            float3 refracted = center;
+            // Keep the green channel on the central refracted ray. Red and
+            // blue take tiny opposite offsets along the same optical path,
+            // producing restrained chromatic dispersion rather than a broad
+            // painted rainbow fringe.
+            float2 dispersionOffset = refractedRay.xy * 1.8;
+            float3 glassRedSample = uWallpaper.eval(clamp(
+                samplePoint + dispersionOffset,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 glassBlueSample = uWallpaper.eval(clamp(
+                samplePoint - dispersionOffset,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 refractedGlass = float3(
+                glassRedSample.r,
+                center.g,
+                glassBlueSample.b
+            );
+            // Solid keeps its prior diffuse/frosted source path.
+            float3 refracted = mix(refractedGlass, center, solidMode);
             float3 milkyFrost = mix(
                 frostedWallpaper,
                 float3(0.94, 0.95, 0.98),
@@ -319,11 +376,7 @@ class LiquidWallpaperRenderer(
             // wallpaper-coloured reflection into the face, then increase it
             // toward the curved shoulder using Fresnel. This gives the front
             // surface a visible optical body without a white/frosted overlay.
-            float glassFaceReflectivity = clamp(
-                0.18 + glassVolumeFresnel * 0.72,
-                0.18,
-                0.52
-            );
+            float glassFaceReflectivity = glassVolumeFresnel * 0.88;
             float3 glassFace = mix(
                 refracted,
                 environmentReflection,
@@ -356,9 +409,12 @@ class LiquidWallpaperRenderer(
             // The glass face remains wallpaper-derived. Surface normals
             // provide gentle volume shading; environment reflections supply
             // the glossy body rather than a painted outline.
-            float glassFaceLighting = 0.94 +
-                keyDiffuse3D * 0.06 +
-                fillDiffuse3D * 0.035;
+            // Directional diffuse falloff gives the curved cross-section
+            // real volume: the key light brightens its upper-left shoulder
+            // while the opposing side retains a darker glass body.
+            float glassFaceLighting = 0.54 +
+                keyDiffuse3D * 0.34 +
+                fillDiffuse3D * 0.18;
             colour *= mix(glassFaceLighting, 1.0, solidMode);
             colour -= float3(0.12, 0.15, 0.22) *
                 glassSideShadow * (1.0 - solidMode) * 0.16;
@@ -403,22 +459,11 @@ class LiquidWallpaperRenderer(
             colour += float3(1.0, 1.0, 1.0) *
                 solidRim * 0.25 * solidMode;
 
-            // A narrow directional strip produces a crisp specular glint
-            // along the bevel only. It must not wash the entire glyph face.
+            // Frosted Glass keeps its separate, subdued satin highlight.
+            // This coordinate ribbon is retained only for that material.
+            float2 clockRelative = p - uClockCenter * uResolution;
             float reflectionAxis = clockRelative.x * -0.42 +
                 clockRelative.y * 0.91 + sin(uTime * 0.16) * 18.0;
-            float glassSoftbox = exp(
-                -pow((reflectionAxis - 18.0) / 24.0, 2.0)
-            ) * glassProfileCoverage;
-            float glassRibbon = exp(
-                -pow((reflectionAxis + 28.0) / 9.5, 2.0)
-            ) * glassProfileCoverage;
-            colour += float3(0.94, 0.98, 1.0) *
-                glassSoftbox * (1.0 - solidMode) * 0.22;
-            colour += float3(0.92, 0.97, 1.0) *
-                glassRibbon * (1.0 - solidMode) * 0.18;
-
-            // Frosted Glass keeps its separate, subdued satin highlight.
             float solidSheen = exp(
                 -pow((reflectionAxis - 18.0) / 66.0, 2.0)
             ) * glassLens;
