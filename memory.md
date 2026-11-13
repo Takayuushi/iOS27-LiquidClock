@@ -366,7 +366,7 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - All these are one shared SDF/image-gradient model; no glyph IDs or screen-coordinate regions are referenced. Typography/spacing unchanged.
 - **Solid safety:** Glass interior endpoint is selected only at `solidMode=0`; at `solidMode=1` the endpoint remains the prior 13px. Solid still uses 38px blur and centre wallpaper transmission; new Glass scattering/fill stays blended out. Static source validation passed.
 - **Digit Lab build #45:** run ID `43482532012`, commit `6a3a20a`, currently in progress: [Actions #45](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43482532012).
-- Production build workflow status for this SHA must be checked; do not assume success or failure until the specific run is inspected.
+- **Production build #323:** run ID `43482532326`, same commit, currently in progress: [Actions #323](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43482532326).
 - Do not claim a visual improvement until the user installs/tests the new Digit Lab and compares same wallpaper to the iOS reference. Recheck beach wallpaper afterwards for excessive blur/frosting.
 
 - **Reference image order is explicit:** first image supplied in the 13 Nov 2026 turn is Apple's original iOS clock; second image is our Digit Lab #43 result. Always treat image 1 as the target and image 2 as our current output. Do not reverse them.
@@ -501,7 +501,7 @@ Changes:
 - **Latest shader changes:** commit `5ee517e` introduced shared core volume scattering and a wider directional wallpaper diffusion; user then tested build #44 and still found excessive dark/outline appearance and sharply distinct wallpaper streaks. Commit `6a3a20a` further reduces the Glass depth-mask endpoint 42→26px, raises core volume from 0.72→0.90, widens gradient diffusion radius to 14–20px, raises adaptive blend to 0.42–0.86, biases samples away from centre, and reduces high-contrast post-diffusion saturation to 1.20. All are uniform image/SDF-driven operations.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
-- **Do not claim visual parity from CI alone.** Build #44/#322 from `5ee517e` succeeded, but user comparison confirmed optical work remains. Commit `6a3a20a` is the new candidate; verify its CI and on-device appearance before claiming improvement.
+- **Do not claim visual parity from CI alone.** Build #44/#322 from `5ee517e` succeeded, but user comparison confirmed optical work remains. Commit `6a3a20a` is the new candidate; builds #45/#323 are in progress and on-device appearance remains unverified.
 
 ## New issue reported and root cause (13 Nov 2026)
 
