@@ -266,7 +266,7 @@ class LiquidWallpaperRenderer(
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(
                 1.0,
-                mix(42.0, 13.0, solidMode),
+                mix(26.0, 13.0, solidMode),
                 signedDistance
             );
             // The edge profile describes the curved shoulder, while
@@ -279,7 +279,7 @@ class LiquidWallpaperRenderer(
                 0.66,
                 glassProfileCoverage
             );
-            float glassCoreVolume = interiorVolume * 0.72;
+            float glassCoreVolume = interiorVolume * 0.90;
             float glassVolumeRegion = max(
                 glassEdgeVolume,
                 glassCoreVolume
@@ -468,7 +468,7 @@ class LiquidWallpaperRenderer(
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
-            float diffusionRadius = mix(10.0, 15.0, bandContrast);
+            float diffusionRadius = mix(14.0, 20.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
@@ -492,12 +492,12 @@ class LiquidWallpaperRenderer(
                 uResolution
             )).rgb;
             float3 microfacetTransmission =
-                center * 0.28 +
-                (softNearA + softNearB) * 0.20 +
-                (softFarA + softFarB) * 0.16;
+                center * 0.22 +
+                (softNearA + softNearB) * 0.21 +
+                (softFarA + softFarB) * 0.18;
             float microfacetDiffusion = mix(
-                0.36,
-                0.80,
+                0.42,
+                0.86,
                 bandContrast
             ) * mix(
                 0.92,
@@ -514,11 +514,19 @@ class LiquidWallpaperRenderer(
                 refractedGlass,
                 float3(0.2126, 0.7152, 0.0722)
             );
+            // Retain saturation in ordinary areas, but do not re-amplify
+            // high-contrast wallpaper bands after the common diffusion pass.
+            // The adjustment is image-driven and identical for every glyph.
+            float glassTransmissionSaturation = mix(
+                1.48,
+                1.20,
+                bandContrast
+            );
             float3 saturatedRefractedGlass = clamp(
                 mix(
                     float3(refractedLuma),
                     refractedGlass,
-                    1.52
+                    glassTransmissionSaturation
                 ),
                 0.0,
                 1.0
