@@ -1385,7 +1385,7 @@ class LiquidWallpaperRenderer(
         // Kerning is based on actual visible outline bounds, not the font's
         // nominal advances. This removes built-in side-bearing gaps directly.
         val hourPairGapEm = 0.036f
-        val minutePairGapEm = 0.017f
+        val minutePairGapEm = 0.019f
         val hourToColonGapEm = 0.0355f
         val colonToMinuteGapEm = 0.034f
         val colonRadiusEm = COLON_DOT_RADIUS_EM * 1.08f
