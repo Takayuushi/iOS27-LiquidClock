@@ -490,7 +490,7 @@ class LiquidWallpaperRenderer(
             // along them. This merges paired white streaks into a coherent
             // optical body while retaining their direction and larger detail.
             // It is one image-driven material response shared by every glyph.
-            float2 diffusionProbe = float2(4.0, 4.0);
+            float2 diffusionProbe = float2(6.0, 6.0);
             float3 probeLeft = uWallpaper.eval(clamp(
                 samplePoint - float2(diffusionProbe.x, 0.0),
                 float2(0.0),
@@ -693,7 +693,7 @@ class LiquidWallpaperRenderer(
             // Increase the common diffuse transport only where the wallpaper
             // contains strong local bands. The same image-driven response is
             // used by every stroke, independent of glyph identity or width.
-            float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
+            float glassBandHaze = smoothstep(0.10, 0.55, bandContrast);
             float glassAtmosphericScatter =
                 mix(0.46, 0.58, glassBandHaze) *
                 glassAtmosphericCoverage;
@@ -801,13 +801,13 @@ class LiquidWallpaperRenderer(
             float glassFaceDarkness =
                 1.0 - smoothstep(0.18, 0.52, glassFaceLuma);
             float glassFaceReflectionAmount = mix(
-                0.035,
-                0.20,
+                0.065,
+                0.22,
                 smoothstep(0.08, 0.48, glassProfileSlope)
             ) * glassHorizontalHighlight;
             float glassChromaPickup = smoothstep(
-                0.025,
-                0.16,
+                0.018,
+                0.12,
                 length(directionalReflectionChroma)
             );
             float glassReflectionLumaLift =
