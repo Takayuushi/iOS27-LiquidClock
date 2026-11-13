@@ -17,3 +17,9 @@ A separate Android APK that previews the same copied wallpaper renderer, SDF gly
 - Production app source, manifest, Gradle settings and behaviour are unchanged.
 
 Build locally with `gradle -p digit-lab assembleDebug`. GitHub Actions uploads a separate `liquid-clock-digit-lab-debug` artifact. SF Pro font assets are downloaded and subset at build time, not committed.
+
+## Installing updated test builds
+
+Digit Lab builds use a stable, branch-scoped Android debug signing key cached by GitHub Actions. After installing the first build produced with that persistent key, install later APKs directly over the existing Digit Lab app; Android will retain the app's local data and preferences. The app ID remains `com.example.ios27clock.digitlab`, and the CI run number supplies the increasing version code.
+
+**One-time migration:** APKs produced before persistent signing was enabled used temporary runner-generated keys. Android cannot update an app signed with one of those keys using the new stable key. Uninstall the old Digit Lab once before installing the first APK from the updated workflow. This affects only the separate Digit Lab app, not the production clock app.
