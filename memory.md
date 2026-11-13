@@ -28,6 +28,12 @@ This section is deliberately repeated near the top of memory.md so it is not mis
 - Renderer commit `da687bb` accidentally put the new negative refraction direction into the shared warp expression. Commit `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` corrects this by splitting `glassWarp` and `solidWarp`; at `solidMode == 1`, the Solid warp again matches the previous implementation exactly. Never collapse these paths into one direction-sensitive expression again.
 - Before each future shader commit, explicitly review all output-affecting expressions at `solidMode == 1` and compare them with the last user-approved Solid implementation. Do not infer safety merely because a variable is named `glass*`.
 
+### Latest screenshot assessment (13 Nov 2026, ~14:00 IST)
+- User tested build #293 / Digit Lab #15 from commit `d2dec8b`. Refraction is visible, but the clock still reads as a flat distortion outline rather than a raised 3D glass object. On the diagonal-streak wallpaper, the refraction creates conspicuous wavy bands, especially across the `4`.
+- The cause is not insufficient edge brightness. In `d2dec8b`, both `glassAreaReflection` and tight glints were gated by `glassProfileCoverage`, which fades to zero across the centre of a stroke. The face therefore received almost no reflection and only the contour remained visible.
+- New follow-up commit `869692f763ddccef54944f52638b8ab0febf5e40` widens the rounded cap radius from 13 to 20 px; derives refraction displacement from that same cap's slope (capped at 22 px) rather than the mismatched 38 px distance curve; adds a restrained wallpaper-coloured environment reflection across the face with stronger Fresnel toward the shoulder; restores a weak broad specular across the front cap; and increases the Glass-only lift shadow.
+- The Solid/Frosted path is protected: its positive SDF-normal warp, displacement, tilt, blur, face, opacity, sheen and shadow values are selected unchanged when `solidMode == 1`. All new face/reflection/refraction contributions are Glass-only.
+- Build #293 and Digit Lab #15 (commit `d2dec8b`) both succeeded. New workflows #294 and #16 are now running from `869692f`; the visual result has not yet been tested.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -136,13 +142,15 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `d2dec8b2044fc6e04b2ad79b6624af2f15d5f226` — “Isolate new refraction to Liquid Glass and preserve Solid”
-- **Latest code change:** separates the SDF refraction into `glassWarp` and `solidWarp`; the Solid path has its former positive normal displacement and 0.68 tilt restored exactly when `solidMode == 1`.
-- **Prior build for renderer commit `da687bb`:** pending at the time of initial handover; check Actions before assuming result.
-- **Builds for `d2dec8b`:** not yet verified. Check the new production and Digit Lab Actions runs associated with this commit.
-- **On-device status:** commit `a4db737` was tested and rejected as frosted/opaque. Commit `da687bb` was not yet device-tested at the time of the Solid-scope correction.
-- **Material scope:** only production Glass / Digit Lab Liquid Glass may change. Production Solid / Digit Lab Frosted Glass is approved and protected.
-- **Primary next priority:** build/test the isolated Liquid Glass refraction without altering Solid; compare the same wallpaper and verify both materials independently.
+- **Latest renderer source commit:** `869692f763ddccef54944f52638b8ab0febf5e40` — “Give Liquid Glass a rounded face reflection and profile-matched refraction”
+- **Latest renderer change:** radius 20 px; profile-slope-driven refraction capped at 22 px; image-derived reflection across the face with increased Fresnel at curved shoulders; broad front-cap specular; a stronger Glass-only lift shadow.
+- **Material guard:** production Solid / Digit Lab Frosted Glass remains protected. The current source keeps its previous positive SDF-normal warp, solid displacement, 0.68 tilt, frosted diffusion/face/0.78 opacity/sheens and old shadow values when `solidMode == 1`.
+- **Latest completed production build:** #293 — success from `d2dec8b`: [Actions #293](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43392850222)
+- **Latest completed Digit Lab build:** #15 — success from `d2dec8b`: [Actions #15](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43392850181)
+- **New production build:** #294, run ID `43397321465`, from `869692f`; pending at time of writing: [Actions #294](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321465)
+- **New Digit Lab build:** #16, run ID `43397321484`, from `869692f`; pending at time of writing: [Actions #16](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43397321484)
+- **On-device status:** `d2dec8b` still looked flat/outline-like and distorted the wallpaper into wavy bands. `869692f` is not yet built or device-tested.
+- **Primary next priority:** test #294/#16 on the same two wallpapers. Look for visible front-face reflections and convex surface depth without white frosting, and confirm Solid looks identical.
 ## New issue reported and root cause (13 Nov 2026)
 
 ### Preview unexpectedly replaced the installed wallpaper
