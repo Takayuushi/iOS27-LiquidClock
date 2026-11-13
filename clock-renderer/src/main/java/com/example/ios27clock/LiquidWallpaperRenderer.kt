@@ -250,8 +250,8 @@ class LiquidWallpaperRenderer(
             // receive a white fill across the whole face.
             float glassAreaReflection = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                5.5
-            ) * 0.52 * smoothstep(0.08, 0.48, glassProfileSlope) * glassHorizontalHighlight;
+                4.5
+            ) * 0.58 * smoothstep(0.08, 0.48, glassProfileSlope) * glassHorizontalHighlight;
             float glassKeyGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 42.0
@@ -280,10 +280,14 @@ class LiquidWallpaperRenderer(
                 glassProfileCoverage
             );
             float glassCoreVolume = interiorVolume * 0.90;
-            float glassVolumeRegion = max(
-                glassEdgeVolume,
-                glassCoreVolume
-            );
+            // Combine edge and interior volume as a smooth union.
+            // max() leaves a coverage trough where both masks are partially
+            // active; that trough makes atmospheric scattering look patchy
+            // across strokes of different widths. The union keeps one
+            // continuous glass medium without knowing which glyph is rendered.
+            float glassVolumeRegion = 1.0 -
+                (1.0 - glassEdgeVolume) *
+                (1.0 - glassCoreVolume);
 
             float2 tilt = clamp(uTilt, float2(-1.0), float2(1.0));
 
