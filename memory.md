@@ -697,6 +697,12 @@ Changes:
 - Visual baseline/rollback target is Digit Lab #55, not #56. Wait for user confirmation of restored warm orange in 0 and blue transmission in 4 before making another material pass. Avoid more global blur or neutral haze; preserve local chroma and build haze as a restrained shared in-scattering term.
 - Rule #1: one shared, glyph-independent material response for every numeral and time. No digit-specific adjustments. Solid/Frosted untouched.
 
+### Revert accidental manual-only Digit Lab workflow change (14 Nov 2026, ~02:22 IST)
+- User asked why Digit Lab builds had suddenly been made manual. The manual-only change was an incorrect interpretation of an earlier 'don't run builds automatically' preference; it should not have been applied to the Digit Lab test bench.
+- User workflow expectation: Digit Lab should automatically build on shared renderer changes so the user can quickly test the updated renderer. Restore the push trigger for `feature/**` changes touching `clock-renderer/**` and Digit Lab/workflow supporting files, while retaining `workflow_dispatch`.
+- Workflow correction commit `2940ecbacd8cadd2202c58b8c156b21c16552598` restores the previous automatic push paths plus manual dispatch. Do not make Digit Lab manual-only again unless user explicitly requests it.
+- This correction changes only `.github/workflows/digit-lab.yml`; no renderer change. It may itself trigger a Digit Lab run because the workflow file is in the push path filter.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
