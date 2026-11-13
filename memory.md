@@ -771,16 +771,31 @@ Changes:
 - CI from `809568c`: Digit Lab #62 run `43513422665`; Production #338 run `43513422623`; both picked up the same commit and were in progress at note time. Check final status and artifacts before sharing.
 - Next visual test should focus on whether `1` and `0` regain orange/white wrap and have their black/blue/white bands softly blended, whether `7` develops a hazy body from top to bottom, and whether `4` retains its improved atmospheric cyan edge without becoming washed out. User visual verification pending.
 
+### Digit Lab #62 comparison: progress on 0/4/7; flat-face reflection gap on 1 and upper 0 (14 Nov 2026, ~03:21 IST)
+- User supplied Digit Lab #62 screenshot `Screenshot_20261114_032147.jpg` and an updated iOS reference screenshot `RDT_20261112_1627083837676783770026508(20261113-215524).jpg`. Compared with #61 `Screenshot_20261114_031007.jpg` using aligned clock/glyph crops.
+- Visual assessment agrees with user: #62 is a genuine improvement over #61. `0` now shows more warm orange transmission (most visibly in the lower/interior region); `4` has visibly softer, more natural cyan haze; `7` has a somewhat more continuous hazy body. `1` is nearly unchanged. The upper half of `0`, where the closely spaced white bands cross, still preserves too much of their crisp structure.
+- Compared with iOS: the `1` needs broader chromatic/orange-white light bending across its flatter face; the upper `0` needs those paired white bands to merge into a smoother internal glow; `4` still has some difference in softbox/reflection polish; `7` is improved but still sharper and less evenly hazed than the reference.
+- Both #62 builds succeeded from commit `809568cc6575f10781e26cb1aa04365b5f0f2d46`: Digit Lab #62 run `43513422665`, artifact `14079356070`; Production #338 run `43513422623`, artifact `14078737994`.
+- Follow-up renderer commit `ec1313ba51675a49a80ee2555fdd524bd13d88e6` — “Improve broad chromatic fill and close-band haze response”:
+  - Raises the shared low-slope chromatic environmental reflection floor from 0.035 to 0.065 and maximum from 0.20 to 0.22, so flatter glass faces can pick up broad warm/cool environmental reflections instead of relying almost entirely on curvature/surface slope.
+  - Makes chromatic reflection pickup activate earlier (threshold 0.018–0.12 from 0.025–0.16), retaining channel hue while improving subdued orange/blue environmental reflections.
+  - Widens the shared local colour-edge probe from 4px to 6px to improve detection of closely spaced high-contrast wallpaper bands that can alias at the shorter probe distance.
+  - Moves adaptive haze response threshold from smoothstep(0.18, 0.72) to smoothstep(0.10, 0.55), allowing medium-strength paired bands to receive the stronger end of the existing 46–58% atmospheric transport and 30–38% bloom range.
+  - No increase to global blur radius, no extra texture reads. Retains #62 two-scale diffuse transport, external 18px chromatic light wrap, smooth-union volume, #59 softbox improvement, and the full colour-preserving transmission path.
+  - Static checks passed for all changes, unchanged Solid/Frosted blur/centre selection/opacity, and no digit-specific logic.
+- Candidate builds from `ec1313b`: Digit Lab #63 run `43515211106`; Production #339 run `43515211091`. Both were in progress when recorded. Check actual status/artifacts before linking APKs.
+- This next pass is intended to improve the shared light response on flatter strokes and paired-band transitions. User verification remains pending; check whether `1` picks up more natural orange/white reflection and the upper `0` softens without washing the `4` or making the `7` cloudy.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `809568cc6575f10781e26cb1aa04365b5f0f2d46` — “Balance colour-preserving diffusion with shared atmospheric haze”
+- **Latest renderer commit:** `ec1313ba51675a49a80ee2555fdd524bd13d88e6` — “Improve broad chromatic fill and close-band haze response”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
 - **Latest submitted comparison:** first image is our Digit Lab #52 rendering; second image is Apple's iOS reference. The 16% atmospheric mix in 202f8a8 was still too subtle. Follow-up 7e4670e increases shared isotropic haze to 32% and adds low-strength bright-pass bloom using existing blur samples.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
-- **Latest candidate builds:** Production #338 (run `43513422623`) and Digit Lab #62 (run `43513422665`), both from `809568c`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
+- **Latest candidate builds:** Production #339 (run `43515211091`) and Digit Lab #63 (run `43515211106`), both from `ec1313b`; in progress when recorded. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
 - **Solid protection:** at `solidMode == 1`, Solid still selects original centre wallpaper transmission, 38px blur, opacity, bevel, sheen and lighting; new ambient fill is explicitly multiplied by `1-solidMode`. Static checks passed. Device screenshot confirmation is still required.
 - **Next visual checks:** compare build from `6a3a20a` using the same diagonal wallpaper against iOS. Judge the overall material across all digits, not only 1/0/4/7. Check for continuous silver-blue body, softer merged bands, no muddy/frosted result; then test the beach wallpaper.
