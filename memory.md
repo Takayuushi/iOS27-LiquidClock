@@ -580,13 +580,27 @@ Changes:
 - Both workflow jobs completed successfully and uploaded artifacts. This verifies compile/upload, not actual device installation.
 - No app source or signing workflow change was made in response to this report because the most likely cause (different #50/#51 certificate) was disproved. Remaining diagnosis requires Android's exact Package Installer failure code. Ask user to run `adb install -r app-debug.apk` from the extracted #51 artifact (or provide the installer details screen) and share the exact `INSTALL_FAILED_...` output. Do not advise uninstalling pre-emptively; it may erase Digit Lab preferences and is not justified by the evidence yet.
 
+### Clarification: target is natural atmospheric haze, not just directional edge blur (14 Nov 2026, ~01:20 IST)
+- User clarified the intended iOS reference appearance: the glass should have a consistent, natural fogged-window quality, like bright light seen through a lightly hazy pane. It is not enough to selectively blur individual wallpaper edges or merely soften black/blue/white bands. The whole glass body should have a coherent low-frequency atmospheric softness while remaining transparent, reflective and coloured by the wallpaper.
+- Correct interpretation: previous work focused too narrowly on contrast detection and directional cross-band blur. The image should instead read as light scattering through a continuous glass volume: broad local glow, soft low-frequency transmission and gentle, consistent haze across all glyph surfaces.
+- The user's 'smoky' comment was not a request to remove all haze; the distinction is unnatural gray/smudgy patches versus Apple's even, luminous atmospheric haze. Avoid neutral gray paint, but do not make the Liquid Glass face crystal-clear/sharp.
+- New renderer commit `202f8a84e4ce338a6b8f04e17d9891ef84b37c20` — “Add uniform atmospheric haze to Liquid Glass”:
+  - Widens the Liquid Glass isotropic eight-direction environmental blur radius from 22px to 30px. Solid/Frosted retains its original 38px blur exactly.
+  - Adds a uniform 16% low-frequency blend from the locally blurred wallpaper into the Liquid Glass transmitted face, gated only by the shared glyph-volume mask. This produces continuous softening throughout the body, not only where local edges are detected.
+  - Changes the dark-area ambient environment target from a 55% mix of neutral gray and directional microfacet transmission to a 72% mix of neutral gradient and the same isotropically blurred wallpaper, making the haze naturally pick up local wallpaper colour.
+  - Reuses existing eight blur samples; no extra wallpaper texture fetches. No glyph-specific conditions, no position-dependent material, no font/spacing/geometry/gesture/wallpaper isolation changes.
+  - Solid/Frosted remains protected: blur radius still resolves to 38px at solidMode=1; ambient and atmospheric scattering remain multiplied/blended out when Solid is selected; original centre wallpaper transmission, 0.78 opacity, bevel and sheen remain unchanged.
+- Static checks passed for the new 30/38px blur selection, shared 16% atmosphere blend, wallpaper-colour source, unchanged Solid transmission/opacity, and absence of digit-index branches.
+- CI runs from `202f8a8` should be recorded after Actions starts: Production and Digit Lab build numbers, run IDs, results and artifact IDs. On-device verification remains pending.
+- Next comparison must judge the whole glass body, not only isolated digits: it should have an even, natural haze like the iOS reference, softened bright wallpaper streaks, retained black/blue colour and continuous silver-blue reflections. Reject a flat opaque/frosted film or patchy gray smoke.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
-- **Latest renderer commit:** `7e11b7dc2d13dd2bb45909d3ec32565919e6a329` — “Refine shared colour-edge diffusion and reduce glass haze”
+- **Latest renderer commit:** `202f8a84e4ce338a6b8f04e17d9891ef84b37c20` — “Add uniform atmospheric haze to Liquid Glass”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** first image is our Digit Lab #50 rendering; second image is Apple's iOS reference. The user says the result is close but dark glass is still smoky/neutral. Follow-up 7e11b7d uses a full-RGB structure tensor and reduces neutral ambient fill.
+- **Latest submitted comparison:** first image is our Digit Lab rendering; second image is Apple's iOS reference. User clarified target as consistent natural atmospheric haze like bright light through a lightly fogged glass pane, not just directional edge blur. Follow-up 202f8a8 adds a shared isotropic low-frequency haze layer.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
 - **Latest shader changes:** commit `6a3a20a` improves shared Liquid Glass volume/scattering/diffusion; `9651e9c` adds a subtle global directional-glint/rim increase; `f6e61bc` broadens the SDF-normal softbox lobe and slightly expands contrast-adaptive diffusion.
