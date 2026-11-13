@@ -182,6 +182,18 @@ This section is deliberately repeated near the top of memory.md so it is not mis
   - spacing, glyph geometry, official SF Pro axes, colon geometry and white rim values unchanged.
 - Solid/Frosted protection: blur stays 38px under `solidMode`; new bounce is mixed to the original solid source; face reflectivity is used only to form the Glass face before the Solid/Frosted `body` selection; directional chroma pickup and final Fresnel contribution are explicitly gated by `(1.0 - solidMode)`. Approved Solid renderer remains unchanged.
 - Production #308 and Digit Lab #30 were triggered from `686220c`; CI and on-device validation pending.
+### Lower-terminal highlight diagnosis and targeted Glass fix (13 Nov 2026, ~19:48 IST)
+- User tested Production #308 / Digit Lab #30 from `686220c` and says the iOS comparison is still more illuminated, especially at the lower end-cap of the 7's descending stroke. User will continue providing direct same-wallpaper comparisons until it is right.
+- Inspection of the exact screenshot pair at 945x2048 and 944x2048 confirms the missing effect is a tight cyan-white directional highlight at the lower terminal, not just more overall brightness. The iOS reference has a visible cap reflection; the Digit Lab version mainly has the thin perimeter rim there.
+- Root cause in shader: to prevent the horizontal bars on 4 and 7 looking too wide, `glassHorizontalHighlight = mix(1.0, 0.58, horizontalShoulder)` suppresses reflection for strongly vertical Y-facing surface normals. That also attenuates the 7's terminal cap. Existing fill/key glints are likewise tied to the broad-bar limiter, so the cap highlight has no independent directional term.
+- New commit `9c06eb5146c5975e769e8a30ae840eba34a71e2f` — “Add directional Liquid Glass end-cap reflection” adds a localized, lower-left-facing cap lobe after existing rim terms:
+  - 2D outward SDF normal aligned to `(-0.28, 0.96)` with a 12th-power narrow angular lobe;
+  - edge-only activation gated by `glassProfileSlope` and `normalConfidence`;
+  - a separate 3D half-vector for the cap, creating a compact high-intensity specular return;
+  - adds wallpaper-derived reflection chroma plus a restrained cyan-white core.
+  - Explicitly Glass-only via `(1.0 - solidMode)`; does not change broad horizontal highlights, glyph mask/path geometry, font axes, kerning or Solid.
+- Production build #309 has started from `9c06eb5`, run ID `43441833708`; Digit Lab build status not yet present in latest run listing at time of note. CI and device test pending.
+- Existing spacing remains: `1–0` 0.024em, `0–:` 0.027em, `:–4` 0.033em, `4–7` 0.021em. Do not change.
 ### Current work to resume after a new chat
 - **Primary open issue: Liquid Glass material quality.** The user says recent Digit Lab output looks like thin transparent outlines rather than thick, polished, refractive glass. The target is the reflective silver/chrome-like reference with visible glass volume, rounded shoulders, strong directional specular reflections and wallpaper-derived colour/refraction—not an all-around white bevel or an opaque frosted face.
 - The screenshot pair supplied on 13 Nov 2026 is timestamped approximately 13:00–13:01 IST (07:30–07:31 UTC). The latest shader visible at that time was commit `e1be6953d1442948fc959619821706d114173b70`. The later change `54679f0154a1a70d8d52796153a07f13a279f0b4` landed at 13:08 IST and its APKs were built after those screenshots; the screenshots therefore do not verify that later shader.
@@ -290,16 +302,15 @@ Changes:
 ## Status snapshot
 
 - **Active branch:** `feature/live-wallpaper-big-clock`
-- **Latest renderer source commit:** `686220caa878bc7b92516206bed190434868c93d` — “Prevent beach frosting with luminance-aware chromatic reflections”
-- **Latest user-tested builds:** Production #307 and Digit Lab #29 succeeded from `25893a9`. The user reports the diagonal image remains dimmer/less vivid than iOS and the beach image looks almost frosted.
-- **Latest Glass fix:** 22px blurred capture (Solid 38px); internal bounce max 20% and gated to genuinely dark refracted pixels; Fresnel blend reduced and high-luminance samples attenuated; full screen-blend removed; directional reflections are chroma-first with only a small dark-face luminance lift; last Fresnel contribution is 12% chroma-only.
-- **Typography:** hour pair 0.024em; hour-to-colon 0.027em; colon-to-minute 0.033em; minute pair 0.021em. Preserve.
-- **Glass colon:** 3.2px profile. Solid remains 20px.
-- **Protected Solid:** blur remains 38px; new bounce, chromatic reflections and face updates are gated/mixed out. No approved Solid/Frosted values changed.
-- **Current production build:** #308, run ID `43439831696`, from `686220c`; in progress at last check: [Actions #308](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43439831696)
-- **Current Digit Lab build:** #30, run ID `43439831647`, from `686220c`; in progress at last check: [Actions #30](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43439831647)
-- **On-device status:** `686220c` not yet tested. Await new same-wallpaper and beach screenshots; don't claim visually fixed from source changes or successful CI alone.
-- **Primary next priority:** verify #308/#30; compare iOS diagonal reference and beach preview for colourful internal reflections, clear wallpaper detail and no frosted veil; verify Solid parity.
+- **Latest renderer commit:** `9c06eb5146c5975e769e8a30ae840eba34a71e2f` — “Add directional Liquid Glass end-cap reflection”
+- **Latest tested pair:** Production #308 and Digit Lab #30 succeeded from `686220c`; user reports the reference iOS still has stronger internal illumination, especially at the 7 lower terminal.
+- **Latest targeted fix:** separate Glass-only lower-left end-cap specular lobe using SDF outward-normal alignment `(-0.28,0.96)`, edge slope/confidence gates, a dedicated cap half-vector and wallpaper-derived cyan-white highlight. The existing horizontal bar highlight attenuation stays in place.
+- **Unchanged typography:** 1–0 0.024em; 0–: 0.027em; :–4 0.033em; 4–7 0.021em.
+- **Protected Solid/Frosted:** all new terminal-light contributions gated by `(1.0-solidMode)`; Solid material stays unchanged. Glyph shapes, official SF Pro axes and shared spacing unchanged.
+- **Current production build:** #309, run ID `43441833708`, from `9c06eb5`; queued at last check: [Actions #309](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43441833708)
+- **Digit Lab build:** matching #31 has not yet appeared in the workflow run listing at last check; verify whether the separate Digit Lab workflow triggered. Previous #30 from `686220c` succeeded.
+- **On-device status:** new end-cap treatment not yet tested. Do not claim success from source diff or CI alone.
+- **Next priority:** verify #309 and start/verify Digit Lab #31 from the same SHA; inspect the terminal reflection, ensure it stays narrow and does not broaden glyph strokes, compare both beach and diagonal wallpapers, verify Solid unchanged.
 
 ## New issue reported and root cause (13 Nov 2026)
 
