@@ -443,6 +443,29 @@ class LiquidWallpaperRenderer(
             float2 glassRefractionOffset =
                 refractedRay.xy * glassOpticalThickness * glassEdgePull +
                 glassCurvatureWarp;
+
+            // Build #96: estimate refracted-ray convergence from the Jacobian
+            // of the local screen-space ray map. For this near-normal view,
+            // the trace of the convex height-field Hessian is the first-order
+            // divergence of the refracted ray field. A negative divergence
+            // means neighbouring rays converge and concentrate transmitted
+            // wallpaper radiance. This is an optical energy response, not an
+            // additive highlight.
+            float glassCurvatureTrace = glassCurvatureX + glassCurvatureY;
+            float glassRayJacobian = clamp(
+                1.0 + glassOpticalThickness * 0.34 *
+                    glassCurvatureTrace * glassEdgePull,
+                0.72,
+                1.0
+            );
+            float glassRayConcentration = 1.0 / glassRayJacobian;
+            float glassRayConvergence = 1.0 - glassRayJacobian;
+            float glassRayConvergenceGate = smoothstep(
+                0.08,
+                0.30,
+                glassProfileSlope
+            ) * (1.0 - smoothstep(0.78, 1.18, glassProfileSlope)) *
+                glassProfileCoverage * normalConfidence;
             float2 solidWarp =
                 refractionNormal *
                     (1.5 + solidEdge * 6.0 + solidBevel * 1.1) +
@@ -1037,6 +1060,29 @@ class LiquidWallpaperRenderer(
             glassTransmitted = 1.0 -
                 (1.0 - glassTransmitted) *
                 (1.0 - glassBrightBloom * glassAtmosphericBloom);
+            // Concentrate transmitted radiance according to the estimated
+            // ray-map Jacobian. Apply the gain in linear light and keep it
+            // deliberately partial: the full inverse Jacobian would over-focus
+            // thin glyph shoulders and clip bright wallpaper bands.
+            float glassRayEnergyFocus = clamp(
+                glassRayConvergence * glassRayConvergenceGate * 0.36,
+                0.0,
+                0.18
+            );
+            float glassRayEnergyGain = mix(
+                1.0,
+                glassRayConcentration,
+                glassRayEnergyFocus
+            );
+            glassTransmitted = clamp(
+                fromLinearSrgb(clamp(
+                    toLinearSrgb(glassTransmitted) * glassRayEnergyGain,
+                    0.0,
+                    1.0
+                )),
+                0.0,
+                1.0
+            );
             // Solid keeps its prior diffuse/frosted source path.
             float3 refracted = mix(glassTransmitted, center, solidMode);
             float3 milkyFrost = mix(
@@ -1200,68 +1246,9 @@ class LiquidWallpaperRenderer(
                 glassAreaSourcePresence *
                 (1.0 - solidMode) * 0.16;
 
-            // Build #95: geometry-driven caustic-like focusing. The convex
-            // height field already provides a local curvature estimate; project
-            // its curvature onto both light directions to approximate where
-            // refracted energy concentrates along the glass shoulder.
-            // Reuse existing wallpaper environment samples as the light source:
-            // no extra texture reads, render passes, uniforms or digit masks.
-            float keyCausticCurvature = abs(
-                glassCurvatureX * keyLight3D.x * keyLight3D.x +
-                glassCurvatureY * keyLight3D.y * keyLight3D.y
-            );
-            float fillCausticCurvature = abs(
-                glassCurvatureX * fillLight3D.x * fillLight3D.x +
-                glassCurvatureY * fillLight3D.y * fillLight3D.y
-            );
-            float glassCausticCurvature = max(
-                keyCausticCurvature,
-                fillCausticCurvature * 0.58
-            );
-            float glassCausticCurvatureResponse = smoothstep(
-                0.012,
-                0.060,
-                glassCausticCurvature
-            );
-            // Restrict concentration to the rounded shoulder transition.
-            // This avoids a broad luminous wash across the flat glass crown.
-            float glassCausticShoulder = smoothstep(
-                0.08,
-                0.30,
-                glassProfileSlope
-            ) * (1.0 - smoothstep(0.78, 1.18, glassProfileSlope));
-            float glassCausticFacing = max(
-                keyDiffuse3D,
-                fillDiffuse3D * 0.48
-            );
-            float glassCausticFocus = glassCausticCurvatureResponse *
-                glassCausticShoulder *
-                glassProfileCoverage *
-                normalConfidence *
-                smoothstep(0.10, 0.46, glassCausticFacing);
-            float3 glassCausticSource = mix(
-                directionalEnvironmentReflection,
-                glassBrightBloom,
-                0.62
-            );
-            float glassCausticSourceLuma = dot(
-                glassCausticSource,
-                float3(0.2126, 0.7152, 0.0722)
-            );
-            float glassCausticSourcePresence = smoothstep(
-                0.045,
-                0.28,
-                glassCausticSourceLuma
-            );
-            // A low-energy, colour-preserving focal highlight. It is deliberately
-            // not a white bloom: warm and cool wallpaper light remain distinct.
-            colour += clamp(
-                glassCausticSource * 1.12 + float3(0.006, 0.008, 0.012),
-                0.0,
-                1.0
-            ) * glassCausticFocus *
-                glassCausticSourcePresence *
-                (1.0 - solidMode) * 0.075;
+            // #96 replaces the previous curvature-only additive caustic
+            // glint with a Jacobian-based concentration of transmitted
+            // wallpaper radiance. This avoids stacking another bright rim.
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.28;
             colour += float3(0.68, 0.82, 1.0) *
