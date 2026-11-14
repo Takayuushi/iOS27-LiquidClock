@@ -1317,3 +1317,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Crucially, they report that the change does not distort or damage the other existing effects. They regard the result as an overall improvement and accept retaining the height-derived optical-depth experiment.
 - Keep #86 as the current accepted baseline; do not roll it back merely because the improvement is more visible on `1` than `0`. This is still one universal profile-driven material, not a digit-specific treatment.
 - Future experiments should preserve the #86 benefit on `1` while seeking more convincing convex volume/reflection across other glyph geometries, without introducing per-digit rules or degrading colour transport/Frosted Glass.
+
+
+## Build #87 candidate — stronger convex depth modulation (14 Nov 2026)
+- Starts from user-accepted Build #86 (`a4624ba716e52d35b21900293b8f47f1837a192c`).
+- Renderer commit `0bec405fa9337bbf9df9a72a4b120c7938e8a370` — “Strengthen convex glass depth modulation”.
+- Changes only the geometry-derived refraction thickness range from 38–46px to 36–48px. The same `glassBodyDepth` derived from the convex height map controls the interpolation. This modestly increases crown-to-shoulder thickness contrast (8px span to 12px span) to test whether the benefit seen on `1` can become more apparent across other glyph geometries.
+- No new texture reads, uniforms, passes, dependencies, digit-specific conditions, wallpaper presets or screen-region rules. Surface normals, convex profile, Snell IOR, diffusion, reflections, colour transport and glyph layout remain unchanged.
+- Solid/Frosted mode remains on its existing separate `solidWarp` and source path; this thickness is only consumed by `glassRefractionOffset` in Liquid Glass.
+- Experimental only, not visually validated. Compare against #86 using identical wallpaper, clock string, font width/weight and placement. Prioritize whether `0`, `4`, `7` gain a more coherent volume while the improved `1` remains intact; reject if distortion, colour displacement, darkening or edge artifacts increase. #86 remains rollback baseline.
