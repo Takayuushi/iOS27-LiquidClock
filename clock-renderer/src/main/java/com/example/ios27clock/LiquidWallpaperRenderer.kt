@@ -490,24 +490,44 @@ class LiquidWallpaperRenderer(
             // colour-managed AGSL material pipeline.
             float3 centerLinear = toLinearSrgb(center);
 
-            // Integrate colour along the refracted ray instead of treating
-            // the glass as a single displaced wallpaper lookup. Three interior
-            // samples approximate a short Beer-Lambert light path through the
-            // convex volume. The path length follows the actual surface slope,
-            // so flat regions stay clear while curved shoulders gain depth.
+            // Integrate colour along a gently curved refracted path instead
+            // of treating the glass as a single displaced wallpaper lookup.
+            // The local height-field curvature bends the interior path while
+            // keeping its endpoints fixed. Projecting the curvature vector
+            // perpendicular to the endpoint ray prevents this correction from
+            // simply increasing the overall refraction displacement.
             float2 glassRay = glassRefractionOffset;
+            float glassRayLengthSquared = max(dot(glassRay, glassRay), 0.001);
+            float2 glassPathCurvature = glassCurvatureWarp -
+                glassRay * (
+                    dot(glassCurvatureWarp, glassRay) /
+                    glassRayLengthSquared
+                );
+            // A small, shared arc correction approximates the second-order
+            // path through the convex volume. It uses the same curvature field
+            // for every glyph and introduces no extra wallpaper samples.
+            const float GLASS_PATH_CURVATURE = 0.45;
+            float2 rayQuarterPoint = p + glassRay * 0.25 +
+                glassPathCurvature * (GLASS_PATH_CURVATURE * 0.75);
+            float2 rayMiddlePoint = p + glassRay * 0.50 +
+                glassPathCurvature * GLASS_PATH_CURVATURE;
+            float2 rayThreeQuarterPoint = p + glassRay * 0.75 +
+                glassPathCurvature * (GLASS_PATH_CURVATURE * 0.75);
+            // Three interior samples approximate a short Beer-Lambert light
+            // path through the volume. Flat regions remain almost straight;
+            // curved shoulders receive the geometry-driven path correction.
             float3 rayQuarter = toLinearSrgb(uWallpaper.eval(clamp(
-                p + glassRay * 0.25,
+                rayQuarterPoint,
                 float2(0.0),
                 uResolution
             )).rgb);
             float3 rayMiddle = toLinearSrgb(uWallpaper.eval(clamp(
-                p + glassRay * 0.50,
+                rayMiddlePoint,
                 float2(0.0),
                 uResolution
             )).rgb);
             float3 rayThreeQuarter = toLinearSrgb(uWallpaper.eval(clamp(
-                p + glassRay * 0.75,
+                rayThreeQuarterPoint,
                 float2(0.0),
                 uResolution
             )).rgb);
