@@ -1455,3 +1455,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is a controlled shader experiment. Compare against #96 and the protected #93 baseline using identical weight (539), font width, digit string and wallpaper.
 - Check: fine white scattering in 1; orange/black/white blending in 0; no halos or clipping on 4/7; unchanged Frosted Glass.
 - Main and standalone Digit Lab APK workflows should trigger from the renderer push. Verify both successful runs and artifacts before sharing links.
+
+## Build #98 candidate — analytic convex-normal refinement (14 Nov 2026)
+- Branch: `feature/cryengine-normal-refinement-98`, created from the Build #97 checkpoint on `feature/cryengine-scatter-preservation-97`.
+- Renderer commit: `1c61af927e48036b8ea7284de7c8a73729459361`.
+- Refines the Liquid Glass surface normal using the analytic derivative of the existing rounded convex height profile, applying the SDF chain rule to the four already-sampled neighbouring distance values.
+- Retains the central-difference gradient at the antialiased silhouette, then smoothly blends toward the analytic gradient across the supported interior of the convex shoulder. The analytic gradient is capped to avoid an unstable near-edge slope.
+- The refined normal drives the existing Snell refraction direction, GGX/area-light reflection and directional occlusion through the existing shared surface-normal variable. No additional wallpaper or SDF texture reads, uniforms, render passes, dependencies, or digit-specific rules are introduced.
+- The refinement is explicitly gated by `(1.0 - solidMode)`; Solid/Frosted retains the previous finite-difference normal and its independent warp/material path.
+- This is a controlled geometry experiment, not yet visually validated. Compare #98 with #97 and the accepted #93 baseline using identical weight (539), compressed width, digit string and placement. Test the blue diagonal wallpaper, pink beach and red nebula.
+- Evaluate whether 0 retains warm/black/white blending, 1 recovers fine white scattering, and 4/7 retain clean highlights without wavy displacement, edge halos, metallic shine or loss of transmitted wallpaper detail.
+- No caustics or HDR changes are included in this experiment. Do not promote #98 until both APKs build successfully and the user reviews the screenshots.
