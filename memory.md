@@ -1504,3 +1504,15 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is an isolated HDR/transmission-balance experiment. Compare #101 with #100 and accepted #93 using identical settings (weight 539, compressed width, 10:47 and same placement) on the blue/orange diagonal, pink beach, and red nebula wallpapers.
 - Acceptance checks: stronger but still natural amber/orange transmission; clearly separated black/white bands through the lower 0 and 1; no flat cutout appearance; preserve broad shoulder reflections, internal depth, fine scattering on 4/7, and the beach's soft pink light.
 - Reject if reduced haze makes the glass look too sharp/plastic, if orange clips or becomes a painted tint, or if any Frosted Glass behaviour changes. Build #93 remains the accepted baseline; #100 is the immediate comparison checkpoint. Candidate not yet visually validated.
+
+## Build #102 candidate — curvature-selective local reflections (14 Nov 2026)
+- Branch: `feature/cryengine-hdr-detail-101`, continued directly from the Build #101 checkpoint; no branch switch or new branch was made.
+- Renderer commit: `7618478426a9b0c76bc172c87fe7b64f41fd0a13`.
+- Adds a second, low-energy local environment-reflection lobe using the existing reflected-wallpaper sample and chromatic reflection colour.
+- Gates the additional reflection by the existing convex surface slope, curvature magnitude, profile coverage, and normal confidence. The reflection is therefore concentrated on supported curved shoulders rather than spread uniformly over the digit face.
+- Protects bright transmitted wallpaper with a local refracted-luminance guard, preserving orange/amber light and the separation of black/white bands beneath the reflected layer.
+- Adds no wallpaper or SDF texture reads, uniforms, render passes, dependencies, or glyph-specific rules.
+- The Frosted Glass path is explicitly excluded through the existing `solidMode` gate. No changes to refraction, transmission/scattering, or the established frosted material response.
+- This is an experimental reflection refinement, not yet visually validated. Compare #102 with #101 and accepted #93 at identical settings (weight 539, compressed width, 10:47 and same placement) on the blue/orange diagonal, pink beach, and red nebula wallpapers.
+- Acceptance checks: sharper but restrained shoulder reflections; preserve broad central-face reflections, orange colour in the lower 0 and 1, crisp black/white band separation, and fine wallpaper detail; no white rails, clipped highlights, metallic/plastic appearance, or loss of transmission.
+- Do not promote #102 until both APK workflows complete and the user reviews the three-wallpaper comparison. Build #93 remains the accepted baseline.
