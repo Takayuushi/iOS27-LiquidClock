@@ -825,7 +825,7 @@ class LiquidWallpaperRenderer(
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
-            float diffusionRadius = mix(30.0, 42.0, bandContrast);
+            float diffusionRadius = mix(18.0, 28.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
@@ -854,15 +854,15 @@ class LiquidWallpaperRenderer(
             // Averaging display-encoded RGB here biases the result toward dark,
             // saturated edges and can leave the rails visually separated.
             float3 microfacetTransmissionLinear =
-                centerLinear * 0.08 +
+                centerLinear * 0.22 +
                 (
                     toLinearSrgb(softNearA) +
                     toLinearSrgb(softNearB)
-                ) * 0.24 +
+                ) * 0.22 +
                 (
                     toLinearSrgb(softFarA) +
                     toLinearSrgb(softFarB)
-                ) * 0.22;
+                ) * 0.17;
             float3 microfacetTransmission = clamp(
                 fromLinearSrgb(microfacetTransmissionLinear),
                 0.0,
@@ -930,7 +930,7 @@ class LiquidWallpaperRenderer(
             // optical edge response, not a digit-specific correction.
             float pairedBandSoftening = mix(
                 1.0,
-                0.32,
+                0.50,
                 bandContrast
             );
             float stableDirectionWeight = mix(
@@ -945,8 +945,8 @@ class LiquidWallpaperRenderer(
             );
 
             float microfacetDiffusion = mix(
-                0.42,
-                0.96,
+                0.30,
+                0.76,
                 bandContrast
             ) * mix(
                 0.96,
