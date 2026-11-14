@@ -280,7 +280,7 @@ class LiquidWallpaperRenderer(
             float glassMicroGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
                 56.0
-            ) * smoothstep(0.10, 0.44, glassProfileSlope) *
+            ) * smoothstep(0.16, 0.52, glassProfileSlope) *
                 normalConfidence * glassHorizontalHighlight;
             float glassSideShadow = glassProfileCoverage *
                 max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
