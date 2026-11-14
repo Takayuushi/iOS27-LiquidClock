@@ -1238,3 +1238,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted original blur path, typography, geometry, layout, UI, controls, gestures, package IDs and signing config remain unchanged.
 - CI runs for adaptive-kernel commit `f7c7dd8`: Production #356 (`43569048518`) and Digit Lab #79 (`43569048564`) were in progress at check time. Verify artifacts and successful completion before distribution.
 - Visual test: compare #80 with #78 on the same diagonal wallpaper, then test at least one wallpaper with vertical/horizontal or irregular features and a different clock string. Check that the diffusion direction follows wallpaper structure everywhere, colours stay balanced, no glyph-specific artefacts appear, and 4/7 highlights remain.
+
+## Build #81 candidate — anisotropic wallpaper-aligned diffusion (2026-11-14)
+- User reviewed #80 and confirmed the black/white wallpaper bands are beginning to blend, subtly but visibly. #80 is now the validated baseline; blue and warm colour effects remain intact.
+- Renderer commit `b000fb73b7d68e69d8a22e5f4e7248298833067d` — “Use anisotropic wallpaper-aligned glass diffusion”.
+- Refined the four existing short-range tensor-oriented samples into an anisotropic kernel: 68% weight across the dominant local wallpaper bands (structure-tensor edge normal), 32% along the bands (perpendicular tangent). This should blend black/white band boundaries more effectively while preserving colour continuity along the bands.
+- No additional texture reads; same four samples and same tensor-derived orientation. No digit/time/screen-region/wallpaper-specific rules; one shared material response for every glyph and wallpaper.
+- No changes to refracted-ray integration, linear-light microfacet scattering, warm/cool transport weights, surface geometry, reflections, typography, Solid/Frosted, UI, gestures, package IDs or signing.
+- #80 successful CI was confirmed: Digit Lab #80 (`43569076184`) and Production #357 (`43569076233`) from final #80 commit `3441e31`.
+- #81 CI runs need to be located and checked against exact head SHA `b000fb73b7d68e69d8a22e5f4e7248298833067d`; do not reuse #80 links or report artifact availability until verified.
+- Compare #81 to #80 on the same diagonal wallpaper. Also test a different wallpaper orientation and different clock string. Reject if colour detail along bands is smeared, blue/orange balance shifts, or 4/7 highlights degrade.
