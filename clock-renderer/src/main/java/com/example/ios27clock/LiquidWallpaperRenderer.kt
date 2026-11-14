@@ -1162,8 +1162,18 @@ class LiquidWallpaperRenderer(
                 0.0,
                 1.0
             );
+            // Balance reflected environment light against the wallpaper
+            // detail already transmitted through the glass. Bright transmitted
+            // regions retain more of their original colour/texture; darker
+            // regions leave additional headroom for the environmental reflection.
+            // This is a local radiance gate, not a global brightness adjustment.
+            // It reuses the existing refracted luminance and adds no samples.
+            float transmissionHighlightProtection = 1.0 -
+                0.34 * smoothstep(0.46, 0.82, refractedLuma);
             float glassFaceReflectivity =
-                glassVolumeFresnel * 0.64 * reflectionHighlightProtection;
+                glassVolumeFresnel * 0.64 *
+                reflectionHighlightProtection *
+                transmissionHighlightProtection;
             // Retain the colour-bearing environment reflection. The broad
             // transmitted haze is handled by the glass volume below/above;
             // blurring this reflection separately was washing out the warm
