@@ -1168,3 +1168,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - **Solid/Frosted is protected:** the original `frostedWallpaper` ring, 38px blur selection, `solidWarp`, face path, opacity and all Solid-only lighting remain unchanged. The new four-sample kernel is consumed only by Liquid Glass expressions.
 - No glyph-specific corrections, digit geometry, font, weight/width, tracking, layout, colour picker, UI, wallpaper/depth or gesture behaviour was changed.
 - This commit is a test candidate, not a verified visual improvement. The feature-branch push should trigger the existing Digit Lab and Production workflows. Wait for both CI runs to finish and inspect the Digit Lab artifact before calling the build ready; then compare #72 with #71 using the same diagonal wallpaper and the original iOS reference. Watch especially for improved blending in `0` and `1`, retained warm/cool saturation, and no washed-out/frosted appearance in `4` and `7`.
+
+## Build #73 candidate — refracted-ray volume integration (2026-11-14)
+- Branch remains `feature/live-wallpaper-big-clock`; no branch switch.
+- Renderer commit: `0e1c6ea80082abee37cb7f9cc0fe9d1c86fc5af6` — “Integrate refracted light through glass volume”.
+- Builds on #72's existing SDF-derived convex surface, Snell-style refraction, Fresnel response, environment sampling and two-scale wallpaper transport.
+- Added three interior wallpaper samples along the actual refracted ray (quarter, midpoint, three-quarter), combined with Simpson-style weights, then a Beer-Lambert transmittance term based on ray length. Integrated ray colour now contributes to the Liquid Glass atmospheric transport.
+- This is an experimental image-space volume approximation, not literal global illumination or a physically complete 3D renderer. It adds three wallpaper texture samples per fragment; profile/performance must be tested on the Galaxy S25+.
+- Solid/Frosted path, typography, tracking, glyph geometry, Digit Lab UI, wallpaper controls, gestures and package/signing configuration were not changed.
+- CI runs triggered by push: Production run `43563704313` (#350) and Digit Lab run `43563704334` (#73). At the time of this note both were in progress; do not claim APK availability until artifacts are verified.
+- Visual status is unknown until user tests the APK and provides a screenshot. Compare against #72 using the same wallpaper, crop, time and settings; specifically inspect 0/1 paired rails, interior volume on 4/7, colour fidelity and sustained performance.
