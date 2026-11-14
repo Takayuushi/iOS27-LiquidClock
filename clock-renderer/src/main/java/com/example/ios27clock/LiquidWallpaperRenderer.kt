@@ -273,6 +273,15 @@ class LiquidWallpaperRenderer(
                 max(dot(glassSurfaceNormal, fillHalfVector), 0.0),
                 30.0
             ) * 0.56 * glassHorizontalHighlight;
+            // A restrained high-frequency microfacet lobe adds a crisp glass
+            // sparkle only where the convex shoulder turns toward the key
+            // softbox. Its low energy and normal-confidence gate avoid a
+            // continuous white outline or a painted-on embossed edge.
+            float glassMicroGlint = pow(
+                max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
+                68.0
+            ) * smoothstep(0.10, 0.44, glassProfileSlope) *
+                normalConfidence * glassHorizontalHighlight;
             float glassSideShadow = glassProfileCoverage *
                 max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
             float outerLip = 1.0 -
@@ -1095,6 +1104,8 @@ class LiquidWallpaperRenderer(
                 glassKeyGlint * (1.0 - solidMode) * 1.28;
             colour += float3(0.68, 0.82, 1.0) *
                 glassFillGlint * (1.0 - solidMode) * 0.88;
+            colour += float3(0.94, 0.98, 1.0) *
+                glassMicroGlint * (1.0 - solidMode) * 0.14;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
 
