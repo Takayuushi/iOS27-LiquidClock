@@ -891,7 +891,7 @@ class LiquidWallpaperRenderer(
             );
             float3 warmLightTransportLinear =
                 microfacetTransmissionLinear *
-                    (1.0 + warmLightPresence * 0.16) +
+                    (1.0 + warmLightPresence * 0.22) +
                 float3(0.010, 0.004, 0.0) * warmLightPresence;
             float3 warmLightTransport = clamp(
                 fromLinearSrgb(warmLightTransportLinear),
@@ -1042,7 +1042,7 @@ class LiquidWallpaperRenderer(
                 mix(
                     microfacetTransmission,
                     warmLightTransport,
-                    warmLightPresence * 0.42
+                    warmLightPresence * 0.50
                 ) * 1.10 +
                     float3(0.016, 0.020, 0.028),
                 0.0,
@@ -1084,7 +1084,7 @@ class LiquidWallpaperRenderer(
             // used by every stroke, independent of glyph identity or width.
             float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
             float glassAtmosphericScatter =
-                mix(0.68, 0.80, glassBandHaze) *
+                mix(0.58, 0.42, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
@@ -1095,7 +1095,7 @@ class LiquidWallpaperRenderer(
             // high-contrast regions, while retaining the direct chromatic
             // transmission and the external light-wrap added in #61.
             float glassAtmosphericBloom =
-                mix(0.30, 0.38, glassBandHaze) *
+                mix(0.22, 0.30, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = 1.0 -
                 (1.0 - glassTransmitted) *
