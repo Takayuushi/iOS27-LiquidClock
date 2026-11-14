@@ -317,9 +317,13 @@ class LiquidWallpaperRenderer(
                 0.0,
                 1.0
             );
+            // Increase the crown-to-shoulder thickness contrast modestly.
+            // The #86 range (38–46px) was accepted on-device; this candidate
+            // widens it to 36–48px so curved shoulders bend the transmitted
+            // ray a little more while the crown retains a deeper optical path.
             float glassOpticalThickness = mix(
-                38.0,
-                46.0,
+                36.0,
+                48.0,
                 smoothstep(0.0, 1.0, glassBodyDepth)
             );
             float eta = 1.0 / GLASS_IOR;
