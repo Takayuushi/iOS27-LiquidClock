@@ -375,7 +375,7 @@ class LiquidWallpaperRenderer(
             // Glass gets a tighter optical diffusion, while Solid retains its
             // wider frosted response. This avoids a separate anisotropic blur.
             // Preserve wallpaper detail through Liquid Glass; only Frosted Glass gets wide diffusion.
-            float blurRadius = mix(44.0, 38.0, solidMode);
+            float blurRadius = mix(62.0, 38.0, solidMode);
             float2 blurX = float2(blurRadius, 0.0);
             float2 blurY = float2(0.0, blurRadius);
             float2 blurDiagonal = float2(
@@ -548,7 +548,7 @@ class LiquidWallpaperRenderer(
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
-            float diffusionRadius = mix(24.0, 34.0, bandContrast);
+            float diffusionRadius = mix(30.0, 42.0, bandContrast);
             float2 nearDiffusionOffset = diffusionAxis * diffusionRadius * 0.62;
             float2 farDiffusionOffset = diffusionAxis * diffusionRadius * 1.38;
             float3 softNearA = uWallpaper.eval(clamp(
