@@ -1417,3 +1417,16 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Next isolated graphics experiment: restrained, geometry-driven caustic-like light focusing derived from the existing convex height field and its curvature/normal variation. Reuse existing wallpaper/environment samples where possible; avoid adding expensive full-screen passes or digit-specific masks. Keep it subtle and test for bright wallpaper bands, dark regions and smooth gradients.
 - After caustics, refine HDR/highlight handling: preserve bright highlight detail with a soft roll-off while retaining dark-region information and transmitted wallpaper colour. Avoid simply raising global brightness or bloom.
 - Every experiment stays on a separate branch/build checkpoint; compare with #93 and the immediately previous candidate using identical wallpaper, digits, weight, width, scale and position. Keep Frosted Glass isolated from Liquid Glass experiments.
+
+
+## Build #95 — geometry-driven caustic focusing experiment (14 Nov 2026)
+- Branch: `feature/cryengine-caustics-95`, created from the #94.2 PBR candidate at `2a62985f89a868cb8d3ae3059072ffe614e9dbcd`.
+- Renderer commit: `c9f72d8dc748adc33fa1158191e3272cfbd69683`.
+- Added a low-energy, geometry-derived caustic-like focal response using the existing convex height-field curvature projected onto the existing key/fill light directions.
+- Focus is restricted to the curved shoulder using existing profile slope, coverage, normal-confidence and light-facing terms. The source colour reuses existing directional environment and bright-bloom samples.
+- No new wallpaper texture reads, SDF reads, uniforms, render passes, digit-specific masks or coordinate-specific effects.
+- Frosted Glass is explicitly gated out by `(1.0 - solidMode)`; its path is not intentionally changed.
+- This is an experimental approximation of light concentration, not a full photon-traced caustic simulation. It must be evaluated for subtlety and possible shoulder hotspots.
+- Preserve Build #93 as the accepted visual baseline and #94.2 as the PBR comparison checkpoint. Do not promote #95 without same-settings comparison on diagonal blue/yellow, beach and red-nebula wallpapers.
+- Key visual checks: maintain the orange/black/white blending in 0, white scattering and pink reflections in 1, and blue-white highlights on 4 and 7. Reject if the new focus becomes a hard white rim, blooms over the crown, washes out wallpaper colour, or alters Frosted Glass.
+- Both main APK and Digit Lab workflows should trigger from this feature-branch renderer change; verify successful builds and shared signing-key cache restoration before sharing APK links.
