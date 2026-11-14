@@ -1219,3 +1219,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is a narrow incremental candidate intended to spread orange/amber light more softly through the glass body. It is not yet visually validated.
 - Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
 - CI for commit `10654d1` must be located and verified for both Production and Digit Lab before sharing APKs. Compare with #77 on the same wallpaper/settings; reject if orange bleeds into blue regions, highlights flatten, or transparency is lost.
+
+## Build #79 candidate — slightly broader warm diffuse contribution (2026-11-14)
+- User tested #78 and confirmed a clear improvement: warm light spreads more naturally while the other colour effects remain intact.
+- #78 CI verification: Production run #354 (`43567837259`) and Digit Lab #77 (`43567837263`) both completed successfully from renderer commit `10654d1`.
+- Renderer commit `3216654bca11fc9da82ab6570c23a51f74b6b164` — “Broaden warm light diffusion through glass body”.
+- This is a deliberately small follow-up: increased the wallpaper-derived warm contribution in the broad diffuse target from `warmLightPresence * 0.30` to `warmLightPresence * 0.42`. It reuses existing samples and the same warm-chroma detector; no extra texture reads or fixed tint.
+- No changes to ray integration, refraction, Fresnel, geometry, glyph-specific behaviour, Solid/Frosted, typography, layout, UI, gestures, package IDs or signing.
+- Production run #355 (`43568505067`) and Digit Lab #78 (`43568505093`) were queued when checked. Verify both runs and artifacts before distribution.
+- Compare with #78 on the same wallpaper/settings. Accept only if warm scattering becomes more legible without contaminating blue regions, flattening the 4/7 highlights or making the glass cloudy. If this is too warm, revert to #78; it is the proven baseline.
