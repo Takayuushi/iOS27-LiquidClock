@@ -1443,3 +1443,15 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is a first-order screen-space approximation to ray convergence, not a full ray-traced caustic solver. Validate for subtlety and numerical stability.
 - Preserve Build #93 as the accepted visual baseline; #94.2 and #95 remain experimental comparison checkpoints. Do not promote #96 without matching-settings tests on the blue diagonal, beach and red-nebula wallpapers.
 - Key checks: preserve orange/black/white blending in 0, white scattering and pink reflections in 1, blue-white highlights in 4 and 7. Reject if bright regions clip, shoulders develop halos, wallpaper colours desaturate, or the effect becomes visible as a separate outline.
+
+
+## Build #97 — preserve scattering through ray convergence (14 Nov 2026)
+- Branch: `feature/cryengine-scatter-preservation-97`, branched from the Build #96 ray-convergence checkpoint.
+- Renderer commit: `a6fb62fd3f8f8e0f296a7e1fca217c5e23ccc4b5`.
+- Separates the direct transmitted wallpaper component from the later volume-scatter, atmospheric-scatter and bloom residual.
+- Applies the Build #96 Jacobian energy gain only to direct transmitted wallpaper radiance; carries the signed scattering residual through unchanged in linear light.
+- Purpose: preserve fine, soft white scattering while retaining the colour-bearing convergence response in the transmitted image.
+- No extra texture reads, uniforms, render passes, digit-specific logic or coordinate masks. Frosted Glass remains excluded.
+- This is a controlled shader experiment. Compare against #96 and the protected #93 baseline using identical weight (539), font width, digit string and wallpaper.
+- Check: fine white scattering in 1; orange/black/white blending in 0; no halos or clipping on 4/7; unchanged Frosted Glass.
+- Main and standalone Digit Lab APK workflows should trigger from the renderer push. Verify both successful runs and artifacts before sharing links.
