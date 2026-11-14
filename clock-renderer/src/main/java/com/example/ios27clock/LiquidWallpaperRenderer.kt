@@ -1205,7 +1205,24 @@ class LiquidWallpaperRenderer(
                 glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.94, 0.98, 1.0) *
                 glassMicroGlint * (1.0 - solidMode) * 0.22;
-            colour += float3(0.92, 0.97, 1.0) *
+            // Keep the GGX reflection tied to the sampled environment colour.
+            // A restrained wallpaper tint prevents the broader dielectric lobe
+            // from laying a uniform cool-white veil over warm transmitted bands.
+            float3 glassPbrEnvironmentColour = mix(
+                directionalEnvironmentReflection,
+                glassBrightBloom,
+                0.35
+            );
+            float3 glassPbrReflectionTint = mix(
+                float3(0.92, 0.97, 1.0),
+                clamp(
+                    glassPbrEnvironmentColour * 1.25 + float3(0.04),
+                    0.0,
+                    1.0
+                ),
+                0.42
+            );
+            colour += glassPbrReflectionTint *
                 glassPbrSpecular * (1.0 - solidMode) * 0.24;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
