@@ -286,10 +286,11 @@ class LiquidWallpaperRenderer(
             // complements the broad wallpaper-driven area reflection.
             // A single dielectric roughness is shared by every glyph; the
             // existing SDF normal supplies the changing highlight shape.
-            // Build #94.1 experiment: broaden the dielectric reflection slightly
-            // and lift its energy enough to read beside the existing area-light
-            // highlights. Compare against #94 and the accepted #93 baseline.
-            float glassPbrRoughness = 0.30;
+            // Build #104: tighten the dielectric lobe slightly so its existing
+            // convex-surface reflection reads as a cleaner glass highlight. Keep
+            // the change confined to this shared GGX material response; do not
+            // increase diffusion, bloom, or wallpaper colour mixing.
+            float glassPbrRoughness = 0.28;
             float glassPbrAlpha = glassPbrRoughness * glassPbrRoughness;
             float glassPbrAlphaSquared = glassPbrAlpha * glassPbrAlpha;
             float glassPbrNdotH = max(
@@ -1290,7 +1291,7 @@ class LiquidWallpaperRenderer(
                 0.42
             );
             colour += glassPbrReflectionTint *
-                glassPbrSpecular * (1.0 - solidMode) * 0.24;
+                glassPbrSpecular * (1.0 - solidMode) * 0.26;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
 
