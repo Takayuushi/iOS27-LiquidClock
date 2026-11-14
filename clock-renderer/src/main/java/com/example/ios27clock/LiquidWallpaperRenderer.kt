@@ -286,9 +286,10 @@ class LiquidWallpaperRenderer(
             // complements the broad wallpaper-driven area reflection.
             // A single dielectric roughness is shared by every glyph; the
             // existing SDF normal supplies the changing highlight shape.
-            // Build #94 experiment: compare this lobe against the #93 area-light
-            // and directional-occlusion checkpoint before promoting any values.
-            float glassPbrRoughness = 0.24;
+            // Build #94.1 experiment: broaden the dielectric reflection slightly
+            // and lift its energy enough to read beside the existing area-light
+            // highlights. Compare against #94 and the accepted #93 baseline.
+            float glassPbrRoughness = 0.30;
             float glassPbrAlpha = glassPbrRoughness * glassPbrRoughness;
             float glassPbrAlphaSquared = glassPbrAlpha * glassPbrAlpha;
             float glassPbrNdotH = max(
@@ -1205,7 +1206,7 @@ class LiquidWallpaperRenderer(
             colour += float3(0.94, 0.98, 1.0) *
                 glassMicroGlint * (1.0 - solidMode) * 0.22;
             colour += float3(0.92, 0.97, 1.0) *
-                glassPbrSpecular * (1.0 - solidMode) * 0.16;
+                glassPbrSpecular * (1.0 - solidMode) * 0.24;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
 
