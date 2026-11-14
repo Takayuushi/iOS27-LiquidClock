@@ -857,8 +857,19 @@ class LiquidWallpaperRenderer(
             // microfacet sample preserves the local orange/blue light path.
             // This avoids the colour wash from a blur-only target and avoids
             // the overly sharp direct-only result.
-            float3 glassDiffuseTransport = mix(
+            // Carry the detected warm environmental energy into the
+            // broad diffuse pass as well as the local volume-scatter pass.
+            // This gives orange/amber light a softer spatial contribution
+            // through the body instead of concentrating it at the microfacet
+            // sampling locations. The gate is derived from sampled wallpaper
+            // chroma, so blue and neutral environments retain their balance.
+            float3 warmAtmosphericTransport = mix(
                 glassAtmosphere,
+                warmLightTransport,
+                warmLightPresence * 0.30
+            );
+            float3 glassDiffuseTransport = mix(
+                warmAtmosphericTransport,
                 microfacetTransmission,
                 0.18
             );
