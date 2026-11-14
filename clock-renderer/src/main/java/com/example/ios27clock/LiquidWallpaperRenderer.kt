@@ -467,38 +467,6 @@ class LiquidWallpaperRenderer(
                 blurE + blurF + blurG + blurH
             ) * 0.125;
 
-            // Liquid Glass uses a two-scale, colour-preserving transport kernel.
-            // The inner cross samples soften narrow rails without erasing their
-            // colour; the existing wide ring carries the broader atmospheric
-            // glow. Keep the original frostedWallpaper untouched for Solid.
-            float2 glassNearX = float2(28.0, 0.0);
-            float2 glassNearY = float2(0.0, 28.0);
-            float3 glassNearA = uWallpaper.eval(clamp(
-                samplePoint + glassNearX, float2(0.0), uResolution
-            )).rgb;
-            float3 glassNearB = uWallpaper.eval(clamp(
-                samplePoint - glassNearX, float2(0.0), uResolution
-            )).rgb;
-            float3 glassNearC = uWallpaper.eval(clamp(
-                samplePoint + glassNearY, float2(0.0), uResolution
-            )).rgb;
-            float3 glassNearD = uWallpaper.eval(clamp(
-                samplePoint - glassNearY, float2(0.0), uResolution
-            )).rgb;
-            float3 glassNearTransport = (
-                glassNearA + glassNearB + glassNearC + glassNearD
-            ) * 0.25;
-            // Blend the integrated ray path into the broad atmosphere.
-            // This adds depth-dependent colour transport without a digit-
-            // specific mask or a screen-space glow overlay.
-            float3 glassAtmosphere = clamp(
-                glassRayTransmission * 0.34 +
-                    center * 0.10 +
-                    glassNearTransport * 0.26 +
-                    frostedWallpaper * 0.30,
-                0.0,
-                1.0
-            );
             // Extract bright energy before averaging so bright wallpaper bands
             // create a soft, low-frequency glow through the glass instead of
             // remaining only as sharp refracted lines.
@@ -626,6 +594,41 @@ class LiquidWallpaperRenderer(
                 max(diffusionGradientLength, 0.0001);
             float wallpaperContrast = sqrt(max(tensorLambda, 0.0));
             float bandContrast = smoothstep(0.08, 0.55, wallpaperContrast);
+
+            // Rotate the short-range atmospheric kernel to the local wallpaper
+            // structure. The principal tensor axis follows the strongest
+            // colour-edge normal; its perpendicular follows the band itself.
+            // This keeps the same material response coherent on diagonal,
+            // vertical, horizontal and irregular wallpapers without any
+            // digit-, clock-time- or screen-region-specific rules.
+            float2 diffusionTangent = float2(-diffusionAxis.y, diffusionAxis.x);
+            float2 glassNearX = diffusionAxis * 28.0;
+            float2 glassNearY = diffusionTangent * 28.0;
+            float3 glassNearA = uWallpaper.eval(clamp(
+                samplePoint + glassNearX, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearB = uWallpaper.eval(clamp(
+                samplePoint - glassNearX, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearC = uWallpaper.eval(clamp(
+                samplePoint + glassNearY, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearD = uWallpaper.eval(clamp(
+                samplePoint - glassNearY, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearTransport = (
+                glassNearA + glassNearB + glassNearC + glassNearD
+            ) * 0.25;
+            // Blend direct refracted light, adaptive near-field diffusion and
+            // broad atmosphere into one shared optical transport target.
+            float3 glassAtmosphere = clamp(
+                glassRayTransmission * 0.34 +
+                    center * 0.10 +
+                    glassNearTransport * 0.26 +
+                    frostedWallpaper * 0.30,
+                0.0,
+                1.0
+            );
             // Diffuse across (not along) high-contrast wallpaper bands.
             // The larger footprint merges paired streaks into a continuous
             // glass volume, while low-contrast areas retain sharper detail.
@@ -841,7 +844,7 @@ class LiquidWallpaperRenderer(
                 mix(
                     microfacetTransmission,
                     warmLightTransport,
-                    warmLightPresence * 0.42
+                    warmLightPresence * 0.30
                 ) * 1.10 +
                     float3(0.016, 0.020, 0.028),
                 0.0,
