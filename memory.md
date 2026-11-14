@@ -856,6 +856,14 @@ Changes:
 - Explicit checks confirmed the `solidWarp`, `solidMode` material selection, Frosted/Solid path, and existing bloom expression remain unchanged. Only the Liquid Glass final transport expressions were modified.
 - #70 CI runs: Digit Lab `43560936211`; Production `43560936188`; both queued when this note was written. Wait for successful completion and inspect the resulting APK artifact before sharing.
 
+### Production comparison #70 and wider-scattering pass #71 (14 Nov 2026)
+- User tested the production app and Digit Lab with the same shared renderer. The production Font & Color screen shows 10:56 while Digit Lab shows 10:47; the material response itself is essentially the same. Production colour tint/scattering can mask the material slightly but does not fix the underlying optical response.
+- User's production screenshot confirms the shared renderer issue: `0` and `1` still show conspicuous distorted black/white rails rather than soft continuous in-volume blending; `4` remains the most convincing digit, with some haze but not the soft natural body of the iOS reference. The same material response is visible on additional glyphs (`5`, `6`), confirming it is not a per-digit mask issue.
+- Digit Lab #70 and Production #347 from `2767e7643e75a25571ce11777d5632ae015f198a` both succeeded (runs `43560936211` and `43560936188`). #70 lowered the microfacet share in final diffuse transport from 40% to 22% and increased atmospheric scatter to 58–70%; this was a controlled but insufficient step.
+- #71 commit `f2b0de555a6cd1292ad6918f90f2c4e217dc93ce` expands the spatial footprint of Liquid Glass diffusion: broad blur radius 44→62px and directional cross-band radius 24–34→30–42px. This targets the remaining paired black/white rails by averaging across a wider neighbourhood, not by adding arbitrary brightness or glyph-specific tint.
+- Solid/Frosted Glass protection checked before commit: the blur radius still resolves to exactly 38px at `solidMode == 1`; Solid warp, face selection and opacity/material selection remain intact. No Solid/Frosted shader contribution was intentionally changed.
+- #71 CI runs: Digit Lab `43561850509`; Production `43561850484`; queued when recorded. Await successful completion and on-device visual validation before judging the wider diffusion.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
