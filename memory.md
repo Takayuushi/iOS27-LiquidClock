@@ -1516,3 +1516,15 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is an experimental reflection refinement, not yet visually validated. Compare #102 with #101 and accepted #93 at identical settings (weight 539, compressed width, 10:47 and same placement) on the blue/orange diagonal, pink beach, and red nebula wallpapers.
 - Acceptance checks: sharper but restrained shoulder reflections; preserve broad central-face reflections, orange colour in the lower 0 and 1, crisp black/white band separation, and fine wallpaper detail; no white rails, clipped highlights, metallic/plastic appearance, or loss of transmission.
 - Do not promote #102 until both APK workflows complete and the user reviews the three-wallpaper comparison. Build #93 remains the accepted baseline.
+
+## Build #103 candidate — clear convex face and broad reflection (14 Nov 2026)
+- Branch: `feature/cryengine-hdr-detail-101`; continued in place from Build #102.
+- Renderer commit: `520fbe77a5501b718b85e5aadfa15de67d4198f3`.
+- Reduces microfacet diffusion from 0.30–0.76 to 0.20–0.56, retaining more direct refracted wallpaper detail and reducing merging of closely spaced black/white or warm/cool bands.
+- Reduces broad atmospheric scattering from 0.58–0.42 to 0.42–0.30 and atmospheric bloom from 0.22–0.30 to 0.16–0.22. This specifically targets the hazy appearance in the lower portions of 0 and 1 without removing the existing volume/refraction model.
+- Adds a restrained 0.065 maximum broad convex-face reflection lobe, gated by surface slope, profile coverage, normal confidence, bright-transmission protection and `(1.0 - solidMode)`. It reuses the existing chromatic environment reflection; no additional texture reads or uniforms.
+- Existing #102 shoulder reflection remains. No changes to the SDF, glyph geometry, Snell refraction, ray integration, wallpaper sampling, or Frosted Glass material path.
+- Build #102 workflows completed successfully: Digit Lab #108 and Android #389. Their artifacts were present and unexpired at validation time.
+- Build #103 is an experimental candidate, not yet visually validated. Compare against #102 at weight 539, compressed width, sample 10:47 and identical placement on blue/orange diagonal, pink beach and red nebula wallpapers.
+- Acceptance: clearer wallpaper detail through the lower 0/1; amber/orange remains saturated but not painted on; white/black rails remain distinguishable; broad curved face reads as glass without a flat white veil; no plastic/metallic sheen, harsh outline, or regressions in Frosted Glass.
+- Keep #93 as the accepted baseline until the user evaluates #103. Do not promote based on shader logic alone.
