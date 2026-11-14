@@ -836,6 +836,14 @@ Changes:
 - Candidate CI from `7d98ec2`: Digit Lab #67 run `43557969174`; Production #343 run `43557969049`; both started on the same commit and were in progress at note time.
 - Visual hypothesis pending: stronger broad fallback should further merge upper-`0` paired bands while retaining orange/blue hue. Check whether `1` gets any better response where high-contrast wallpaper crosses its stroke; `4`/`7` must not become washed out. If `1` stays unchanged, next inspect shared low-slope chromatic reflection and interior light pickup rather than adding more general blur.
 
+### Digit Lab #67 review and stronger #68 candidate (14 Nov 2026)
+- User supplied `/mnt/data/283979.jpg` as Digit Lab #67. Compared the clock crop against `/mnt/data/283972.jpg` (#66) at identical dimensions. Side-by-side crop shows no meaningful perceptual improvement: the clock is effectively visually identical; any difference is too subtle to count as a useful build-to-build gain. #67 did not visibly resolve the upper paired white rails in `0` or add the missing warm light transport in `1`.
+- #67 build succeeded: Digit Lab run `43557969174`, artifact `14098739656`; Production #343 run `43557969049`; both use commit `7d98ec2005abf576c87198521fca3b7b7b51ade9`.
+- #67 shader's stronger fallback did not create visible impact. Likely the previous 52% isotropic fallback / 46% directional cap is still too conservative once combined with existing transport and final haze. Avoid claiming a visible gain without a real side-by-side result.
+- New #68 renderer candidate commit `764af2b3a301608ae8491a82a3a7fc0c5e2c82aa` — “Strengthen paired-band haze for clearer liquid-glass blending”: increase isotropic fallback's broad wallpaper blend from 52% to 62%; reduce high-contrast directional contribution cap from 46% to 32%. This is intended to produce a clearly testable difference in cross-band blending, not another imperceptible micro-adjustment.
+- #68 preserves 4px tensor probe, 24–34px sampling radius, existing haze/bloom, external light wrap, Solid/Frosted separation, and glyph-independent image-driven behavior. Static validation passed. This stronger move carries some risk of over-softening / colour wash; assess orange/blue saturation and `4`/`7` sharpness carefully. If it washes out, roll back rather than stacking more blur.
+- Candidate #68 CI should be started automatically by the push; record actual Digit Lab/Production run IDs and completion status before sharing artifacts.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
