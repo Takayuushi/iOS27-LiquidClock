@@ -286,6 +286,7 @@ class LiquidWallpaperRenderer(
             // existing convex SDF normal against both broad light directions
             // so the shadowed shoulder responds to key and fill illumination,
             // rather than behaving like a single fixed dark outline.
+            // This is a local SDF approximation, not a scene-depth pass.
             float glassKeySideOcclusion = max(
                 -dot(glassSurfaceNormal.xy, keyLight3D.xy),
                 0.0
