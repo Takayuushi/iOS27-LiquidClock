@@ -247,7 +247,8 @@ class LiquidWallpaperRenderer(
             float3 fillLight3D = normalize(float3(0.62, 0.46, 0.64));
             float3 viewDirection3D = float3(0.0, 0.0, 1.0);
             float3 keyHalfVector = normalize(keyLight3D + viewDirection3D);
-            float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);            float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
+            float3 fillHalfVector = normalize(fillLight3D + viewDirection3D);
+            float keyDiffuse3D = max(dot(glassSurfaceNormal, keyLight3D), 0.0);
             float fillDiffuse3D = max(dot(glassSurfaceNormal, fillLight3D), 0.0);
             // Schlick Fresnel from the actual height-map normal. The face
             // stays transmissive at normal incidence and reflects strongly
@@ -765,7 +766,8 @@ class LiquidWallpaperRenderer(
             // isotropic transport sample when no dominant direction exists.
             // This avoids streaky direction flips without widening the probe
             // or applying a glyph/coordinate-specific correction.
-            float tensorTrace = max(tensorXX + tensorYY, 0.0001);            float tensorCoherence = clamp(
+            float tensorTrace = max(tensorXX + tensorYY, 0.0001);
+            float tensorCoherence = clamp(
                 tensorDiscriminant / tensorTrace,
                 0.0,
                 1.0
@@ -1014,7 +1016,8 @@ class LiquidWallpaperRenderer(
             float legacyFresnel = pow(
                 1.0 - clamp(abs(dot(normal, keyLight)), 0.0, 1.0),
                 2.6
-            ) * edgeBand;            float fresnel = mix(glassVolumeFresnel, legacyFresnel, solidMode);
+            ) * edgeBand;
+            float fresnel = mix(glassVolumeFresnel, legacyFresnel, solidMode);
             float solidSpecular = pow(facing, 3.5) * solidEdge;
             float solidFillSpecular = pow(oppositeFacing, 3.2) * solidEdge;
             float bevelShade = solidBevel * (1.0 - facing) *
@@ -2508,7 +2511,8 @@ class LiquidWallpaperRenderer(
                     best = min(
                         best,
                         distances[index + width].toInt() + SDF_CARDINAL_COST
-                    )                    if (x > 0) {
+                    )
+                    if (x > 0) {
                         best = min(
                             best,
                             distances[index + width - 1].toInt() + SDF_DIAGONAL_COST
