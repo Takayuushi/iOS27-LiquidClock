@@ -96,6 +96,37 @@ jobs:
 
           echo "SF Pro Display Thin and Bold assets downloaded and validated."
 
+      - name: Restore shared Android debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: ios27-liquidclock-shared-debug-signing-v2-${{ github.ref_name }}
+          restore-keys: |
+            ios27-liquidclock-shared-debug-signing-v2-
+
+      - name: Initialise shared Android debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          KEYSTORE="$HOME/.android/debug.keystore"
+          if [[ ! -s "$KEYSTORE" ]]; then
+            echo "No shared signing key found; creating the canonical key on the default branch."
+            keytool -genkeypair -v \\
+              -keystore "$KEYSTORE" \\
+              -storepass android \\
+              -alias androiddebugkey \\
+              -keypass android \\
+              -keyalg RSA \\
+              -keysize 2048 \\
+              -validity 10000 \\
+              -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "Restored the shared Android debug signing key."
+          fi
+          chmod 600 "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass android -alias androiddebugkey
+
       - name: Build debug APK
         shell: bash
         run: |
