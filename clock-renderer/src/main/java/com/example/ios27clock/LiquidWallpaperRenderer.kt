@@ -221,10 +221,45 @@ class LiquidWallpaperRenderer(
                     heightBottomDistance * heightBottomDistance,
                 0.0
             ));
-            float heightGradientX = (heightRight - heightLeft) / 8.5;
-            float heightGradientY = (heightBottom - heightTop) / 8.5;
+            // The central difference is stable at the antialiased silhouette,
+            // but it slightly underestimates the slope across the curved body.
+            // Refine the normal with the analytic derivative of the same convex
+            // height profile, applying the SDF chain rule. This reuses the four
+            // existing distance samples; no extra texture reads are required.
+            float finiteHeightGradientX = (heightRight - heightLeft) / 8.5;
+            float finiteHeightGradientY = (heightBottom - heightTop) / 8.5;
+            float sdfDistanceGradientX = (distanceRight - distanceLeft) / 8.5;
+            float sdfDistanceGradientY = (distanceBottom - distanceTop) / 8.5;
+            float analyticHeightDerivative =
+                (glassProfileRadius - profileDistance) /
+                max(glassHeight, 1.5);
+            float2 analyticHeightGradient = float2(
+                sdfDistanceGradientX * analyticHeightDerivative,
+                sdfDistanceGradientY * analyticHeightDerivative
+            );
+            float analyticHeightGradientLength = length(analyticHeightGradient);
+            analyticHeightGradient *= min(
+                1.0,
+                1.35 / max(analyticHeightGradientLength, 0.0001)
+            );
+            // Retain the filtered finite-difference normal at the very edge,
+            // where the ideal cap derivative approaches a singularity. Move
+            // toward the analytic normal only once the profile has enough
+            // interior support, and keep the approved Solid path unchanged.
+            float glassNormalRefinement = smoothstep(
+                1.5,
+                6.0,
+                profileDistance
+            ) * normalConfidence * (1.0 - solidMode);
+            float2 refinedHeightGradient = mix(
+                float2(finiteHeightGradientX, finiteHeightGradientY),
+                analyticHeightGradient,
+                glassNormalRefinement
+            );
+            float heightGradientX = refinedHeightGradient.x;
+            float heightGradientY = refinedHeightGradient.y;
             float glassProfileSlope = length(
-                float2(heightGradientX, heightGradientY)
+                refinedHeightGradient
             );
             float glassInteriorGate = smoothstep(
                 -0.65,
