@@ -1188,3 +1188,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Scope is deliberately limited to the refracted-ray integration; the rest of the material pipeline is unchanged. Solid/Frosted, typography, layout, UI, gestures, package IDs and signing configuration were not changed.
 - Production run #351 (`43564951548`) and Digit Lab run #74 (`43564951495`) were triggered by this commit and were in progress when recorded. Verify both CI outcomes and artifacts before distributing. The visual impact and S25+ performance are unverified until on-device comparison.
 - Next investigation: profile the shader's per-fragment texture-sample cost and actual frame pacing on the S25+. Compare #73 and this build on the same wallpaper/settings. If performance headroom exists, explore a controlled multi-step volume integration; if not, optimise/reuse samples before increasing ray-march count. Preserve the approved Solid/Frosted path.
+
+## Build #76 candidate — linear-light directional microfacet scattering (2026-11-14)
+- User tested #75 (renderer commit `e53045d`) and judged it an improvement. The #75 screenshot retains stronger glass-like colour and coherent reflections, but the diagonal wallpaper rails remain distinct inside 0/1.
+- #75 CI verification: Production run #351 (`43564951548`) and Digit Lab #74 (`43564951495`) both completed successfully from `e53045d`.
+- Renderer commit `682a0e8deb7a81d1f76b4aea47ea0c80b8672e20` — “Integrate directional glass scattering in linear light”.
+- The structure-tensor-derived cross-band microfacet transport now converts its already-existing centre/near/far wallpaper samples to linear sRGB, applies the existing weighted directional integration in linear light, then converts back. This targets the dark/saturated edge bias that can preserve paired rails when averaging display-encoded values.
+- No extra wallpaper texture samples were added; this is a colour-space correction to samples the shader already evaluates. It should not increase the shader's texture-sampling count.
+- No new volumetric fog, literal global illumination or Vulkan renderer is claimed. This remains an AGSL GPU fragment-shader optical approximation.
+- Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
+- CI for the new candidate should be tracked from commit `682a0e8`; do not report artifact availability until both Production and Digit Lab runs are located, completed successfully and their artifacts are verified.
+- Visual test should compare #76 against #75 on the same diagonal wallpaper and settings. Check whether 0/1 paired rails blend more naturally, while preserving blue/orange chroma and avoiding a cloudy/frosted face. Also check 4/7 highlights and S25+ frame pacing/heat; no additional texture taps were added.
