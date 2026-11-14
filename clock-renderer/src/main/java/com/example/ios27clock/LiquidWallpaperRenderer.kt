@@ -282,8 +282,23 @@ class LiquidWallpaperRenderer(
                 56.0
             ) * smoothstep(0.10, 0.44, glassProfileSlope) *
                 normalConfidence * glassHorizontalHighlight;
-            float glassSideShadow = glassProfileCoverage *
-                max(-dot(glassSurfaceNormal.xy, keyLight3D.xy), 0.0);
+            // SSDO-inspired directional self-occlusion. Evaluate the
+            // existing convex SDF normal against both broad light directions
+            // so the shadowed shoulder responds to key and fill illumination,
+            // rather than behaving like a single fixed dark outline.
+            float glassKeySideOcclusion = max(
+                -dot(glassSurfaceNormal.xy, keyLight3D.xy),
+                0.0
+            );
+            float glassFillSideOcclusion = max(
+                -dot(glassSurfaceNormal.xy, fillLight3D.xy),
+                0.0
+            );
+            float glassDirectionalOcclusion = glassProfileCoverage *
+                max(
+                    glassKeySideOcclusion,
+                    glassFillSideOcclusion * 0.48
+                );
             float outerLip = 1.0 -
                 smoothstep(0.4, 5.5, max(-signedDistance, 0.0));
             float interiorVolume = smoothstep(
@@ -1072,7 +1087,7 @@ class LiquidWallpaperRenderer(
                 1.0
             );
             colour -= float3(0.12, 0.15, 0.22) *
-                glassSideShadow * (1.0 - solidMode) * 0.22;
+                glassDirectionalOcclusion * (1.0 - solidMode) * 0.22;
             colour *= mix(0.985, 1.025, glassLens);
             colour += uAccentColor * fresnel * mix(0.68, 0.15, solidMode);
 
