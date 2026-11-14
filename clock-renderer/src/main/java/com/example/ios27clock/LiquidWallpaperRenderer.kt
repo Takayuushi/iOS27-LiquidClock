@@ -616,9 +616,18 @@ class LiquidWallpaperRenderer(
             float3 glassNearD = uWallpaper.eval(clamp(
                 samplePoint - glassNearY, float2(0.0), uResolution
             )).rgb;
-            float3 glassNearTransport = (
-                glassNearA + glassNearB + glassNearC + glassNearD
-            ) * 0.25;
+            // Use an anisotropic kernel: most of the short-range energy
+            // crosses the dominant wallpaper bands, while a smaller portion
+            // travels along them. This softens black/white band boundaries
+            // without smearing the colour structure into an isotropic blur.
+            // The same tensor-derived orientation and weights apply everywhere.
+            float3 glassCrossBandTransport =
+                (glassNearA + glassNearB) * 0.5;
+            float3 glassAlongBandTransport =
+                (glassNearC + glassNearD) * 0.5;
+            float3 glassNearTransport =
+                glassCrossBandTransport * 0.68 +
+                glassAlongBandTransport * 0.32;
             // Blend direct refracted light, adaptive near-field diffusion and
             // broad atmosphere into one shared optical transport target.
             float3 glassAtmosphere = clamp(
