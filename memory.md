@@ -1491,3 +1491,16 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Compare #100 against #99/#98 and accepted #93 using identical weight (539), compressed width, digits and position on the blue diagonal, pink beach and red nebula wallpapers.
 - Primary checks: preserve crisp black/white band separation and distinct orange/red light in the lower 0 and 1; avoid turning the glass into a flat transparent cutout; retain the shoulder reflections, internal depth, and fine scattering on 4/7. Reject if the narrower kernel creates noisy aliasing, hard rails, or fractured highlights.
 - This candidate is not yet built or visually validated. Do not promote it until the user reviews both APKs and the three-wallpaper comparison. Build #93 remains the accepted baseline.
+
+
+## Build #101 candidate — HDR colour and detail preservation (14 Nov 2026)
+- Branch: `feature/cryengine-hdr-detail-101`, branched directly from Build #100 commit `29b5322b344c43f079901c53c958aa66a7c757a3`.
+- Renderer commit: `8b102b9386c53160722b197631d44a6d11db973e`.
+- This iteration follows the Build #100 screenshot review: fine wallpaper detail is improving, but orange/amber energy remains subdued and the lower portions of 0 and the stem of 1 still look too diffused.
+- Reduces high-contrast atmospheric scatter from 0.80 to 0.42 while keeping low-structure scatter at 0.58, so diffuse environments retain softness but strong wallpaper bands preserve more of their original edge separation.
+- Reduces the broad atmospheric bloom contribution from 0.30–0.38 to 0.22–0.30 to avoid washing orange and black/white details together.
+- Increases the image-gated warm radiance response from 16% to 22% and raises its volume-scatter mix from 42% to 50%. This only responds to warm chroma already sampled from the wallpaper; no fixed orange overlay is introduced.
+- No additional texture reads, uniforms, render passes, glyph-specific rules, dependencies, or changes to the Frosted Glass path.
+- This is an isolated HDR/transmission-balance experiment. Compare #101 with #100 and accepted #93 using identical settings (weight 539, compressed width, 10:47 and same placement) on the blue/orange diagonal, pink beach, and red nebula wallpapers.
+- Acceptance checks: stronger but still natural amber/orange transmission; clearly separated black/white bands through the lower 0 and 1; no flat cutout appearance; preserve broad shoulder reflections, internal depth, fine scattering on 4/7, and the beach's soft pink light.
+- Reject if reduced haze makes the glass look too sharp/plastic, if orange clips or becomes a painted tint, or if any Frosted Glass behaviour changes. Build #93 remains the accepted baseline; #100 is the immediate comparison checkpoint. Candidate not yet visually validated.
