@@ -338,6 +338,40 @@ class LiquidWallpaperRenderer(
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
 
+            // Integrate colour along the refracted ray instead of treating
+            // the glass as a single displaced wallpaper lookup. Three interior
+            // samples approximate a short Beer-Lambert light path through the
+            // convex volume. The path length follows the actual surface slope,
+            // so flat regions stay clear while curved shoulders gain depth.
+            float2 glassRay = glassRefractionOffset;
+            float3 rayQuarter = uWallpaper.eval(clamp(
+                p + glassRay * 0.25,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 rayMiddle = uWallpaper.eval(clamp(
+                p + glassRay * 0.50,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 rayThreeQuarter = uWallpaper.eval(clamp(
+                p + glassRay * 0.75,
+                float2(0.0),
+                uResolution
+            )).rgb;
+            float3 glassRayIntegral = (
+                rayQuarter + rayMiddle * 2.0 + rayThreeQuarter
+            ) * 0.25;
+            float glassRayLength = length(glassRay);
+            float glassOpticalDepth = glassRayLength * 0.0065;
+            float glassRayTransmittance = exp(-glassOpticalDepth);
+            float3 glassRayTransmission = clamp(
+                center * glassRayTransmittance +
+                    glassRayIntegral * (1.0 - glassRayTransmittance),
+                0.0,
+                1.0
+            );
+
             // Reflect the view vector about the same height-map normal.
             // This is a local image-based environment lookup, not an arbitrary
             // mirrored clock-coordinate sample.
@@ -440,10 +474,14 @@ class LiquidWallpaperRenderer(
             float3 glassNearTransport = (
                 glassNearA + glassNearB + glassNearC + glassNearD
             ) * 0.25;
+            // Blend the integrated ray path into the broad atmosphere.
+            // This adds depth-dependent colour transport without a digit-
+            // specific mask or a screen-space glow overlay.
             float3 glassAtmosphere = clamp(
-                center * 0.14 +
-                    glassNearTransport * 0.36 +
-                    frostedWallpaper * 0.50,
+                glassRayTransmission * 0.34 +
+                    center * 0.10 +
+                    glassNearTransport * 0.26 +
+                    frostedWallpaper * 0.30,
                 0.0,
                 1.0
             );
