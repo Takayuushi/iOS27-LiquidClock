@@ -1259,3 +1259,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted, refracted ray integration, warm/cool transport, surface geometry, typography, layout, UI, gestures, package IDs and signing config unchanged.
 - CI for #82 must be checked against exact SHA `7bb77ae1fd52b8a43506b138ab1aa3397f9a940f`; do not reuse #81 run links or report artifacts until verified.
 - Test #82 on both the diagonal blue/orange wallpaper and the flowering-tree sunset/water wallpaper, with at least one different clock string. Check for coherent band blending on the first, preserved foliage detail and natural sky/water response on the second, and unchanged colour/reflection balance.
+
+## Build #82 regression and rollback (2026-11-14)
+- User reported #82 produced completely flat, opaque white clock glyphs in both Liquid Glass and Frosted Glass. Uploaded screenshots `284069.jpg` and `284071.jpg` show the same failure in both material modes: wallpaper visible behind the shapes, but all glass transmission/reflection/bevel response absent.
+- #82 workflow builds both completed successfully, but CI success did not catch the device-side rendering regression. Treat these screenshots as authoritative visual evidence; do not claim the new renderer worked.
+- Rolled the shared renderer file back exactly to validated #81 content from SHA `b000fb73b7d68e69d8a22e5f4e7248298833067d`.
+- Rollback commit: `05ab4c099139a701e02daa064d0d3b56351f6003` — “Restore validated build 81 renderer after build 82 regression”.
+- This rollback restores the shared LiquidWallpaperRenderer.kt; no app IDs, signing config, UI, typography, gestures or Solid/Frosted implementation were intentionally modified.
+- Need verify new rollback Production and Digit Lab workflows against exact rollback SHA `05ab4c099139a701e02daa064d0d3b56351f6003`. Do not reuse #81/#82 run links; only provide new artifacts after checking their SHA, success, and APK availability.
+- Root cause is not confirmed. The #82 code change only altered the anisotropic weights based on tensor coherence, but the device screenshots show both material modes failing. Investigate runtime AGSL shader initialization/compilation and device logs before another renderer experiment. Gradle/CI success is not proof of AGSL runtime shader success.
