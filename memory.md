@@ -1347,3 +1347,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted remains protected by the existing `(1.0 - solidMode)` gate; its specular path is unchanged.
 - Experimental and not yet visually validated. Compare against #88 using identical settings and wallpapers. Check that the new glint reads as a crisp, restrained surface reflection, not a white stroke; reject if it creates sparkle noise, edge tracing, loss of wallpaper colour, or any Solid/Frosted change.
 - No build was triggered automatically. Build #88 remains the accepted visual baseline until the user reviews #89.
+
+
+## Build #92 candidate — CryEngine-inspired environment area-light bounce (14 Nov 2026)
+- Experimental branch `experiment/cryengine-area-light` was created directly from the user-selected #90 baseline commit `13f8718f922966209891e292c02081c053821b55`. The accepted #90 branch/history was not modified.
+- Renderer commit `3dbcf81011e139b057b3341f07fccb4a1f43c216` adds a low-energy colour-bearing environment contribution to the existing broad convex-surface area reflection.
+- The contribution reuses the existing `glassBrightBloom` low-frequency bright wallpaper samples and `directionalEnvironmentReflection`; a luma gate activates it only when nearby wallpaper contains sufficient bright energy. It is multiplied by the existing broad `glassAreaReflection` lobe and gated out entirely for Solid/Frosted.
+- Concept inspired by the CRYENGINE 3 trailer's real-time area lights: the glass surface should reflect a broad local light source with colour borrowed from its environment, rather than relying exclusively on a fixed white softbox.
+- No new texture reads, uniforms, passes, digit-specific rules, or screen-position logic. No changes to refraction, curvature correction, #90 microglint, existing transmission/scattering, typography or layout.
+- Experimental and not visually validated. Compare against #90 with identical wallpaper, weight 539, width, digits, size and placement. Check whether reflections inherit local blue/orange/white light naturally. Reject if the face becomes washed out, too bright, milky, metallic, or loses wallpaper transparency. Also compare Solid/Frosted to ensure the path remains unchanged.
+- This is the first of separate CryEngine-inspired experiments; do not stack volumetric scattering changes into this build. Both Android and Digit Lab workflows should build automatically and must be verified against this commit SHA.
