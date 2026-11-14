@@ -1356,3 +1356,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - No changes to refraction, curvature correction, colour transport, broad reflection, key/fill glints, typography, controls or layout. Solid/Frosted remains excluded through the existing `(1.0 - solidMode)` gate.
 - Experimental and not yet visually validated. Compare #90 against #88/#89 with identical wallpaper, digits, font width, weight, size and placement. Keep only if it creates a visible but restrained glass glint without becoming a continuous white edge, metallic shine or embossed stroke. Reject if it reduces wallpaper colour/transparency or creates noisy highlights.
 - Both APK workflows should be triggered automatically by the renderer commit; verify exact SHA and artifacts before sharing.
+
+
+## Build #91 candidate — refine microglint shoulder transition (14 Nov 2026)
+- Starts from the user-reviewed #90 result at weight 539, renderer commit `13f8718f922966209891e292c02081c053821b55`.
+- Renderer commit `5693611e4b543528e8e8acb260fd558e8a24afec` changes only the new Liquid Glass microglint's surface-slope activation window: `smoothstep(0.10, 0.44, glassProfileSlope)` → `smoothstep(0.16, 0.52, glassProfileSlope)`.
+- Keeps the #90 highlight exponent (56) and strength (0.22) unchanged. The intent is to reduce the microglint contribution on shallow/upper transitions where it can read as haze, while retaining the same peak on more clearly curved shoulders. The smoothstep still fades it continuously rather than cutting it off.
+- No changes to refraction, curvature correction, wallpaper colour transport, broad area reflection, existing key/fill glints, typography, controls or layout. Solid/Frosted remains excluded by `(1.0 - solidMode)`.
+- Experimental and not visually validated. Compare #91 to #90 at identical weight (539), font width, wallpaper, digits, size and placement. Keep only if the upper haze is reduced while curved shoulder sparkle and natural band blending remain. Reject if the highlight becomes patchy, discontinuous, too narrow, or loses the #90 improvement.
+- Trigger both Android and Digit Lab APK workflows automatically for this renderer commit and verify the exact SHA/artifacts.
