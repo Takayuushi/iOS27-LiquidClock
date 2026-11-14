@@ -652,10 +652,26 @@ class LiquidWallpaperRenderer(
                 float2(0.0),
                 uResolution
             )).rgb;
-            float3 microfacetTransmission =
-                center * 0.08 +
-                (softNearA + softNearB) * 0.24 +
-                (softFarA + softFarB) * 0.22;
+            // Integrate the directional microfacet bundle in linear light
+            // as well. These four samples are the main cross-band transport
+            // that turns narrow wallpaper rails into a continuous glass body.
+            // Averaging display-encoded RGB here biases the result toward dark,
+            // saturated edges and can leave the rails visually separated.
+            float3 microfacetTransmissionLinear =
+                centerLinear * 0.08 +
+                (
+                    toLinearSrgb(softNearA) +
+                    toLinearSrgb(softNearB)
+                ) * 0.24 +
+                (
+                    toLinearSrgb(softFarA) +
+                    toLinearSrgb(softFarB)
+                ) * 0.22;
+            float3 microfacetTransmission = clamp(
+                fromLinearSrgb(microfacetTransmissionLinear),
+                0.0,
+                1.0
+            );
 
             // The structure-tensor eigenvector is reliable for a single,
             // coherent band direction, but becomes unstable at crossings,
