@@ -1279,3 +1279,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - No changes to Solid/Frosted source path, refracted ray integration, linear-light transport, warm/cool balance, geometry, typography, UI, gestures, app IDs or signing.
 - CI run IDs: Digit Lab #84 (`43571964236`) and Production #361 (`43571964259`), queued at time of commit inspection. Verify completion and exact SHA before providing artifact links.
 - Test both materials immediately on-device before evaluating subtle visual changes. If either material loses its shader response, stop and revert to the exact #81 rollback renderer. Compare against #81 on both known wallpapers, plus a different clock string.
+
+## Build #85 candidate — restrained anisotropic weighting refinement (2026-11-14)
+- User confirmed #84 preserves the optical work and both materials behave naturally across the blue diagonal and orange-liquid wallpapers; a different clock composition was also tested. #84 is the current validated baseline.
+- #84 CI verified: Digit Lab run #84 (`43571964236`) and Production run #361 (`43571964259`) both completed successfully from exact SHA `dff6fd745d93c11ef3f992aafac8bc3011aaacc1`.
+- Renderer commit `561abefe4a8c1a7c2cbeb86e1bb6b11c7b4b281d` — “Refine adaptive cross-band glass diffusion”.
+- One scalar-only refinement to the validated #84 kernel: cross-band weight changes from `mix(0.50, 0.68, bandContrast)` to `mix(0.52, 0.70, bandContrast)`; along-band remains the complement. This is a small 2-percentage-point increase at both ends, preserving the same adaptive relationship and existing scalar.
+- No new AGSL expressions beyond the existing simple mix, no new uniforms, texture reads, render passes, or dependencies. No digit/time/screen-region/wallpaper-specific rules.
+- Solid/Frosted source path, all ray integration and colour transport, geometry, typography, UI, gestures, app IDs and signing unchanged.
+- Digit Lab run #85 (`43574127155`) is queued and matches exact renderer SHA `561abefe4a8c1a7c2cbeb86e1bb6b11c7b4b281d`. Production workflow not yet visible at time of note. Verify both before providing APKs; no build artifact claimed yet.
+- On-device validation must begin with checking Liquid Glass and Frosted Glass still render, then compare the blue diagonal and orange-liquid wallpapers with the same clock string/settings as #84. Look for slightly improved band blending without detail loss, colour shift or altered Frosted appearance. If there is no visible benefit or any regression, revert to #84.
