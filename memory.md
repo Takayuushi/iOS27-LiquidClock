@@ -1347,3 +1347,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted remains protected by the existing `(1.0 - solidMode)` gate; its specular path is unchanged.
 - Experimental and not yet visually validated. Compare against #88 using identical settings and wallpapers. Check that the new glint reads as a crisp, restrained surface reflection, not a white stroke; reject if it creates sparkle noise, edge tracing, loss of wallpaper colour, or any Solid/Frosted change.
 - No build was triggered automatically. Build #88 remains the accepted visual baseline until the user reviews #89.
+
+
+## Build #90 candidate — more perceptible microfacet sparkle (14 Nov 2026)
+- Starts from the user-reviewed #89 candidate, renderer commit `700e65a0de1bcee3a2d3a0bb5feb0308fc22f3c0`.
+- Renderer commit `13f8718f922966209891e292c02081c053821b55` changes only the new Liquid Glass microfacet highlight: exponent 68 → 56 and output strength 0.14 → 0.22.
+- The broader lobe should make the specular sparkle more visible while retaining the same convex-normal, shoulder-slope, normal-confidence and horizontal-shoulder gates. It remains a geometry-driven highlight shared by all glyphs.
+- No changes to refraction, curvature correction, colour transport, broad reflection, key/fill glints, typography, controls or layout. Solid/Frosted remains excluded through the existing `(1.0 - solidMode)` gate.
+- Experimental and not yet visually validated. Compare #90 against #88/#89 with identical wallpaper, digits, font width, weight, size and placement. Keep only if it creates a visible but restrained glass glint without becoming a continuous white edge, metallic shine or embossed stroke. Reject if it reduces wallpaper colour/transparency or creates noisy highlights.
+- Both APK workflows should be triggered automatically by the renderer commit; verify exact SHA and artifacts before sharing.
