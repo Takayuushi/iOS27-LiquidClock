@@ -1199,6 +1199,69 @@ class LiquidWallpaperRenderer(
                 glassAreaReflection *
                 glassAreaSourcePresence *
                 (1.0 - solidMode) * 0.16;
+
+            // Build #95: geometry-driven caustic-like focusing. The convex
+            // height field already provides a local curvature estimate; project
+            // its curvature onto both light directions to approximate where
+            // refracted energy concentrates along the glass shoulder.
+            // Reuse existing wallpaper environment samples as the light source:
+            // no extra texture reads, render passes, uniforms or digit masks.
+            float keyCausticCurvature = abs(
+                glassCurvatureX * keyLight3D.x * keyLight3D.x +
+                glassCurvatureY * keyLight3D.y * keyLight3D.y
+            );
+            float fillCausticCurvature = abs(
+                glassCurvatureX * fillLight3D.x * fillLight3D.x +
+                glassCurvatureY * fillLight3D.y * fillLight3D.y
+            );
+            float glassCausticCurvature = max(
+                keyCausticCurvature,
+                fillCausticCurvature * 0.58
+            );
+            float glassCausticCurvatureResponse = smoothstep(
+                0.012,
+                0.060,
+                glassCausticCurvature
+            );
+            // Restrict concentration to the rounded shoulder transition.
+            // This avoids a broad luminous wash across the flat glass crown.
+            float glassCausticShoulder = smoothstep(
+                0.08,
+                0.30,
+                glassProfileSlope
+            ) * (1.0 - smoothstep(0.78, 1.18, glassProfileSlope));
+            float glassCausticFacing = max(
+                keyDiffuse3D,
+                fillDiffuse3D * 0.48
+            );
+            float glassCausticFocus = glassCausticCurvatureResponse *
+                glassCausticShoulder *
+                glassProfileCoverage *
+                normalConfidence *
+                smoothstep(0.10, 0.46, glassCausticFacing);
+            float3 glassCausticSource = mix(
+                directionalEnvironmentReflection,
+                glassBrightBloom,
+                0.62
+            );
+            float glassCausticSourceLuma = dot(
+                glassCausticSource,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float glassCausticSourcePresence = smoothstep(
+                0.045,
+                0.28,
+                glassCausticSourceLuma
+            );
+            // A low-energy, colour-preserving focal highlight. It is deliberately
+            // not a white bloom: warm and cool wallpaper light remain distinct.
+            colour += clamp(
+                glassCausticSource * 1.12 + float3(0.006, 0.008, 0.012),
+                0.0,
+                1.0
+            ) * glassCausticFocus *
+                glassCausticSourcePresence *
+                (1.0 - solidMode) * 0.075;
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.28;
             colour += float3(0.68, 0.82, 1.0) *
