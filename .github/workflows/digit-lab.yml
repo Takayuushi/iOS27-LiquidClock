@@ -51,11 +51,13 @@ jobs:
           gradle-version: '9.6.1'
       - name: Prepare official SF Pro clock font assets
         run: bash .github/scripts/prepare-digit-lab-fonts.sh
-      - name: Restore persistent Digit Lab debug signing key
+      - name: Restore shared Android debug signing key
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: digit-lab-debug-signing-${{ github.ref_name }}-v1
+          key: ios27-liquidclock-shared-debug-signing-v2-${{ github.ref_name }}
+          restore-keys: |
+            ios27-liquidclock-shared-debug-signing-v2-
 
       - name: Initialise persistent Digit Lab debug signing key
         shell: bash
@@ -64,7 +66,7 @@ jobs:
           mkdir -p "$HOME/.android"
           KEYSTORE="$HOME/.android/debug.keystore"
           if [[ ! -s "$KEYSTORE" ]]; then
-            echo "No saved Digit Lab signing key found; creating this branch's stable key."
+            echo "No shared signing key found; creating a fallback key for this branch."
             keytool -genkeypair -v \
               -keystore "$KEYSTORE" \
               -storepass android \
@@ -75,7 +77,7 @@ jobs:
               -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           else
-            echo "Restored the existing Digit Lab signing key."
+            echo "Restored the shared Android debug signing key."
           fi
           chmod 600 "$KEYSTORE"
           keytool -list -keystore "$KEYSTORE" -storepass android -alias androiddebugkey
