@@ -866,7 +866,7 @@ class LiquidWallpaperRenderer(
             float3 warmAtmosphericTransport = mix(
                 glassAtmosphere,
                 warmLightTransport,
-                warmLightPresence * 0.30
+                warmLightPresence * 0.42
             );
             float3 glassDiffuseTransport = mix(
                 warmAtmosphericTransport,
