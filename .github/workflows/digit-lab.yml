@@ -2,7 +2,7 @@ name: Liquid Clock Digit Lab APK
 
 on:
   push:
-    branches: ['feature/**']
+    branches: ['feature/**', 'experiment/**']
     paths:
       - 'clock-renderer/**'
       - 'digit-lab/app/src/main/java/com/example/ios27clock/DigitLabActivity.kt'
