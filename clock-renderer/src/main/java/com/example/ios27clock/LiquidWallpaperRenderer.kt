@@ -621,21 +621,13 @@ class LiquidWallpaperRenderer(
             // travels along them. This softens black/white band boundaries
             // without smearing the colour structure into an isotropic blur.
             // The same tensor-derived orientation and weights apply everywhere.
-            float tensorCoherence = clamp(
-                tensorDiscriminant /
-                    max(tensorXX + tensorYY, 0.0001),
-                0.0,
-                1.0
-            );
-            float crossBandWeight = mix(0.50, 0.72, tensorCoherence);
-            float alongBandWeight = 1.0 - crossBandWeight;
             float3 glassCrossBandTransport =
                 (glassNearA + glassNearB) * 0.5;
             float3 glassAlongBandTransport =
                 (glassNearC + glassNearD) * 0.5;
             float3 glassNearTransport =
-                glassCrossBandTransport * crossBandWeight +
-                glassAlongBandTransport * alongBandWeight;
+                glassCrossBandTransport * 0.68 +
+                glassAlongBandTransport * 0.32;
             // Blend direct refracted light, adaptive near-field diffusion and
             // broad atmosphere into one shared optical transport target.
             float3 glassAtmosphere = clamp(
