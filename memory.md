@@ -844,6 +844,12 @@ Changes:
 - #68 preserves 4px tensor probe, 24–34px sampling radius, existing haze/bloom, external light wrap, Solid/Frosted separation, and glyph-independent image-driven behavior. Static validation passed. This stronger move carries some risk of over-softening / colour wash; assess orange/blue saturation and `4`/`7` sharpness carefully. If it washes out, roll back rather than stacking more blur.
 - Candidate #68 CI should be started automatically by the push; record actual Digit Lab/Production run IDs and completion status before sharing artifacts.
 
+### Digit Lab #68 visual review and #69 candidate (14 Nov 2026)
+- User supplied `/mnt/data/283982.jpg` for #68. Compared the clock crop directly against #67 `/mnt/data/283979.jpg` at identical dimensions. #68 is still a small rather than decisive visual gain: user correctly noticed a little more yellow/orange energy entering the `0`; the paired white rails in `0` remain too distinct, `1` still does not blend orange/white light naturally, and `4`/`7` do not yet show the broad soft atmospheric haze of the iOS reference. Do not oversell #68.
+- #68 Digit Lab run `43558588630` and Production run `43558588619` both completed successfully on commit `764af2b3a301608ae8491a82a3a7fc0c5e2c82aa`. Artifact `14099081651` (`liquid-clock-digit-lab-debug`, 9.6 MB) was downloaded and confirmed to contain `app-debug.apk`.
+- #69 candidate commit `b6b95e89a133923292e3fb34f781f98de27a74f4` — “Increase colour-bearing atmospheric glass transport”. The #68 final glass transport path mixed only 32% of cross-band microfacet transmission into broad diffuse transport and atmospheric scatter ranged 0.46–0.58. #69 raises those to 40% and 0.52–0.66 respectively, while keeping bloom unchanged. This is a shared image-driven shader response, not digit-specific tuning. Aim: move more warm/cool colour through the full digit body while softening paired rails; watch for colour wash and loss of edge definition.
+- #69 CI: Digit Lab run `43559669827`; Production run `43559669792`; both were `in_progress` at the time of this note. Check their final status and artifact before sharing.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
