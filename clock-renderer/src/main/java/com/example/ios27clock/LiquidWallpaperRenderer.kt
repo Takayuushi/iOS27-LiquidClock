@@ -625,9 +625,16 @@ class LiquidWallpaperRenderer(
                 (glassNearA + glassNearB) * 0.5;
             float3 glassAlongBandTransport =
                 (glassNearC + glassNearD) * 0.5;
+            // Keep the #81 anisotropic kernel as the stable fallback,
+            // and adapt its directional strength using bandContrast, an
+            // already-computed and already-used scalar. This avoids adding
+            // another tensor-derived expression to the AGSL program while
+            // still easing toward isotropic diffusion in low-structure areas.
+            float crossBandWeight = mix(0.50, 0.68, bandContrast);
+            float alongBandWeight = 1.0 - crossBandWeight;
             float3 glassNearTransport =
-                glassCrossBandTransport * 0.68 +
-                glassAlongBandTransport * 0.32;
+                glassCrossBandTransport * crossBandWeight +
+                glassAlongBandTransport * alongBandWeight;
             // Blend direct refracted light, adaptive near-field diffusion and
             // broad atmosphere into one shared optical transport target.
             float3 glassAtmosphere = clamp(
