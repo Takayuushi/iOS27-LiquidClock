@@ -1158,3 +1158,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 ### Required wording for future handovers
 - Say **“official Apple SF Pro variable font and Display faces, extracted from Apple's SF-Pro.dmg”**.
 - Never say or imply “GitHub font” when referring to the current production or Digit Lab font.
+
+
+### Digit Lab #72 candidate — two-scale colour transport (14 Nov 2026)
+- After the user tested #71, the visible issue remained: Liquid Glass still transmits narrow paired wallpaper rails too sharply, especially through `0` and `1`; the `4` and `7` show more haze but still lack the reference's naturally blended optical volume.
+- Renderer commit `9eac57580b6519a9c9bebbab87ea97dcfbd7be86` — “Add two-scale colour transport for Liquid Glass”.
+- Replaced the single-radius-only Glass atmospheric target with a colour-preserving two-scale kernel: centre sample 14%, four 28px cross samples 36%, and existing 62px eight-direction ring 50%. This should merge close rails while carrying orange/blue/white colour into the body instead of applying a white veil.
+- Liquid Glass isotropic fallback now blends 72% toward this two-scale atmosphere; its broad diffuse transport uses 18% microfacet contribution; atmospheric scatter increases from 58–70% to 68–80%, still gated by image contrast and the shared glass-volume mask.
+- **Solid/Frosted is protected:** the original `frostedWallpaper` ring, 38px blur selection, `solidWarp`, face path, opacity and all Solid-only lighting remain unchanged. The new four-sample kernel is consumed only by Liquid Glass expressions.
+- No glyph-specific corrections, digit geometry, font, weight/width, tracking, layout, colour picker, UI, wallpaper/depth or gesture behaviour was changed.
+- This commit is a test candidate, not a verified visual improvement. The feature-branch push should trigger the existing Digit Lab and Production workflows. Wait for both CI runs to finish and inspect the Digit Lab artifact before calling the build ready; then compare #72 with #71 using the same diagonal wallpaper and the original iOS reference. Watch especially for improved blending in `0` and `1`, retained warm/cool saturation, and no washed-out/frosted appearance in `4` and `7`.
