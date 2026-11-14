@@ -977,6 +977,11 @@ class LiquidWallpaperRenderer(
                 screenedGlassFace,
                 glassBounceStrength
             );
+            // Keep the direct wallpaper transmission separate from the
+            // subsequent in-volume scattering and atmospheric light layers.
+            // Ray-map convergence should focus the refracted image, not the
+            // diffuse/scattered energy that softens its fine white highlights.
+            float3 glassUnscatteredTransmission = glassTransmitted;
             // Preserve the directional, colour-bearing microfacet scatter:
             // it carries the wallpaper's local orange/blue light through the
             // glass instead of replacing it with an over-averaged grey/blue wash.
@@ -1074,9 +1079,21 @@ class LiquidWallpaperRenderer(
                 glassRayConcentration,
                 glassRayEnergyFocus
             );
+            // Apply the Jacobian gain only to the direct transmitted
+            // wallpaper component. Preserve the signed scattering residual
+            // (volume scatter, atmospheric haze and bloom) at its prior energy.
+            // This prevents ray convergence from swallowing the soft white
+            // scattering that gives curved glass its luminous body.
+            float3 glassScatteringResidualLinear =
+                toLinearSrgb(glassTransmitted) -
+                toLinearSrgb(glassUnscatteredTransmission);
+            float3 glassFocusedTransmissionLinear =
+                toLinearSrgb(glassUnscatteredTransmission) *
+                glassRayEnergyGain;
             glassTransmitted = clamp(
                 fromLinearSrgb(clamp(
-                    toLinearSrgb(glassTransmitted) * glassRayEnergyGain,
+                    glassFocusedTransmissionLinear +
+                        glassScatteringResidualLinear,
                     0.0,
                     1.0
                 )),
