@@ -1477,3 +1477,17 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is an isolated optical energy-balance experiment, not yet visually validated. Compare #99 against #98, #97, and the protected #93 baseline with identical weight (539), compressed width, digits and placement on the blue diagonal, pink beach, and red nebula wallpapers.
 - Evaluate whether bright beach/sky and blue-white bands retain detail without losing shoulder reflections; check that dark nebula regions still show useful environmental reflections and that the 0's warm/black/white blending and 1's fine white scattering remain intact.
 - Do not promote #99 unless both APK workflows complete and the same-settings visual comparison shows a clear improvement. Build #93 remains the accepted baseline.
+
+
+## Build #100 — wallpaper-detail preservation in Liquid Glass transmission (14 Nov 2026)
+- Branch: `feature/cryengine-detail-preservation-100`, branched from the Build #99 reflection-balance checkpoint.
+- Renderer commit: `eddca8b409a0ce1c6f96a31da2eb4ecb4a0b0a8a`.
+- Targets the remaining visual weakness identified in the Build #98/#99 screenshot review: wallpaper colour and structure are present, but broad directional transport makes orange/red features and black/white bands merge into soft haze, especially in the lower portions of 0 and through 1.
+- Narrows the broad cross-band diffusion footprint from 30–42px to 18–28px.
+- Increases the direct refracted centre-ray contribution in the linear-light microfacet bundle from 8% to 22%, while proportionally reducing near/far blur-sample weights so the kernel remains normalized.
+- Reduces the final microfacet diffusion blend from 0.42–0.96 to 0.30–0.76, retaining more of the sharper refracted wallpaper detail.
+- Raises the high-contrast directional transport floor from 0.32 to 0.50 so the cross-band material kernel contributes more consistently instead of falling back as heavily to the broad atmospheric target.
+- This is one isolated transmission-detail experiment. No extra texture reads, uniforms, render passes, dependencies, glyph-specific masks, or coordinate-specific rules are added. The existing geometry, refraction, Fresnel, reflections, ray-convergence, scattering, and Frosted Glass material path are otherwise unchanged.
+- Compare #100 against #99/#98 and accepted #93 using identical weight (539), compressed width, digits and position on the blue diagonal, pink beach and red nebula wallpapers.
+- Primary checks: preserve crisp black/white band separation and distinct orange/red light in the lower 0 and 1; avoid turning the glass into a flat transparent cutout; retain the shoulder reflections, internal depth, and fine scattering on 4/7. Reject if the narrower kernel creates noisy aliasing, hard rails, or fractured highlights.
+- This candidate is not yet built or visually validated. Do not promote it until the user reviews both APKs and the three-wallpaper comparison. Build #93 remains the accepted baseline.
