@@ -630,7 +630,7 @@ class LiquidWallpaperRenderer(
             // already-computed and already-used scalar. This avoids adding
             // another tensor-derived expression to the AGSL program while
             // still easing toward isotropic diffusion in low-structure areas.
-            float crossBandWeight = mix(0.50, 0.68, bandContrast);
+            float crossBandWeight = mix(0.52, 0.70, bandContrast);
             float alongBandWeight = 1.0 - crossBandWeight;
             float3 glassNearTransport =
                 glassCrossBandTransport * crossBandWeight +
