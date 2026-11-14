@@ -1199,3 +1199,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
 - CI for the new candidate should be tracked from commit `682a0e8`; do not report artifact availability until both Production and Digit Lab runs are located, completed successfully and their artifacts are verified.
 - Visual test should compare #76 against #75 on the same diagonal wallpaper and settings. Check whether 0/1 paired rails blend more naturally, while preserving blue/orange chroma and avoiding a cloudy/frosted face. Also check 4/7 highlights and S25+ frame pacing/heat; no additional texture taps were added.
+
+## Build #77 candidate — warm environmental light transport (2026-11-14)
+- User reviewed #76 and explicitly confirmed improvement: soft environmental light is now visible inside the 1 for the first time, while the 4 and 7 retained their prior effects. Remaining requested refinement: orange/warm light should scatter more.
+- #76 CI verification: Production run #352 (`43566298293`) and Digit Lab #75 (`43566298286`) both completed successfully from renderer commit `682a0e8`.
+- Renderer commit `fb7f928e452d509b968a1140dd1e1ad0a40958e0` — “Preserve warm environmental light in glass scattering”.
+- Added a warm-chroma detector using the existing linear-light directional microfacet transport samples. It identifies red/orange energy relative to blue and gently boosts only the warm component in the volumetric scatter target. It does not add a fixed orange light, screen overlay, glyph-specific rule, or new wallpaper texture samples.
+- Scope is limited to the Liquid Glass volume-scatter target. Existing blue/neutral paths should remain largely unaffected; actual appearance must be confirmed on-device.
+- Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
+- Production run #353 (`43566878464`) was queued after the push. Locate the matching Digit Lab run and verify both CI results/artifacts before distributing; do not claim APK availability yet.
+- Visual test: same wallpaper and settings as #76. Check whether orange light spreads more softly through 0/1 without orange tint contaminating blue areas; confirm 4/7 highlights and transparency remain intact.
