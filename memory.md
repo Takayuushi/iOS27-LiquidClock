@@ -1347,3 +1347,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted remains protected by the existing `(1.0 - solidMode)` gate; its specular path is unchanged.
 - Experimental and not yet visually validated. Compare against #88 using identical settings and wallpapers. Check that the new glint reads as a crisp, restrained surface reflection, not a white stroke; reject if it creates sparkle noise, edge tracing, loss of wallpaper colour, or any Solid/Frosted change.
 - No build was triggered automatically. Build #88 remains the accepted visual baseline until the user reviews #89.
+
+
+## Build #93 candidate — SSDO-inspired directional self-occlusion (14 Nov 2026)
+- Starts from the visually promising CryEngine-style area-light experiment, commit `3dbcf81011e139b057b3341f07fccb4a1f43c216`, which itself preserves the Build #90 visual baseline plus the wallpaper-driven area-light bounce.
+- Isolated branch: `experiment/cryengine-directional-occlusion`.
+- Renderer commit `f575819e52b8c6f347da21fdf5fddd04c4d59a93` replaces the single-key side-shadow estimate with a geometry-driven occlusion estimate evaluated against the existing key and fill light directions. The fill contribution is weighted at 0.48 and combined with the key contribution using max(), avoiding a simple additive darkening of both sides.
+- The existing convex SDF surface normal and glass profile coverage are reused. No extra wallpaper samples, uniforms, render passes, digit-specific logic, or changes to refraction/area-light bounce.
+- The output remains gated to Liquid Glass by `(1.0 - solidMode)`; Frosted/Solid is intended to remain unchanged.
+- This is an SSDO-inspired local self-occlusion approximation, not a full screen-space directional occlusion implementation: the clock shader has no scene depth buffer or arbitrary scene-light list.
+- Experimental and not visually validated. Compare with the area-light-only branch using identical settings and wallpapers. Keep only if the glass gains subtle directional depth without developing dark outlines, dirty edges, loss of transparency, or altered wallpaper colour blending.
+- Trigger and verify both Android and Digit Lab APK workflows for this renderer commit.
