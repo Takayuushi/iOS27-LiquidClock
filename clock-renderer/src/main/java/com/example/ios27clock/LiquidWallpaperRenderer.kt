@@ -307,7 +307,21 @@ class LiquidWallpaperRenderer(
             // Snell refraction through the convex height-map surface.
             // Incoming view ray travels toward the glyph; eta is air/glass.
             const float GLASS_IOR = 1.52;
-            const float GLASS_THICKNESS_PX = 46.0;
+            // The same convex height field that defines the surface normal
+            // also defines local optical depth: the rounded shoulder is thinner
+            // than the crown of the glass rod. This gives the refracted path a
+            // continuous centre-to-edge thickness transition instead of using
+            // one arbitrary slab thickness everywhere.
+            float glassBodyDepth = clamp(
+                glassHeight / max(glassProfileRadius, 1.0),
+                0.0,
+                1.0
+            );
+            float glassOpticalThickness = mix(
+                38.0,
+                46.0,
+                smoothstep(0.0, 1.0, glassBodyDepth)
+            );
             float eta = 1.0 / GLASS_IOR;
             float cosIncident = clamp(glassSurfaceNormal.z, 0.0, 1.0);
             float refractK = max(
@@ -323,7 +337,7 @@ class LiquidWallpaperRenderer(
                 smoothstep(0.10, 0.55, glassProfileSlope)
             );
             float2 glassRefractionOffset =
-                refractedRay.xy * GLASS_THICKNESS_PX * glassEdgePull;
+                refractedRay.xy * glassOpticalThickness * glassEdgePull;
             float2 solidWarp =
                 refractionNormal *
                     (1.5 + solidEdge * 6.0 + solidBevel * 1.1) +
