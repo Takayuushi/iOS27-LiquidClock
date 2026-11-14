@@ -1388,3 +1388,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Build #93 remains the accepted active visual baseline at commit `afec14b17b7bdd88ffc6c1eee2557f701fcd9ffa`. Build #94 remains an unchanged comparison branch. Build #94.1 is experimental and not visually validated.
 - Compare #94.1 with #94 and #93 using identical wallpaper, digits, weight, width, scale and position. Look for broader but still glass-like highlights, while protecting the orange/black blending in digit 0, the white scattering in digit 1, and crisp edges on 4/7. Reject if reflections look metallic, produce broad white bands, wash out wallpaper colour transmission, or reduce transparency.
 - Both Android and Digit Lab APK workflows should auto-run on this `feature/**` branch. Verify the exact workflow commit SHA and artifacts before sharing downloads.
+
+
+## Build #94.2 candidate — environment-tinted GGX reflection (14 Nov 2026)
+- Isolated branch: `feature/cryengine-pbr-reflections-94-2`, based on the #94.1 checkpoint. #94 and #94.1 branches remain unchanged.
+- Renderer commit: `3c9cd7cb1d1aaa0e2ba56b90a9a59b37aa8f2734`.
+- Preserves #94.1 roughness (0.30) and reflection contribution (0.24).
+- Changes only the GGX reflection colour: blends the existing directional wallpaper reflection and low-frequency bright bloom, then mixes 42% of this sampled environment tint into the existing cool dielectric highlight. This is intended to reduce the uniform cool-white overlay on warm transmitted bands and make the reflection respond more naturally to the wallpaper.
+- Does not change the internal volume-scattering, atmospheric-scattering, refraction, curvature, area-light or directional-occlusion parameters. No digit-specific logic or extra wallpaper texture reads.
+- Build #93 remains the accepted active baseline. #94 and #94.1 remain experimental comparison checkpoints. #94.2 is experimental and not visually validated.
+- Compare #94.2 with #94.1 and #93 using identical wallpaper, digits, weight, width, scale and position. Priorities: recover visible white scattering through digit 1; restore some orange diffusion through digit 0 while retaining the improved black/white band blending; preserve clear blue highlights on 4/7. Reject if environment tint causes muddy colour, excessive saturation, darkened highlights or loss of transparency.
+- Both Android and Digit Lab APK workflows should auto-run on this `feature/**` branch. Verify run SHA and artifacts before sharing downloads.
