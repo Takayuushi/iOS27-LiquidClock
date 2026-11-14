@@ -673,6 +673,36 @@ class LiquidWallpaperRenderer(
                 1.0
             );
 
+            // Warm environmental light (orange/amber) is easily lost when
+            // blue and white bands dominate the local transport average.
+            // Detect warm chroma from the linear-light bundle and gently
+            // increase its diffuse contribution without tinting neutral or
+            // blue regions. This is a material response to sampled wallpaper
+            // colour, not a fixed orange light or a glyph-specific effect.
+            float warmLightSignal = max(
+                microfacetTransmissionLinear.r -
+                    microfacetTransmissionLinear.b * 0.82,
+                0.0
+            );
+            float warmLightPresence = smoothstep(
+                0.025,
+                0.16,
+                warmLightSignal
+            ) * smoothstep(
+                0.045,
+                0.22,
+                microfacetTransmissionLinear.r
+            );
+            float3 warmLightTransportLinear =
+                microfacetTransmissionLinear *
+                    (1.0 + warmLightPresence * 0.16) +
+                float3(0.010, 0.004, 0.0) * warmLightPresence;
+            float3 warmLightTransport = clamp(
+                fromLinearSrgb(warmLightTransportLinear),
+                0.0,
+                1.0
+            );
+
             // The structure-tensor eigenvector is reliable for a single,
             // coherent band direction, but becomes unstable at crossings,
             // paired edges and locally isotropic texture. Measure tensor
@@ -808,7 +838,11 @@ class LiquidWallpaperRenderer(
                 scatterWhiteProtection *
                 smoothstep(0.12, 0.60, glassVolumeRegion);
             float3 volumeScatteredTransmission = clamp(
-                microfacetTransmission * 1.10 +
+                mix(
+                    microfacetTransmission,
+                    warmLightTransport,
+                    warmLightPresence * 0.42
+                ) * 1.10 +
                     float3(0.016, 0.020, 0.028),
                 0.0,
                 1.0
