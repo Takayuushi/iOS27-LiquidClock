@@ -821,13 +821,28 @@ Changes:
 - Candidate build expected from `8977b7f`: Digit Lab #66 and Production #342. Check Actions status and artifact before sharing. Compare especially the paired bands through `0`, orange/white blend on `1`, and preserve the soft `4`/blue `7` response. If high-contrast softening washes out colour or weakens edge definition, revert only this multiplier to `1.0`.
 - #64 remains the visual recovery baseline; #65 is a useful comparison candidate, not a confirmed overall improvement. Device screenshots—not CI success—determine acceptance.
 
+### Digit Lab #66 visual review and stronger paired-band fallback (14 Nov 2026, ~10:06 IST)
+- User supplied `283972.jpg` as Digit Lab #66 and `283969.jpg` as Digit Lab #65. I aligned their clock crops and inspected them side by side, then compared #66 with the iOS reference `RDT_20261112_1627083837676783770026508(20261113-215524).jpg`.
+- User confirms a small but visible improvement: more blending of orange, blue and black in the `0`. Visual comparison agrees that the change is subtle and localised. The `0` shows slightly more mixing, but the paired white/black rails in its upper half still look more distinct/messy than Apple's smoother internal transition.
+- `1` is essentially unchanged from #65 and remains too dark/sharp, lacking the broad warm orange/white internal light spread in Apple's reference. `4` and `7` are largely unchanged by #66; they retain prior improvements but still differ from Apple: `4` is less softly polished across its face, and `7` has less continuous interior haze.
+- Compared with iOS: Apple's `1` carries broader silver/orange bending inside its face; Apple's `0` blends the paired black/white/orange bands more naturally while retaining colour; Apple's `4` has a softer cyan luminous body and polished edge; Apple's `7` has a more uniform deep-blue atmospheric body. Our #66 remains comparatively sharper/outlined outside the modest `0` improvement.
+- Digit Lab #66 run `43556974531` succeeded, artifact `14098757729`; Production #342 run `43556974406` succeeded. Both used commit `8977b7fcc6d85dd6df6813969d9ff1970d170055`.
+- New follow-up renderer commit `7d98ec2005abf576c87198521fca3b7b7b51ade9` — “Deepen paired-band diffusion while preserving wallpaper colour”:
+  - Increases the isotropic fallback's blend toward the existing broad wallpaper sample from 46% to 52%, preserving 48% of the local centre colour in that fallback.
+  - Reduces the directional ray-bundle weight in high-contrast band areas from 62% to 46%, with a smooth ramp from 100% to 46% as `bandContrast` rises. This gives paired black/white rails more broad colour-preserving diffusion without changing the sample probe, adding blur radius, or applying coordinate/digit-specific logic.
+  - Keeps the 4px structure-tensor probe and 24–34px cross-band sampling radius unchanged; no added wallpaper texture lookups.
+  - Retains the #62 adaptive haze and bloom, #61 external 18px colour light wrap, smooth-union volume coverage, original chromatic reflections and Solid/Frosted isolation.
+  - Static checks passed for 52% fallback, 46% high-contrast directional weight, unchanged 4px probe/radius, existing haze/halo, smooth union, protected Solid selector/opacity, and no digit-specific branches.
+- Candidate CI from `7d98ec2`: Digit Lab #67 and Production #343 should trigger automatically from this renderer push. Check actual run numbers, completion and artifacts before sharing APK links.
+- Visual hypothesis pending: stronger broad fallback should further merge upper-`0` paired bands while retaining orange/blue hue. Check whether `1` gets any better response where high-contrast wallpaper crosses its stroke; `4`/`7` must not become washed out. If `1` stays unchanged, next inspect shared low-slope chromatic reflection and interior light pickup rather than adding more general blur.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
 - **Latest renderer commit:** `8977b7fcc6d85dd6df6813969d9ff1970d170055` — “Soften high-contrast paired bands in shared glass transport”
 - **Latest accepted typography:** 1–0 0.053em; 4–7 0.019em; 0–: 0.038em; :–4 0.034em. Freeze spacing. All values are shared across both materials.
 - **Latest user-tested builds:** Production #321 and Digit Lab #43 succeeded from `a6e3825`; user accepts shared spacing and varied-time consistency.
-- **Latest submitted comparison:** the #63 screenshot is our Digit Lab rendering; compare it with #62/#64 recovery and the current iOS reference. #63's wider probe worsened the paired upper-zero bands; #64 restores the #62 sampling baseline. Latest user-approved visible gains remain #62's `0`, `4`, and `7` improvements and #61's outer light wrap.
+- **Latest submitted comparison:** #66 vs #65 shows a small but real orange/blue/black blend improvement in `0`; `1` essentially unchanged, `4`/`7` retain previous results. Compare next candidate against #66 and iOS reference. #63's wider probe remains rejected.
 - **Latest comparison image order:** first supplied screenshot is our Digit Lab rendering; second supplied screenshot is Apple's original iOS reference. Use the second as the visual target.
 - **Current task:** improve only Production Glass / Digit Lab Liquid Glass blending, scattering, internal illumination and refraction toward the iOS image.
 - **Latest tested candidate:** Production #341 and Digit Lab #65 from `f8a480e` succeeded; #65 screenshot confirms residual paired-band problem. New candidate from `8977b7f` is queued/running. User requires one unified, geometry/image-driven optical model for every glyph; no digit-specific or screen-region exceptions. Do not touch accepted typography or Solid/Frosted.
