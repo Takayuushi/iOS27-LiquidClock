@@ -1336,3 +1336,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted continues to select its independent `solidWarp` and is not intentionally modified. Typography, layout, controls, gestures, package IDs and signing are unchanged.
 - This is an experimental candidate, not visually validated. Compare against #87 on the same blue diagonal wallpaper first, then the beach/sunset wallpaper. Reject if the zero develops wavy/creased bands, if other glyphs distort, or if existing colour transport/reflections regress. #86 remains the accepted depth baseline and #87 remains the immediate comparison candidate.
 - No GitHub Actions build was triggered automatically; wait for the user's explicit build instruction or test workflow preference.
+
+
+## Build #89 candidate — restrained Liquid Glass microfacet sparkle (14 Nov 2026)
+- Starts from the user-validated Build #88 result, renderer commit `e3be79c2f5bbeea75027718983da351867242fc2`.
+- Renderer commit `700e65a0de1bcee3a2d3a0bb5feb0308fc22f3c0` adds one low-energy, high-frequency specular lobe using the existing convex surface normal and key-light half vector.
+- The added lobe uses a 68-power highlight, is gated by the existing surface-slope and normal-confidence values, and is attenuated on horizontal shoulders. It is added at 0.14 strength in a cool-neutral highlight tint.
+- The goal is a more precise liquid-glass sparkle on curved shoulders, complementing (not replacing) the existing broad softbox reflection and key/fill glints. The low strength and geometry gates are intended to avoid a continuous white outline or an embossed/painted appearance.
+- No new uniforms, texture reads, passes, dependencies, digit-specific rules, wallpaper presets, or screen-position logic. The correction is universal across glyphs.
+- Solid/Frosted remains protected by the existing `(1.0 - solidMode)` gate; its specular path is unchanged.
+- Experimental and not yet visually validated. Compare against #88 using identical settings and wallpapers. Check that the new glint reads as a crisp, restrained surface reflection, not a white stroke; reject if it creates sparkle noise, edge tracing, loss of wallpaper colour, or any Solid/Frosted change.
+- No build was triggered automatically. Build #88 remains the accepted visual baseline until the user reviews #89.
