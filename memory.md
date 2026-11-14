@@ -1209,3 +1209,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
 - Production run #353 (`43566878464`) was queued after the push. Locate the matching Digit Lab run and verify both CI results/artifacts before distributing; do not claim APK availability yet.
 - Visual test: same wallpaper and settings as #76. Check whether orange light spreads more softly through 0/1 without orange tint contaminating blue areas; confirm 4/7 highlights and transparency remain intact.
+
+## Build #78 candidate — warm light in broad diffuse transport (2026-11-14)
+- User reviewed #77 and confirmed improvement: orange, black and white light now blend more naturally inside the 0, while other digits/effects remain intact.
+- #77 CI verification: Production run #353 (`43566878464`) and Digit Lab #76 (`43566878482`) both completed successfully from renderer commit `fb7f928`.
+- Renderer commit `10654d183fc2ad384ae3d8a441a46dd6c6d6f538` — “Carry warm light into diffuse glass transport”.
+- Extends the existing wallpaper-derived warm-chroma signal into the broad diffuse transport target, in addition to its existing local volume-scatter contribution. Warm atmospheric transport is blended toward the warm-preserving sample with a restrained `warmLightPresence * 0.30` factor; blue/neutral areas remain governed by their own sampled chroma.
+- No additional wallpaper texture samples; this only reuses existing linear-light microfacet samples and warm transport.
+- This is a narrow incremental candidate intended to spread orange/amber light more softly through the glass body. It is not yet visually validated.
+- Solid/Frosted, typography, glyph geometry, layout, UI, wallpaper controls, gestures, package IDs and signing configuration remain unchanged.
+- CI for commit `10654d1` must be located and verified for both Production and Digit Lab before sharing APKs. Compare with #77 on the same wallpaper/settings; reject if orange bleeds into blue regions, highlights flatten, or transparency is lost.
