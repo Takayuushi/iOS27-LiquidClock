@@ -1430,3 +1430,16 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Preserve Build #93 as the accepted visual baseline and #94.2 as the PBR comparison checkpoint. Do not promote #95 without same-settings comparison on diagonal blue/yellow, beach and red-nebula wallpapers.
 - Key visual checks: maintain the orange/black/white blending in 0, white scattering and pink reflections in 1, and blue-white highlights on 4 and 7. Reject if the new focus becomes a hard white rim, blooms over the crown, washes out wallpaper colour, or alters Frosted Glass.
 - Both main APK and Digit Lab workflows should trigger from this feature-branch renderer change; verify successful builds and shared signing-key cache restoration before sharing APK links.
+
+
+## Build #96 — refracted-ray convergence experiment (14 Nov 2026)
+- Branch: `feature/cryengine-ray-convergence-96`, created from the Build #95 experimental branch tip `9ba685b1903251514fe349a2982cd7eb6730c8b7`.
+- Renderer commit: `50749f88ab84587ed49435f44bfe668300055486`.
+- Replaces Build #95's curvature-only additive caustic glint with a first-order ray-map Jacobian estimate derived from the existing convex height-field Hessian trace (`glassCurvatureX + glassCurvatureY`).
+- Uses the estimated convergence to apply a restrained, linear-light gain to the already-computed transmitted wallpaper radiance. This aims to concentrate existing colour-bearing light rather than paint on another highlight.
+- Concentration is clamped (Jacobian 0.72–1.0; partial energy focus capped at 0.18) and gated to the curved shoulder, glass coverage and valid SDF normal.
+- No new wallpaper/SDF texture reads, uniforms, render passes, digit-specific masks or screen-coordinate rules.
+- Frosted Glass remains excluded because the new energy gain is applied only to the Liquid Glass transmission path before the existing `mix(glassTransmitted, center, solidMode)`.
+- This is a first-order screen-space approximation to ray convergence, not a full ray-traced caustic solver. Validate for subtlety and numerical stability.
+- Preserve Build #93 as the accepted visual baseline; #94.2 and #95 remain experimental comparison checkpoints. Do not promote #96 without matching-settings tests on the blue diagonal, beach and red-nebula wallpapers.
+- Key checks: preserve orange/black/white blending in 0, white scattering and pink reflections in 1, blue-white highlights in 4 and 7. Reject if bright regions clip, shoulders develop halos, wallpaper colours desaturate, or the effect becomes visible as a separate outline.
