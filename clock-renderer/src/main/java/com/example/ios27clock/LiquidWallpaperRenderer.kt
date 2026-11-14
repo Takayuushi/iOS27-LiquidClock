@@ -340,13 +340,9 @@ class LiquidWallpaperRenderer(
                 1.34,
                 smoothstep(0.10, 0.55, glassProfileSlope)
             );
-            // Estimate local curvature from the second derivative of the
-            // existing convex height field. The height map already supplies
-            // the surface normal; its Hessian adds a small, geometry-driven
-            // correction to the transmitted ray so neighbouring pixels do
-            // not all follow a perfectly uniform slab displacement.
-            // This is deliberately capped to avoid wavy overshoot on tight
-            // glyph turns and uses no extra wallpaper/SDF texture reads.
+            // Estimate local curvature from the existing convex height field.
+            // Its second derivative adds a small geometry-driven correction to
+            // the transmitted ray without extra wallpaper/SDF texture reads.
             float curvatureStepSquared = 4.25 * 4.25;
             float glassCurvatureX = (
                 heightRight - 2.0 * glassHeight + heightLeft
@@ -517,7 +513,8 @@ class LiquidWallpaperRenderer(
                 max(blurB.r, max(blurB.g, blurB.b))
             );
             float brightC = smoothstep(
-                0.14, 0.52,                max(blurC.r, max(blurC.g, blurC.b))
+                0.14, 0.52,
+                max(blurC.r, max(blurC.g, blurC.b))
             );
             float brightD = smoothstep(
                 0.14, 0.52,
@@ -1266,7 +1263,8 @@ class LiquidWallpaperRenderer(
     private var glyphSdfScale = 1f
     private var glyphSdfStale = false
     private var deviceTiltX = 0f
-    private var deviceTiltY = 0f    private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
+    private var deviceTiltY = 0f
+    private var adaptiveAccentColor: Int = Color.rgb(222, 130, 177)
     private var clockFontStyle = 0
     private var clockFontWeight = 640
     private var clockColor = Color.WHITE
@@ -1515,7 +1513,8 @@ class LiquidWallpaperRenderer(
         }
         previewScaleY = (requestedScale / maskClockScale.coerceAtLeast(0.01f))
             .coerceIn(0.25f, maxPreviewRatio)
-        clockScale = (maskClockScale * previewScaleY)            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
+        clockScale = (maskClockScale * previewScaleY)
+            .coerceIn(MIN_CLOCK_SCALE, MAX_CLOCK_SCALE)
         updatePreviewBounds()
     }
 
@@ -1764,6 +1763,7 @@ class LiquidWallpaperRenderer(
                 sourceMask.recycle()
             }
         }
+
         backdrop?.recycle()
         if (wallpaperSample !== backdrop) wallpaperSample?.recycle()
         foregroundOcclusionMask?.recycle()
@@ -2013,7 +2013,8 @@ class LiquidWallpaperRenderer(
                 val dotX = glyphOrigins[index]
                 colonCenters += dotX to (centerY - dotOffset)
                 colonCenters += dotX to (centerY + dotOffset)
-            } else {                // Generate the character's real SF Pro outline once. A
+            } else {
+                // Generate the character's real SF Pro outline once. A
                 // progressively condensed horizontal transform adapts the
                 // *shape* of each digit as vertical expansion increases;
                 // the vertical expansion below then makes the tall iOS form.
@@ -2262,6 +2263,7 @@ class LiquidWallpaperRenderer(
         }
         return Triple(mask, left.toFloat(), top.toFloat())
     }
+
     private fun rebuildGlyphSdf() {
         val mask = glyphMask
         if (mask == null || mask.isRecycled || glyphBounds.isEmpty) {
@@ -2761,7 +2763,8 @@ class LiquidWallpaperRenderer(
         val shader = glassShader ?: return
         val mask = glyphMask ?: return
         try {
-            shader.setInputShader(                "uGlyphMask",
+            shader.setInputShader(
+                "uGlyphMask",
                 BitmapShader(mask, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             )
             val colon = colonMask ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
