@@ -729,7 +729,7 @@ class LiquidWallpaperRenderer(
             float3 glassDiffuseTransport = mix(
                 frostedWallpaper,
                 microfacetTransmission,
-                0.32
+                0.40
             );
             float glassAtmosphericCoverage = smoothstep(
                 0.10,
@@ -741,7 +741,7 @@ class LiquidWallpaperRenderer(
             // used by every stroke, independent of glyph identity or width.
             float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
             float glassAtmosphericScatter =
-                mix(0.46, 0.58, glassBandHaze) *
+                mix(0.52, 0.66, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
