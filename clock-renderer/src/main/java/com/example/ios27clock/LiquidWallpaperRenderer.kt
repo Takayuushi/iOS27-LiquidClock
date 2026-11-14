@@ -599,11 +599,22 @@ class LiquidWallpaperRenderer(
                 frostedWallpaper,
                 0.46
             );
+            // A strong, coherent edge can still be too narrow to read as
+            // a single glass transmission feature: the diagonal wallpaper has
+            // closely spaced black/white rails. In those high-contrast areas,
+            // temper the directional ray bundle and let more of the broad,
+            // colour-preserving environment sample participate. This is an
+            // optical edge response, not a digit-specific correction.
+            float pairedBandSoftening = mix(
+                1.0,
+                0.62,
+                bandContrast
+            );
             float stableDirectionWeight = mix(
                 0.34,
                 1.0,
                 directionalConfidence
-            );
+            ) * pairedBandSoftening;
             microfacetTransmission = mix(
                 isotropicFallbackTransmission,
                 microfacetTransmission,
