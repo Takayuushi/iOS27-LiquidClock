@@ -833,7 +833,7 @@ Changes:
   - Keeps the 4px structure-tensor probe and 24–34px cross-band sampling radius unchanged; no added wallpaper texture lookups.
   - Retains the #62 adaptive haze and bloom, #61 external 18px colour light wrap, smooth-union volume coverage, original chromatic reflections and Solid/Frosted isolation.
   - Static checks passed for 52% fallback, 46% high-contrast directional weight, unchanged 4px probe/radius, existing haze/halo, smooth union, protected Solid selector/opacity, and no digit-specific branches.
-- Candidate CI from `7d98ec2`: Digit Lab #67 and Production #343 should trigger automatically from this renderer push. Check actual run numbers, completion and artifacts before sharing APK links.
+- Candidate CI from `7d98ec2`: Digit Lab #67 run `43557969174`; Production #343 run `43557969049`; both started on the same commit and were in progress at note time.
 - Visual hypothesis pending: stronger broad fallback should further merge upper-`0` paired bands while retaining orange/blue hue. Check whether `1` gets any better response where high-contrast wallpaper crosses its stroke; `4`/`7` must not become washed out. If `1` stays unchanged, next inspect shared low-slope chromatic reflection and interior light pickup rather than adding more general blur.
 
 ## Status snapshot
