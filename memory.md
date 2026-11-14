@@ -1310,3 +1310,10 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 
 - On-device screenshots received for #86 on blue diagonal, pink beach/sunset and green organic wallpapers. User observes the most noticeable improvement on digit `1`. Visual review agrees the `1` shows the clearest crown-to-shoulder depth transition; changes on `0`, `4` and `7` are more subtle. Treat this as preliminary feedback, not a blanket approval of #86; preserve #85 until the user explicitly accepts the overall result.
 - Both #86 CI workflows completed successfully on exact SHA `a4624ba716e52d35b21900293b8f47f1837a192c`: Production #363 (`43574708137`) and Digit Lab #86 (`43574708158`).
+
+
+## Build #86 — user acceptance (14 Nov 2026)
+- User reviewed #86 against #85 and clarified that the improvement on glyph `1` is meaningful to them, while `0` shows less visible change.
+- Crucially, they report that the change does not distort or damage the other existing effects. They regard the result as an overall improvement and accept retaining the height-derived optical-depth experiment.
+- Keep #86 as the current accepted baseline; do not roll it back merely because the improvement is more visible on `1` than `0`. This is still one universal profile-driven material, not a digit-specific treatment.
+- Future experiments should preserve the #86 benefit on `1` while seeking more convincing convex volume/reflection across other glyph geometries, without introducing per-digit rules or degrading colour transport/Frosted Glass.
