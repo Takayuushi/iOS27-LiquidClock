@@ -1443,3 +1443,15 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is a first-order screen-space approximation to ray convergence, not a full ray-traced caustic solver. Validate for subtlety and numerical stability.
 - Preserve Build #93 as the accepted visual baseline; #94.2 and #95 remain experimental comparison checkpoints. Do not promote #96 without matching-settings tests on the blue diagonal, beach and red-nebula wallpapers.
 - Key checks: preserve orange/black/white blending in 0, white scattering and pink reflections in 1, blue-white highlights in 4 and 7. Reject if bright regions clip, shoulders develop halos, wallpaper colours desaturate, or the effect becomes visible as a separate outline.
+
+
+
+## Build #104 candidate — crisp GGX highlight refinement (14 Nov 2026)
+- Isolated branch: `feature/cryengine-highlight-refinement-104`, created directly from the user-confirmed Build #97 renderer baseline commit `a6fb62fd3f8f8e0f296a7e1fca217c5e23ccc4b5`. The #97 source branch and commit remain unchanged.
+- Renderer commit: `d8f44cf7e85fd7b5fa4aa321ccb04ac98c727621`.
+- This is a deliberately narrow Liquid Glass-only experiment. The existing GGX microfacet roughness changes from 0.30 to 0.28, making the existing convex-surface highlight slightly tighter/crisper. Its output multiplier changes from 0.24 to 0.26 for a restrained visibility lift.
+- No changes to refraction, ray convergence, transmitted colour, colour mixing, diffusion radius, volume/atmospheric scattering, bloom, environment sampling, geometry, SDF normals, other glints, or render passes.
+- The GGX contribution remains gated by `(1.0 - solidMode)`; Frosted/Solid is not intentionally changed.
+- Do not launch builds automatically. The user must compare the candidate on-device before any promotion.
+- Compare #104 directly against #97 with identical settings and the same blue/yellow diagonal wallpaper. Inspect the crispness and natural placement of highlights on 1/4/7 and verify that 0 retains its black/white/orange colour separation. Also check pink beach and red-nebula wallpapers for metallic hotspots, white outlines, clipped highlights, reduced transparency, or altered wallpaper transmission.
+- Reject the candidate if the tighter GGX lobe looks metallic, creates edge tracing, or compromises #97's existing colour separation. #97 remains the accepted visual baseline until the user explicitly promotes a candidate.
