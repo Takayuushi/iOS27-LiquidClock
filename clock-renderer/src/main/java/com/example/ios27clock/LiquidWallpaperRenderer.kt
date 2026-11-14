@@ -338,36 +338,50 @@ class LiquidWallpaperRenderer(
 
             float3 center = uWallpaper.eval(samplePoint).rgb;
 
+            // Integrate the refracted path in linear light. Wallpaper texture
+            // samples arrive in the shader's working colour space; averaging
+            // them directly in display-encoded sRGB underestimates bright
+            // energy and makes translucent media look like tinted overlays.
+            // Convert only this optical integration to linear sRGB, then
+            // return to the working space before combining with the existing
+            // colour-managed AGSL material pipeline.
+            float3 centerLinear = toLinearSrgb(center);
+
             // Integrate colour along the refracted ray instead of treating
             // the glass as a single displaced wallpaper lookup. Three interior
             // samples approximate a short Beer-Lambert light path through the
             // convex volume. The path length follows the actual surface slope,
             // so flat regions stay clear while curved shoulders gain depth.
             float2 glassRay = glassRefractionOffset;
-            float3 rayQuarter = uWallpaper.eval(clamp(
+            float3 rayQuarter = toLinearSrgb(uWallpaper.eval(clamp(
                 p + glassRay * 0.25,
                 float2(0.0),
                 uResolution
-            )).rgb;
-            float3 rayMiddle = uWallpaper.eval(clamp(
+            )).rgb);
+            float3 rayMiddle = toLinearSrgb(uWallpaper.eval(clamp(
                 p + glassRay * 0.50,
                 float2(0.0),
                 uResolution
-            )).rgb;
-            float3 rayThreeQuarter = uWallpaper.eval(clamp(
+            )).rgb);
+            float3 rayThreeQuarter = toLinearSrgb(uWallpaper.eval(clamp(
                 p + glassRay * 0.75,
                 float2(0.0),
                 uResolution
-            )).rgb;
-            float3 glassRayIntegral = (
+            )).rgb);
+            float3 glassRayIntegralLinear = (
                 rayQuarter + rayMiddle * 2.0 + rayThreeQuarter
             ) * 0.25;
             float glassRayLength = length(glassRay);
             float glassOpticalDepth = glassRayLength * 0.0065;
             float glassRayTransmittance = exp(-glassOpticalDepth);
+            float3 glassRayTransmissionLinear = clamp(
+                centerLinear * glassRayTransmittance +
+                    glassRayIntegralLinear * (1.0 - glassRayTransmittance),
+                0.0,
+                1.0
+            );
             float3 glassRayTransmission = clamp(
-                center * glassRayTransmittance +
-                    glassRayIntegral * (1.0 - glassRayTransmittance),
+                fromLinearSrgb(glassRayTransmissionLinear),
                 0.0,
                 1.0
             );
