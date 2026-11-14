@@ -282,6 +282,63 @@ class LiquidWallpaperRenderer(
                 56.0
             ) * smoothstep(0.10, 0.44, glassProfileSlope) *
                 normalConfidence * glassHorizontalHighlight;
+            // GGX microfacet reflection: a compact physically based lobe
+            // complements the broad wallpaper-driven area reflection.
+            // A single dielectric roughness is shared by every glyph; the
+            // existing SDF normal supplies the changing highlight shape.
+            float glassPbrRoughness = 0.24;
+            float glassPbrAlpha = glassPbrRoughness * glassPbrRoughness;
+            float glassPbrAlphaSquared = glassPbrAlpha * glassPbrAlpha;
+            float glassPbrNdotH = max(
+                dot(glassSurfaceNormal, keyHalfVector),
+                0.0
+            );
+            float glassPbrNdotV = max(viewCosine, 0.001);
+            float glassPbrNdotL = max(keyDiffuse3D, 0.0);
+            float glassPbrVdotH = max(
+                dot(viewDirection3D, keyHalfVector),
+                0.0
+            );
+            float glassPbrDistributionDenominator =
+                glassPbrNdotH * glassPbrNdotH *
+                    (glassPbrAlphaSquared - 1.0) + 1.0;
+            float glassPbrDistribution = glassPbrAlphaSquared /
+                max(
+                    3.14159265 *
+                        glassPbrDistributionDenominator *
+                        glassPbrDistributionDenominator,
+                    0.0001
+                );
+            float glassPbrGeometryK = (
+                glassPbrRoughness + 1.0
+            ) * (
+                glassPbrRoughness + 1.0
+            ) * 0.125;
+            float glassPbrGeometryView = glassPbrNdotV /
+                max(
+                    glassPbrNdotV * (1.0 - glassPbrGeometryK) +
+                        glassPbrGeometryK,
+                    0.001
+                );
+            float glassPbrGeometryLight = glassPbrNdotL /
+                max(
+                    glassPbrNdotL * (1.0 - glassPbrGeometryK) +
+                        glassPbrGeometryK,
+                    0.001
+                );
+            float glassPbrFresnel = 0.04 +
+                0.96 * pow(1.0 - glassPbrVdotH, 5.0);
+            float glassPbrSpecular = (
+                glassPbrDistribution *
+                glassPbrGeometryView *
+                glassPbrGeometryLight *
+                glassPbrFresnel
+            ) / max(
+                4.0 * glassPbrNdotV * glassPbrNdotL,
+                0.001
+            ) * glassPbrNdotL *
+                smoothstep(0.08, 0.42, glassProfileSlope) *
+                normalConfidence * glassHorizontalHighlight;
             // SSDO-inspired directional self-occlusion. Evaluate the
             // existing convex SDF normal against both broad light directions
             // so the shadowed shoulder responds to key and fill illumination,
@@ -1145,6 +1202,8 @@ class LiquidWallpaperRenderer(
                 glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.94, 0.98, 1.0) *
                 glassMicroGlint * (1.0 - solidMode) * 0.22;
+            colour += float3(0.92, 0.97, 1.0) *
+                glassPbrSpecular * (1.0 - solidMode) * 0.16;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
 
