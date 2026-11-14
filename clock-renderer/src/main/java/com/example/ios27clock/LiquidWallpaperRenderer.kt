@@ -844,7 +844,7 @@ class LiquidWallpaperRenderer(
                 mix(
                     microfacetTransmission,
                     warmLightTransport,
-                    warmLightPresence * 0.30
+                    warmLightPresence * 0.42
                 ) * 1.10 +
                     float3(0.016, 0.020, 0.028),
                 0.0,
@@ -869,7 +869,7 @@ class LiquidWallpaperRenderer(
             float3 warmAtmosphericTransport = mix(
                 glassAtmosphere,
                 warmLightTransport,
-                warmLightPresence * 0.42
+                warmLightPresence * 0.30
             );
             float3 glassDiffuseTransport = mix(
                 warmAtmosphericTransport,
