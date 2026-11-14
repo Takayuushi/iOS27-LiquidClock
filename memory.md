@@ -1455,3 +1455,24 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Do not launch builds automatically. The user must compare the candidate on-device before any promotion.
 - Compare #104 directly against #97 with identical settings and the same blue/yellow diagonal wallpaper. Inspect the crispness and natural placement of highlights on 1/4/7 and verify that 0 retains its black/white/orange colour separation. Also check pink beach and red-nebula wallpapers for metallic hotspots, white outlines, clipped highlights, reduced transparency, or altered wallpaper transmission.
 - Reject the candidate if the tighter GGX lobe looks metallic, creates edge tracing, or compromises #97's existing colour separation. #97 remains the accepted visual baseline until the user explicitly promotes a candidate.
+
+
+
+## Build #105 candidate — curvature-aware refracted path integration (14 Nov 2026)
+- Isolated branch: `feature/curved-ray-transport-105`, created from the Build #104 candidate branch `feature/cryengine-highlight-refinement-104`. Build #104 remains unchanged; Build #97 remains the accepted visual reference.
+- Renderer commit: `49f01ebc556fd3a62949e92315536e5da8af7c1a`.
+- Adds a small second-order curvature correction to the three existing interior wallpaper samples used for Beer-Lambert transmission. The existing height-field curvature warp is projected perpendicular to the endpoint refracted ray, then used to bow the interior sample path while keeping the endpoints and total endpoint displacement unchanged.
+- The shared path-arc coefficient is 0.45. The existing three wallpaper samples and Simpson-style weights remain unchanged; no additional wallpaper reads, uniforms, render passes, digit-specific masks, region-specific rules, or wallpaper presets are introduced.
+- This is an approximation of curved light transport through the convex volume, not a full volumetric ray tracer. It is a global material calculation driven by the same local surface-curvature field for every glyph and clock time.
+- Frosted/Solid is intended to remain unaffected: the adjustment changes only the existing Liquid Glass ray-integration samples; the shared Frosted/Solid path remains governed by the existing material mix.
+- Experimental and not yet visually validated. Compare #105 with #104 and #97 at identical settings on the blue/yellow diagonal, pink beach, and red-nebula wallpapers. Inspect whether the interior wallpaper distortion follows the convex surface more naturally, while preserving #97's colour separation and the improved lower-`0` bending.
+- Reject or retune if the curved path introduces colour smearing, unwanted ghosting, excessive distortion, or any visible change to Frosted Glass. No candidate is promoted automatically.
+
+
+## Build #104 visual review — user screenshots (14 Nov 2026)
+- User supplied three Digit Lab screenshots for Build #104: blue/yellow diagonal, pink beach, and red nebula, with digits `10:47`, compressed width and weight 539.
+- Initial review: the blue/yellow wallpaper retains distinct colour bands and visible lower-`0` bending; the beach image transmits pink/warm light while retaining turquoise water; the red nebula preserves dark transparency and red environmental colour. A particularly sharp highlight appears around the `4` on the red-nebula sample and should be checked against #97 before promotion.
+- Screenshots are promising but do not alone establish that #104 is superior to #97. Keep #97 as the accepted reference until direct comparison confirms the result.
+- Both #104 GitHub Actions workflows completed successfully: Android run `43600605309` (artifact `iOS27-LiquidClock-Android17-debug`) and Digit Lab run `43600605360` (artifact `liquid-clock-digit-lab-debug`).
+
+
