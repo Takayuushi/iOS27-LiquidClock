@@ -1100,6 +1100,29 @@ class LiquidWallpaperRenderer(
                 pow(max(dot(glassSurfaceNormal, keyLight3D), 0.0), 1.35) * glassHorizontalHighlight;
             colour += float3(0.92, 0.97, 1.0) *
                 glassAreaReflection * (1.0 - solidMode) * 0.96;
+            // CryEngine-inspired environment area-light bounce: the broad
+            // convex-surface reflection picks up the nearby wallpaper's
+            // bright, colour-bearing regions instead of remaining a fixed
+            // white softbox. Reuse the existing low-frequency bloom and
+            // directional environment samples; no additional texture reads.
+            float glassAreaSourceLuma = dot(
+                glassBrightBloom,
+                float3(0.2126, 0.7152, 0.0722)
+            );
+            float glassAreaSourcePresence = smoothstep(
+                0.06,
+                0.34,
+                glassAreaSourceLuma
+            );
+            float3 glassAreaSourceColour = mix(
+                directionalEnvironmentReflection,
+                glassBrightBloom,
+                0.55
+            );
+            colour += glassAreaSourceColour *
+                glassAreaReflection *
+                glassAreaSourcePresence *
+                (1.0 - solidMode) * 0.16;
             colour += float3(0.98, 0.99, 1.0) *
                 glassKeyGlint * (1.0 - solidMode) * 1.28;
             colour += float3(0.68, 0.82, 1.0) *
