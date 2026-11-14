@@ -1289,3 +1289,12 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Solid/Frosted source path, all ray integration and colour transport, geometry, typography, UI, gestures, app IDs and signing unchanged.
 - Digit Lab run #85 (`43574127155`) is queued and matches exact renderer SHA `561abefe4a8c1a7c2cbeb86e1bb6b11c7b4b281d`. Production workflow not yet visible at time of note. Verify both before providing APKs; no build artifact claimed yet.
 - On-device validation must begin with checking Liquid Glass and Frosted Glass still render, then compare the blue diagonal and orange-liquid wallpapers with the same clock string/settings as #84. Look for slightly improved band blending without detail loss, colour shift or altered Frosted appearance. If there is no visible benefit or any regression, revert to #84.
+
+
+## Build #85 — user-validated adaptive diffusion refinement (14 Nov 2026)
+- Renderer commit: `561abefe4a8c1a7c2cbeb86e1bb6b11c7b4b281d` — “Refine adaptive cross-band glass diffusion”.
+- The only renderer change from #84 is a conservative 2-percentage-point increase in the adaptive cross-band diffusion range: `mix(0.50, 0.68, bandContrast)` became `mix(0.52, 0.70, bandContrast)`; along-band weight remains the complement. No extra texture reads, passes, uniforms, or dependencies.
+- User has now tested Build #85 and explicitly confirmed: “Definitely improvement.”
+- Their screenshots validate the improvement across orange/liquid wallpaper, blue diagonal streaks, and a pink beach/sunset wallpaper; they also tested Liquid Glass and Frosted Glass, and varied font width (regular/condensed/compressed). The user-visible gain is stronger/more coherent wallpaper-colour and directional-structure transport through Liquid Glass, while Frosted Glass remains visibly distinct.
+- Both CI workflows succeeded on the exact same commit: Production build #362, run [43574127173](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43574127173); Digit Lab build #85, run [43574127155](https://github.com/Takayuushi/iOS27-LiquidClock/actions/runs/43574127155).
+- #85 is now a visually validated checkpoint. Preserve it as the baseline. Do not make another diffusion-strength increase by default; the next meaningful refinement should target the volumetric/convex optical body and believable surface reflections, not simply more blur or brighter outlines. Keep the universal-rendering rule and Solid/Frosted protection intact.
