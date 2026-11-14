@@ -1228,3 +1228,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - No changes to ray integration, refraction, Fresnel, geometry, glyph-specific behaviour, Solid/Frosted, typography, layout, UI, gestures, package IDs or signing.
 - Production run #355 (`43568505067`) and Digit Lab #78 (`43568505093`) were queued when checked. Verify both runs and artifacts before distribution.
 - Compare with #78 on the same wallpaper/settings. Accept only if warm scattering becomes more legible without contaminating blue regions, flattening the 4/7 highlights or making the glass cloudy. If this is too warm, revert to #78; it is the proven baseline.
+
+## Build #80 candidate — wallpaper-structure-aligned atmospheric kernel (2026-11-14)
+- User explicitly reiterated the invariant: no digit-specific, time-specific or screen-region-specific rendering. All optical behaviour must be shared and driven by the local wallpaper/material response.
+- User's #78 screenshot review: retained blue-light blending and approved #78 as the visual baseline; warm/neutral blending was improved. #79's stronger broad warm mix was not the screenshot the user reviewed, so #80 restores the #78 broad diffuse warm contribution (0.30) while retaining the #78 local volume-scatter warm contribution (0.42).
+- Renderer commits: `f7c7dd8ed8dfe693e8f406e164b644d7772601b3` (adaptive kernel) followed by `3441e315313fdfca9616b4335b388e2cc01ba2db` (restore exact #78 warm-scatter balance).
+- Replaced the short-range axis-aligned atmospheric cross kernel with a cross kernel rotated by the local wallpaper RGB structure tensor: one axis follows the dominant colour-edge normal and the perpendicular follows the local band direction. This lets the same transport kernel adapt to diagonal, horizontal, vertical and irregular wallpaper features.
+- Reuses the same four short-range texture samples; no extra texture reads. No glyph identity, clock-time, fixed screen-coordinate or wallpaper-specific rules.
+- Solid/Frosted original blur path, typography, geometry, layout, UI, controls, gestures, package IDs and signing config remain unchanged.
+- CI runs for adaptive-kernel commit `f7c7dd8`: Production #356 (`43569048518`) and Digit Lab #79 (`43569048564`) were in progress at check time. Verify artifacts and successful completion before distribution.
+- Visual test: compare #80 with #78 on the same diagonal wallpaper, then test at least one wallpaper with vertical/horizontal or irregular features and a different clock string. Check that the diffusion direction follows wallpaper structure everywhere, colours stay balanced, no glyph-specific artefacts appear, and 4/7 highlights remain.
