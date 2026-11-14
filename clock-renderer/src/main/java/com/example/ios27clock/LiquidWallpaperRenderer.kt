@@ -279,7 +279,7 @@ class LiquidWallpaperRenderer(
             // continuous white outline or a painted-on embossed edge.
             float glassMicroGlint = pow(
                 max(dot(glassSurfaceNormal, keyHalfVector), 0.0),
-                68.0
+                56.0
             ) * smoothstep(0.10, 0.44, glassProfileSlope) *
                 normalConfidence * glassHorizontalHighlight;
             float glassSideShadow = glassProfileCoverage *
@@ -1105,7 +1105,7 @@ class LiquidWallpaperRenderer(
             colour += float3(0.68, 0.82, 1.0) *
                 glassFillGlint * (1.0 - solidMode) * 0.88;
             colour += float3(0.94, 0.98, 1.0) *
-                glassMicroGlint * (1.0 - solidMode) * 0.14;
+                glassMicroGlint * (1.0 - solidMode) * 0.22;
             colour += float3(0.96, 0.98, 1.0) *
                 glassRimLighting * (1.0 - solidMode) * 0.20;
 
