@@ -418,6 +418,35 @@ class LiquidWallpaperRenderer(
                 blurA + blurB + blurC + blurD +
                 blurE + blurF + blurG + blurH
             ) * 0.125;
+
+            // Liquid Glass uses a two-scale, colour-preserving transport kernel.
+            // The inner cross samples soften narrow rails without erasing their
+            // colour; the existing wide ring carries the broader atmospheric
+            // glow. Keep the original frostedWallpaper untouched for Solid.
+            float2 glassNearX = float2(28.0, 0.0);
+            float2 glassNearY = float2(0.0, 28.0);
+            float3 glassNearA = uWallpaper.eval(clamp(
+                samplePoint + glassNearX, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearB = uWallpaper.eval(clamp(
+                samplePoint - glassNearX, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearC = uWallpaper.eval(clamp(
+                samplePoint + glassNearY, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearD = uWallpaper.eval(clamp(
+                samplePoint - glassNearY, float2(0.0), uResolution
+            )).rgb;
+            float3 glassNearTransport = (
+                glassNearA + glassNearB + glassNearC + glassNearD
+            ) * 0.25;
+            float3 glassAtmosphere = clamp(
+                center * 0.14 +
+                    glassNearTransport * 0.36 +
+                    frostedWallpaper * 0.50,
+                0.0,
+                1.0
+            );
             // Extract bright energy before averaging so bright wallpaper bands
             // create a soft, low-frequency glow through the glass instead of
             // remaining only as sharp refracted lines.
@@ -596,8 +625,8 @@ class LiquidWallpaperRenderer(
             );
             float3 isotropicFallbackTransmission = mix(
                 center,
-                frostedWallpaper,
-                0.62
+                glassAtmosphere,
+                0.72
             );
             // A strong, coherent edge can still be too narrow to read as
             // a single glass transmission feature: the diagonal wallpaper has
@@ -677,7 +706,7 @@ class LiquidWallpaperRenderer(
             float glassBounceStrength =
                 0.24 * glassDarkness * glassNearbyLight;
             float3 brightGlassBounce = clamp(
-                frostedWallpaper * 1.44 + float3(0.012, 0.014, 0.022),
+                glassAtmosphere * 1.34 + float3(0.012, 0.014, 0.022),
                 0.0,
                 1.0
             );
@@ -727,9 +756,9 @@ class LiquidWallpaperRenderer(
             // This avoids the colour wash from a blur-only target and avoids
             // the overly sharp direct-only result.
             float3 glassDiffuseTransport = mix(
-                frostedWallpaper,
+                glassAtmosphere,
                 microfacetTransmission,
-                0.22
+                0.18
             );
             float glassAtmosphericCoverage = smoothstep(
                 0.10,
@@ -741,7 +770,7 @@ class LiquidWallpaperRenderer(
             // used by every stroke, independent of glyph identity or width.
             float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
             float glassAtmosphericScatter =
-                mix(0.58, 0.70, glassBandHaze) *
+                mix(0.68, 0.80, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
