@@ -1248,3 +1248,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - #80 successful CI was confirmed: Digit Lab #80 (`43569076184`) and Production #357 (`43569076233`) from final #80 commit `3441e31`.
 - #81 CI runs need to be located and checked against exact head SHA `b000fb73b7d68e69d8a22e5f4e7248298833067d`; do not reuse #80 links or report artifact availability until verified.
 - Compare #81 to #80 on the same diagonal wallpaper. Also test a different wallpaper orientation and different clock string. Reject if colour detail along bands is smeared, blue/orange balance shifts, or 4/7 highlights degrade.
+
+## Build #82 candidate — coherence-adaptive anisotropic diffusion (2026-11-14)
+- User tested #81 on a second, very different wallpaper (pink flowering tree, open sky, sunset and water) with the same clock string. User confirmed the desired glass response and colour behaviour carried over to this image. This is important cross-wallpaper validation of the universal material.
+- #81 CI verified successful: Digit Lab #81 (`43569954038`) and Production #358 (`43569953915`) both completed successfully from exact renderer SHA `b000fb73b7d68e69d8a22e5f4e7248298833067d`.
+- Renderer commit `7bb77ae1fd52b8a43506b138ab1aa3397f9a940f` — “Adapt glass diffusion to local wallpaper coherence”.
+- Refined the #81 anisotropic near-field kernel so its cross-band weighting adapts to the local RGB structure-tensor coherence. The cross-band weight smoothly ranges from 0.50 (isotropic where local orientation is ambiguous) to 0.72 (anisotropic where the wallpaper has a strong coherent edge direction); along-band weight is the complement.
+- This avoids imposing a fixed 68/32 directional split on every image region. Strongly oriented structures receive more cross-band mixing; open sky, water and irregular textures naturally approach balanced diffusion. This is a shared per-pixel wallpaper-derived response, not a digit/time/region preset.
+- Reuses the exact same four short-range texture samples and the existing tensor; no additional texture reads or new render passes.
+- Solid/Frosted, refracted ray integration, warm/cool transport, surface geometry, typography, layout, UI, gestures, package IDs and signing config unchanged.
+- CI for #82 must be checked against exact SHA `7bb77ae1fd52b8a43506b138ab1aa3397f9a940f`; do not reuse #81 run links or report artifacts until verified.
+- Test #82 on both the diagonal blue/orange wallpaper and the flowering-tree sunset/water wallpaper, with at least one different clock string. Check for coherent band blending on the first, preserved foliage detail and natural sky/water response on the second, and unchanged colour/reflection balance.
