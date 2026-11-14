@@ -850,6 +850,12 @@ Changes:
 - #69 candidate commit `b6b95e89a133923292e3fb34f781f98de27a74f4` — “Increase colour-bearing atmospheric glass transport”. The #68 final glass transport path mixed only 32% of cross-band microfacet transmission into broad diffuse transport and atmospheric scatter ranged 0.46–0.58. #69 raises those to 40% and 0.52–0.66 respectively, while keeping bloom unchanged. This is a shared image-driven shader response, not digit-specific tuning. Aim: move more warm/cool colour through the full digit body while softening paired rails; watch for colour wash and loss of edge definition.
 - #69 CI: Digit Lab run `43559669827`; Production run `43559669792`; both were `in_progress` at the time of this note. Check their final status and artifact before sharing.
 
+### Digit Lab #69 assessment and #70 atmospheric diffusion pass (14 Nov 2026)
+- User tested #69 (commit `b6b95e89a133923292e3fb34f781f98de27a74f4`). They observed a little more white/orange/black blending in the upper part of `0`, but not much elsewhere. This matches the intended modest change; #69 is not a major visual milestone. Digit Lab run `43559669827` and Production run `43559669792` both succeeded.
+- #70 commit `2767e7643e75a25571ce11777d5632ae015f198a` — “Increase broad atmospheric diffusion in liquid glass”. The shader's broad wallpaper diffusion sample is already 44px for Glass, but final diffuse transport was still 40% microfacet transmission. #70 lowers that contribution to 22% (thus increasing the blurred, colour-bearing wallpaper share) and raises image-driven atmospheric scatter from 52–66% to 58–70%. This is intended to soften the interior across all glyphs while preserving colour and the outer bevel/reflections; bloom is unchanged.
+- Explicit checks confirmed the `solidWarp`, `solidMode` material selection, Frosted/Solid path, and existing bloom expression remain unchanged. Only the Liquid Glass final transport expressions were modified.
+- #70 CI runs: Digit Lab `43560936211`; Production `43560936188`; both queued when this note was written. Wait for successful completion and inspect the resulting APK artifact before sharing.
+
 ## Status snapshot
 
 - **Active branch:** feature/live-wallpaper-big-clock
