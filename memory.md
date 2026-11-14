@@ -1399,3 +1399,21 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Build #93 remains the accepted active baseline. #94 and #94.1 remain experimental comparison checkpoints. #94.2 is experimental and not visually validated.
 - Compare #94.2 with #94.1 and #93 using identical wallpaper, digits, weight, width, scale and position. Priorities: recover visible white scattering through digit 1; restore some orange diffusion through digit 0 while retaining the improved black/white band blending; preserve clear blue highlights on 4/7. Reject if environment tint causes muddy colour, excessive saturation, darkened highlights or loss of transparency.
 - Both Android and Digit Lab APK workflows should auto-run on this `feature/**` branch. Verify run SHA and artifacts before sharing downloads.
+
+
+## APK signing continuity — shared debug certificate (14 Nov 2026)
+- Root cause of "App not installed" during in-place updates: each feature branch had its own Actions cache key for `~/.android/debug.keystore`, so builds from different branches were signed with different debug certificates.
+- Default branch workflow commit `d4ad487446454b62f7a0254d7a7c8829dc9231b0` initially attempted to seed the shared cache but its keytool continuation escaping was invalid; corrected in `f1c77c7ca28e8bcc521264ee8777bb8741466401`.
+- Successful default-branch seed run: `43586859509`, commit `f1c77c7ca28e8bcc521264ee8777bb8741466401`. It created the canonical debug keystore in the default-branch Actions cache.
+- Feature branch workflows now use the shared cache namespace `ios27-liquidclock-shared-debug-signing-v2-` with branch-specific exact keys and a shared restore prefix. Feature builds should restore the default-branch keystore on first use, then preserve it in their branch cache. Main app and Digit Lab may safely share the same debug certificate because they have distinct application IDs.
+- Workflow-only commits: main app `b413f4dcb0b44e20c10c9d420571db726bda5829`; Digit Lab `96d305a8e20a176fbc16afdb399ad8fbe355e3d0`.
+- Validate the new feature APKs by checking cache restore logs, comparing signing certificate SHA-256 fingerprints against the canonical seed, and confirming same-package APK updates install over the currently installed builds without uninstalling. Do not claim the issue is fixed until this device-side update test passes.
+- Version codes remain based on each workflow's monotonically increasing GitHub Actions run number.
+
+## Next graphics roadmap after #94.2
+- Keep #93 as the accepted visual baseline. Keep #94.2 as a promising PBR/environment-colour checkpoint, not yet promoted.
+- First validate #94.2 on identical settings across the diagonal blue/yellow wallpaper, pink beach wallpaper, and red nebula. Specifically inspect 0's warm/black/white band blending, 1's internal white scattering, and blue/white edge response on 4 and 7.
+- Do not tune multiple material systems simultaneously. If #94.2 is visually sound, freeze its PBR reflection parameters before beginning caustics.
+- Next isolated graphics experiment: restrained, geometry-driven caustic-like light focusing derived from the existing convex height field and its curvature/normal variation. Reuse existing wallpaper/environment samples where possible; avoid adding expensive full-screen passes or digit-specific masks. Keep it subtle and test for bright wallpaper bands, dark regions and smooth gradients.
+- After caustics, refine HDR/highlight handling: preserve bright highlight detail with a soft roll-off while retaining dark-region information and transmitted wallpaper colour. Avoid simply raising global brightness or bloom.
+- Every experiment stays on a separate branch/build checkpoint; compare with #93 and the immediately previous candidate using identical wallpaper, digits, weight, width, scale and position. Keep Frosted Glass isolated from Liquid Glass experiments.
