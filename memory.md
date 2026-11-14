@@ -1326,3 +1326,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - No new texture reads, uniforms, passes, dependencies, digit-specific conditions, wallpaper presets or screen-region rules. Surface normals, convex profile, Snell IOR, diffusion, reflections, colour transport and glyph layout remain unchanged.
 - Solid/Frosted mode remains on its existing separate `solidWarp` and source path; this thickness is only consumed by `glassRefractionOffset` in Liquid Glass.
 - Experimental only, not visually validated. Compare against #86 using identical wallpaper, clock string, font width/weight and placement. Prioritize whether `0`, `4`, `7` gain a more coherent volume while the improved `1` remains intact; reject if distortion, colour displacement, darkening or edge artifacts increase. #86 remains rollback baseline.
+
+## Build #88 candidate — curvature-derived Liquid Glass ray correction (2026-11-14)
+- Starts from the #87 candidate on `feature/live-wallpaper-big-clock`, renderer commit `0bec405fa9337bbf9df9a72a4b120c7938e8a370`.
+- Renderer commit `8d5f8df73c4987c5ed918f9ecf10250fb6d7c216` adds a small curvature correction to the existing Snell-refraction offset.
+- Reuses the existing convex height field and its four neighbouring height samples to estimate the local second derivatives (height-field curvature). The resulting correction is capped at ±1.6px per axis and added to the Liquid Glass refraction offset.
+- This is a geometry-derived, per-pixel optical correction shared by every glyph and wallpaper. It adds no wallpaper/SDF texture reads, uniforms, render passes, digit-specific logic, clock-time rules or screen-region presets.
+- The correction feeds the existing refracted sample point and ray integration, so the black/white band bending and colour transport remain part of the same optical path.
+- Solid/Frosted continues to select its independent `solidWarp` and is not intentionally modified. Typography, layout, controls, gestures, package IDs and signing are unchanged.
+- This is an experimental candidate, not visually validated. Compare against #87 on the same blue diagonal wallpaper first, then the beach/sunset wallpaper. Reject if the zero develops wavy/creased bands, if other glyphs distort, or if existing colour transport/reflections regress. #86 remains the accepted depth baseline and #87 remains the immediate comparison candidate.
+- No GitHub Actions build was triggered automatically; wait for the user's explicit build instruction or test workflow preference.
