@@ -1466,3 +1466,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is a controlled geometry experiment, not yet visually validated. Compare #98 with #97 and the accepted #93 baseline using identical weight (539), compressed width, digit string and placement. Test the blue diagonal wallpaper, pink beach and red nebula.
 - Evaluate whether 0 retains warm/black/white blending, 1 recovers fine white scattering, and 4/7 retain clean highlights without wavy displacement, edge halos, metallic shine or loss of transmitted wallpaper detail.
 - No caustics or HDR changes are included in this experiment. Do not promote #98 until both APKs build successfully and the user reviews the screenshots.
+
+
+## Build #99 — transmission-aware environment reflection balance (14 Nov 2026)
+- Branch: `feature/cryengine-transmission-balance-99`, branched from the Build #98 checkpoint at `b84676fd5ead4fd5e0b49c36a340024262725bec`.
+- Renderer commit: `199b64e25cd448937e9b787ed41cf60ed5599a84`.
+- Adds a local transmission-highlight protection term to the existing environment-reflection blend. The existing refracted wallpaper luminance reduces the environmental reflection contribution in already-bright transmitted regions, preserving wallpaper colour and fine detail; darker transmitted regions retain more reflection headroom.
+- The new factor multiplies the existing Fresnel/environment-reflection weight. No extra wallpaper/SDF texture reads, uniforms, render passes, dependencies, or glyph-specific rules are added.
+- No changes to the convex height field, analytic normals, Snell refraction, ray-convergence/scattering path, GGX model, directional occlusion, caustic experiment, or Frosted Glass path.
+- This is an isolated optical energy-balance experiment, not yet visually validated. Compare #99 against #98, #97, and the protected #93 baseline with identical weight (539), compressed width, digits and placement on the blue diagonal, pink beach, and red nebula wallpapers.
+- Evaluate whether bright beach/sky and blue-white bands retain detail without losing shoulder reflections; check that dark nebula regions still show useful environmental reflections and that the 0's warm/black/white blending and 1's fine white scattering remain intact.
+- Do not promote #99 unless both APK workflows complete and the same-settings visual comparison shows a clear improvement. Build #93 remains the accepted baseline.
