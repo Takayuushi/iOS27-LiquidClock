@@ -1183,6 +1183,44 @@ class LiquidWallpaperRenderer(
                 chromaticEnvironmentReflection,
                 glassFaceReflectivity
             );
+            // Build #102: add a second, low-energy local environment-reflection
+            // lobe only where the convex surface has meaningful curvature.
+            // The reflected wallpaper sample is already evaluated above, so
+            // this sharpens shoulder reflections without another texture read.
+            // Bright transmitted wallpaper is explicitly protected to keep
+            // orange/white/black detail visible beneath the reflected layer.
+            float glassShoulderCurvature = smoothstep(
+                0.006,
+                0.040,
+                length(float2(glassCurvatureX, glassCurvatureY))
+            );
+            float glassShoulderReflectionGate =
+                smoothstep(0.12, 0.40, glassProfileSlope) *
+                (1.0 - smoothstep(0.82, 1.12, glassProfileSlope)) *
+                glassShoulderCurvature *
+                glassProfileCoverage *
+                normalConfidence *
+                (1.0 - solidMode);
+            float glassTransmittedHighlightGuard = 1.0 -
+                0.72 * smoothstep(0.34, 0.76, refractedLuma);
+            float glassShoulderReflectionAmount =
+                0.12 *
+                glassShoulderReflectionGate *
+                smoothstep(
+                    0.08,
+                    0.36,
+                    max(
+                        environmentReflection.r,
+                        max(environmentReflection.g, environmentReflection.b)
+                    )
+                ) *
+                reflectionHighlightProtection *
+                glassTransmittedHighlightGuard;
+            glassFace = mix(
+                glassFace,
+                chromaticEnvironmentReflection,
+                glassShoulderReflectionAmount
+            );
             float innerGlassTint = smoothstep(0.0, 12.0, insideDistance) *
                 (1.0 - smoothstep(26.0, 64.0, insideDistance));
             glassFace = mix(
