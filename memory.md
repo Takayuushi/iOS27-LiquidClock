@@ -1358,3 +1358,13 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - This is an SSDO-inspired local self-occlusion approximation, not a full screen-space directional occlusion implementation: the clock shader has no scene depth buffer or arbitrary scene-light list.
 - Experimental and not visually validated. Compare with the area-light-only branch using identical settings and wallpapers. Keep only if the glass gains subtle directional depth without developing dark outlines, dirty edges, loss of transparency, or altered wallpaper colour blending.
 - Trigger and verify both Android and Digit Lab APK workflows for this renderer commit.
+
+
+## Build #94 candidate — GGX physically based glass reflections (14 Nov 2026)
+- Starts from the directional-occlusion checkpoint `afec14b17b7bdd88ffc6c1eee2557f701fcd9ffa`, preserving the CryEngine-inspired wallpaper area-light bounce and SSDO-inspired local directional self-occlusion.
+- Isolated development branch: `feature/cryengine-pbr-reflections`. The `experiment/cryengine-pbr-reflections` branch also retains the renderer-only experiment commit.
+- Renderer commit `1b47a50d226a12b34c1f145e71b96caca3ca0359` adds a restrained GGX microfacet specular lobe for Liquid Glass. It uses the existing convex SDF normal, key-light half vector, view/light cosines, Schlick dielectric Fresnel (F0 = 0.04), Smith-Schlick geometry terms and a shared dielectric roughness of 0.24.
+- The new lobe is gated by the existing glass-profile slope, normal confidence, horizontal-shoulder attenuation and `(1.0 - solidMode)`. It adds no uniforms, wallpaper samples, render passes, digit-specific logic or dependencies.
+- Existing wallpaper-coloured environment reflection, broad area-light bounce, refraction, curvature correction, microglint and directional occlusion remain intact. Solid/Frosted path is intentionally excluded.
+- Experimental and not visually validated. Compare #94 with the #93 directional-occlusion checkpoint and protected #90 baseline at identical wallpaper, digits, weight, width, scale and position. Keep only if the glass gains a coherent physically based highlight without metallic hotspots, white outlines, washed-out colour transmission, or loss of the #90 optical blending. Watch 0/1 dark-orange and black band transitions, and 4/7 bright shoulder edges.
+- Both Android and Digit Lab APK workflows should auto-run because this branch matches the `feature/**` push filters. Verify run SHA and uploaded artifacts before sharing links.
