@@ -597,7 +597,7 @@ class LiquidWallpaperRenderer(
             float3 isotropicFallbackTransmission = mix(
                 center,
                 frostedWallpaper,
-                0.46
+                0.52
             );
             // A strong, coherent edge can still be too narrow to read as
             // a single glass transmission feature: the diagonal wallpaper has
@@ -607,7 +607,7 @@ class LiquidWallpaperRenderer(
             // optical edge response, not a digit-specific correction.
             float pairedBandSoftening = mix(
                 1.0,
-                0.62,
+                0.46,
                 bandContrast
             );
             float stableDirectionWeight = mix(
