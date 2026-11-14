@@ -1377,3 +1377,14 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Existing wallpaper-coloured environment reflection, broad area-light bounce, refraction, curvature correction, microglint and directional occlusion remain intact. Solid/Frosted path is intentionally excluded.
 - Experimental and not visually validated. Compare #94 primarily with the accepted #93 active baseline at identical wallpaper, digits, weight, width, scale and position. #90 is a historical fallback reference, not the active baseline. Keep #94 only if the glass gains a coherent physically based highlight without metallic hotspots, white outlines, washed-out colour transmission, or loss of #93's optical blending. Watch 0/1 dark-orange and black band transitions, and 4/7 bright shoulder edges.
 - Both Android and Digit Lab APK workflows should auto-run because this branch matches the `feature/**` push filters. Verify run SHA and uploaded artifacts before sharing links.
+
+
+## Build #94.1 candidate — broader GGX reflection (14 Nov 2026)
+- Isolated branch: `feature/cryengine-pbr-reflections-94-1`, created from the current Build #94 checkpoint. The existing `feature/cryengine-pbr-reflections` branch remains unchanged for direct comparison.
+- Renderer commit: `748b019babcbff6e4283e7230229ee11f5550200`.
+- Two controlled GGX adjustments only: dielectric roughness increased from 0.24 to 0.30 to broaden the microfacet reflection lobe; its Liquid Glass output multiplier increased from 0.16 to 0.24 (1.5x) to make it more visible alongside existing area-light highlights.
+- GGX distribution, Fresnel, Smith-Schlick geometry, SDF normals, lighting directions, area-light reflection, directional occlusion, refraction, curvature correction and microglint are otherwise unchanged.
+- Solid/Frosted path remains excluded by the existing `(1.0 - solidMode)` gate.
+- Build #93 remains the accepted active visual baseline at commit `afec14b17b7bdd88ffc6c1eee2557f701fcd9ffa`. Build #94 remains an unchanged comparison branch. Build #94.1 is experimental and not visually validated.
+- Compare #94.1 with #94 and #93 using identical wallpaper, digits, weight, width, scale and position. Look for broader but still glass-like highlights, while protecting the orange/black blending in digit 0, the white scattering in digit 1, and crisp edges on 4/7. Reject if reflections look metallic, produce broad white bands, wash out wallpaper colour transmission, or reduce transparency.
+- Both Android and Digit Lab APK workflows should auto-run on this `feature/**` branch. Verify the exact workflow commit SHA and artifacts before sharing downloads.
