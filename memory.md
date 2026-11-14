@@ -1,5 +1,14 @@
 # iOS 27 Liquid Clock — Project Memory
 
+## Active visual baseline — Build #93 (14 Nov 2026)
+
+- **Build #93 is now the accepted active visual baseline**, per the user's explicit decision after reviewing its screenshots. It retains the successful Build #90 optical improvements and adds the CryEngine-inspired wallpaper area-light bounce plus SSDO-inspired directional self-occlusion.
+- Baseline renderer commit: `afec14b17b7bdd88ffc6c1eee2557f701fcd9ffa` on `feature/cryengine-directional-occlusion`.
+- Build #90 remains preserved as a historical reference and fallback checkpoint; it is no longer the active baseline.
+- Build #94 (GGX physically based reflections) is an experimental continuation from #93 on `feature/cryengine-pbr-reflections`. Compare #94 primarily against #93. Promote only after user review confirms a genuine improvement.
+- Future CryEngine-inspired work (caustics, then HDR refinement) must branch from the currently accepted baseline unless the user explicitly changes that decision. Never overwrite the accepted baseline branch or its commit.
+
+
 > Living handover notes for future development sessions. Documentation only: this file is not read by the Android app, Gradle, or the rendering code.
 
 ## Digit Lab APK in-place update signing (14 Nov 2026)
@@ -1366,5 +1375,5 @@ This is a must-preserve project fact. Do not call the font a GitHub font, a comm
 - Renderer commit `1b47a50d226a12b34c1f145e71b96caca3ca0359` adds a restrained GGX microfacet specular lobe for Liquid Glass. It uses the existing convex SDF normal, key-light half vector, view/light cosines, Schlick dielectric Fresnel (F0 = 0.04), Smith-Schlick geometry terms and a shared dielectric roughness of 0.24.
 - The new lobe is gated by the existing glass-profile slope, normal confidence, horizontal-shoulder attenuation and `(1.0 - solidMode)`. It adds no uniforms, wallpaper samples, render passes, digit-specific logic or dependencies.
 - Existing wallpaper-coloured environment reflection, broad area-light bounce, refraction, curvature correction, microglint and directional occlusion remain intact. Solid/Frosted path is intentionally excluded.
-- Experimental and not visually validated. Compare #94 with the #93 directional-occlusion checkpoint and protected #90 baseline at identical wallpaper, digits, weight, width, scale and position. Keep only if the glass gains a coherent physically based highlight without metallic hotspots, white outlines, washed-out colour transmission, or loss of the #90 optical blending. Watch 0/1 dark-orange and black band transitions, and 4/7 bright shoulder edges.
+- Experimental and not visually validated. Compare #94 primarily with the accepted #93 active baseline at identical wallpaper, digits, weight, width, scale and position. #90 is a historical fallback reference, not the active baseline. Keep #94 only if the glass gains a coherent physically based highlight without metallic hotspots, white outlines, washed-out colour transmission, or loss of #93's optical blending. Watch 0/1 dark-orange and black band transitions, and 4/7 bright shoulder edges.
 - Both Android and Digit Lab APK workflows should auto-run because this branch matches the `feature/**` push filters. Verify run SHA and uploaded artifacts before sharing links.
