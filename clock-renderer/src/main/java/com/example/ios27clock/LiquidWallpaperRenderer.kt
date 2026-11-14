@@ -944,12 +944,16 @@ class LiquidWallpaperRenderer(
                 stableDirectionWeight
             );
 
+            // Build #103: retain more of the direct refracted image so narrow
+            // wallpaper rails and warm/cool colour boundaries remain legible
+            // inside the glass. The microfacet bundle still supplies depth,
+            // but no longer dominates the face when band contrast is high.
             float microfacetDiffusion = mix(
-                0.30,
-                0.76,
+                0.20,
+                0.56,
                 bandContrast
             ) * mix(
-                0.96,
+                0.92,
                 1.0,
                 smoothstep(0.04, 0.32, glassProfileSlope)
             );
@@ -1083,8 +1087,12 @@ class LiquidWallpaperRenderer(
             // contains strong local bands. The same image-driven response is
             // used by every stroke, independent of glyph identity or width.
             float glassBandHaze = smoothstep(0.18, 0.72, bandContrast);
+            // Reduce the broad haze contribution so the transmitted image
+            // does not lose its fine structure beneath the volume lighting.
+            // The convex body remains visible through refraction, Fresnel and
+            // the local reflection lobes rather than a blurred overlay.
             float glassAtmosphericScatter =
-                mix(0.58, 0.42, glassBandHaze) *
+                mix(0.42, 0.30, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = mix(
                 glassTransmitted,
@@ -1095,7 +1103,7 @@ class LiquidWallpaperRenderer(
             // high-contrast regions, while retaining the direct chromatic
             // transmission and the external light-wrap added in #61.
             float glassAtmosphericBloom =
-                mix(0.22, 0.30, glassBandHaze) *
+                mix(0.16, 0.22, glassBandHaze) *
                 glassAtmosphericCoverage;
             glassTransmitted = 1.0 -
                 (1.0 - glassTransmitted) *
@@ -1220,6 +1228,30 @@ class LiquidWallpaperRenderer(
                 glassFace,
                 chromaticEnvironmentReflection,
                 glassShoulderReflectionAmount
+            );
+            // Build #103: carry a restrained environment reflection farther
+            // across the convex face, not only the tight shoulder. The gate
+            // follows the continuous surface slope and profile coverage, while
+            // bright transmitted pixels retain their wallpaper detail.
+            // This is the screen-space equivalent of a broad curved-lens
+            // reflection lobe; it reuses the existing environment sample.
+            float glassConvexFaceGate =
+                smoothstep(0.035, 0.24, glassProfileSlope) *
+                (1.0 - smoothstep(0.74, 1.08, glassProfileSlope)) *
+                glassProfileCoverage *
+                normalConfidence *
+                (1.0 - solidMode);
+            float glassConvexFaceTransmissionGuard = 1.0 -
+                0.68 * smoothstep(0.30, 0.72, refractedLuma);
+            float glassConvexFaceReflectionAmount =
+                0.065 *
+                glassConvexFaceGate *
+                reflectionHighlightProtection *
+                glassConvexFaceTransmissionGuard;
+            glassFace = mix(
+                glassFace,
+                chromaticEnvironmentReflection,
+                glassConvexFaceReflectionAmount
             );
             float innerGlassTint = smoothstep(0.0, 12.0, insideDistance) *
                 (1.0 - smoothstep(26.0, 64.0, insideDistance));
